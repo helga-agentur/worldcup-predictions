@@ -19,6 +19,8 @@ venv/
 
 # Generated runtime data, reports, and published site output
 /data/
+/logs/*
+!/logs/.gitkeep
 /reports/*
 !/reports/.gitkeep
 /public/
