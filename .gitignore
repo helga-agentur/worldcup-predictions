@@ -17,8 +17,10 @@ __pycache__/
 .venv/
 venv/
 
-# Generated runtime data and published site output
+# Generated runtime data, reports, and published site output
 /data/
+/reports/*
+!/reports/.gitkeep
 /public/
 
 # Python build artifacts
