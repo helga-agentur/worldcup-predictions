@@ -25,3 +25,6 @@ venv/
 /dist/
 /build/
 *.egg-info/
+
+# Allow AGENTS.md to be committed.
+!AGENTS.md
