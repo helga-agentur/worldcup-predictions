@@ -22,7 +22,7 @@ from worldcup_predictions.tournament import (
     build_tournament_state,
     parse_openfootball_text,
 )
-from worldcup_predictions.tournament.repository import load_tournament_state, write_fixtures, write_results
+from worldcup_predictions.tournament.repository import load_active_fixture_rows, load_tournament_state, write_fixtures, write_results
 
 
 OPENFOOTBALL_SAMPLE = """
@@ -44,6 +44,26 @@ class TournamentStateTest(unittest.TestCase):
         ).to_fixture()
 
         self.assertEqual(fixture.key, "2026-06-29T20:30:00Z|GER|PAR")
+
+    def test_fixture_record_key_uses_stable_source_slot_when_available(self) -> None:
+        resolver = TeamResolver.default()
+        old_placeholder = FixtureRecord(
+            event_date="2026-07-04T17:00:00Z",
+            home_team=resolver.resolve("Canada"),
+            away_team=resolver.resolve("W75"),
+            source_id="75",
+            metadata={"source": "srf_public"},
+        )
+        renamed_placeholder = FixtureRecord(
+            event_date="2026-07-04T17:00:00Z",
+            home_team=resolver.resolve("Canada"),
+            away_team=resolver.resolve("Sieger Sechzehntelfinal 4"),
+            source_id="75",
+            metadata={"source": "srf_public"},
+        )
+
+        self.assertNotEqual(old_placeholder.key, renamed_placeholder.key)
+        self.assertEqual(old_placeholder.record_key, renamed_placeholder.record_key)
 
     def test_openfootball_parser_returns_canonical_fixtures_and_results(self) -> None:
         fixtures, results = parse_openfootball_text(OPENFOOTBALL_SAMPLE)
@@ -217,6 +237,46 @@ class TournamentStateTest(unittest.TestCase):
 
             self.assertEqual(len(state.results), 1)
             self.assertEqual(state.standings["A"][0].points, 3)
+
+    @unittest.skipIf(duckdb is None, "duckdb dependency is not installed")
+    def test_active_fixture_rows_ignore_stale_source_batches(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            resolver = TeamResolver.default()
+            stale = FixtureRecord(
+                event_date="2026-07-04T17:00:00Z",
+                home_team=resolver.resolve("Canada"),
+                away_team=resolver.resolve("W75"),
+                stage="knockout",
+                status="open",
+                metadata={"source": "srf_public"},
+            )
+            current = FixtureRecord(
+                event_date="2026-07-04T17:00:00Z",
+                home_team=resolver.resolve("Canada"),
+                away_team=resolver.resolve("Sieger Sechzehntelfinal 4"),
+                stage="knockout",
+                status="open",
+                metadata={"source": "srf_public"},
+            )
+            write_fixtures(storage, [stale], source="srf_public", run_id="old")
+            con = storage._connect()
+            try:
+                con.execute(
+                    """
+                    UPDATE structured_records
+                    SET observed_at_utc = '2026-01-01T00:00:00Z'
+                    WHERE dataset = 'tournament_fixtures' AND source = 'srf_public'
+                    """
+                )
+            finally:
+                con.close()
+            write_fixtures(storage, [current], source="srf_public", run_id="current")
+
+            rows = load_active_fixture_rows(storage)
+
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["away_team"], "Sieger Sechzehntelfinal 4")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from worldcup_predictions.storage.contracts import StructuredStorage
 from worldcup_predictions.tournament.contracts import FixtureRecord, ResultRecord, TournamentState
 from worldcup_predictions.tournament.state import build_tournament_state, standing_records
@@ -16,8 +18,40 @@ GROUP_STATE_DATASET = "group_state_signals"
 def load_fixtures(storage: StructuredStorage) -> list[FixtureRecord]:
     return [
         FixtureRecord.from_record(row)
-        for row in storage.read_records(FIXTURES_DATASET, latest_only=True)
+        for row in load_active_fixture_rows(storage)
     ]
+
+
+def load_active_fixture_rows(storage: StructuredStorage) -> list[dict[str, Any]]:
+    """Return the latest active fixture batch for each source.
+
+    Fixture datasets are append-only for auditability. When an upstream source
+    renames or removes future placeholders, older rows must not remain active
+    just because their old fixture key differs from the current one.
+    """
+
+    rows = storage.read_records(FIXTURES_DATASET)
+    latest_observed_by_source: dict[str, str] = {}
+    for row in rows:
+        record = row.get("_record") or {}
+        source = str(record.get("source") or "")
+        observed_at = str(record.get("observed_at_utc") or "")
+        if not source or not observed_at:
+            continue
+        if observed_at >= latest_observed_by_source.get(source, ""):
+            latest_observed_by_source[source] = observed_at
+
+    latest_by_key: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        record = row.get("_record") or {}
+        source = str(record.get("source") or "")
+        observed_at = str(record.get("observed_at_utc") or "")
+        if source and latest_observed_by_source.get(source) != observed_at:
+            continue
+        key = str(row.get("record_key") or record.get("record_key") or "")
+        if key:
+            latest_by_key[key] = row
+    return list(latest_by_key.values())
 
 
 def load_results(storage: StructuredStorage) -> list[ResultRecord]:

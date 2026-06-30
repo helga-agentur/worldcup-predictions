@@ -790,6 +790,69 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertFalse(placeholder["prediction_available"])
             self.assertTrue((result.output_dir / "spiele" / "2026-07-04-can-sieger-sechzehntelfinal-4" / "index.html").exists())
 
+    def test_site_ignores_stale_fixture_placeholders_from_old_source_batches(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            storage = DuckDBStorage.at_data_root(root / "data")
+            storage.write_records(
+                TOURNAMENT_FIXTURES,
+                [
+                    {
+                        "record_key": "2026-07-04T17:00:00Z|CAN|W75",
+                        "fixture_key": "2026-07-04T17:00:00Z|CAN|W75",
+                        "event_date": "2026-07-04T17:00:00Z",
+                        "home_team": "Canada",
+                        "away_team": "W75",
+                        "home_fifa_code": "CAN",
+                        "away_fifa_code": None,
+                        "stage": "knockout",
+                        "status": "open",
+                        "metadata": {"source": "srf_public"},
+                    }
+                ],
+                source="srf_public",
+                run_id="old",
+            )
+            con = storage._connect()
+            try:
+                con.execute(
+                    """
+                    UPDATE structured_records
+                    SET observed_at_utc = '2026-01-01T00:00:00Z'
+                    WHERE dataset = 'tournament_fixtures' AND source = 'srf_public'
+                    """
+                )
+            finally:
+                con.close()
+            storage.write_records(
+                TOURNAMENT_FIXTURES,
+                [
+                    {
+                        "record_key": "2026-07-04T17:00:00Z|CAN|Sieger Sechzehntelfinal 4",
+                        "fixture_key": "2026-07-04T17:00:00Z|CAN|Sieger Sechzehntelfinal 4",
+                        "event_date": "2026-07-04T17:00:00Z",
+                        "home_team": "Canada",
+                        "away_team": "Sieger Sechzehntelfinal 4",
+                        "home_fifa_code": "CAN",
+                        "away_fifa_code": None,
+                        "stage": "knockout",
+                        "status": "open",
+                        "metadata": {"source": "srf_public"},
+                    }
+                ],
+                source="srf_public",
+                run_id="current",
+            )
+
+            result = build_site(project_root=root, storage=storage, gtm_container_id="")
+            html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+            payload = json.loads((result.output_dir / "api" / "predictions").read_text(encoding="utf-8"))
+
+            self.assertEqual(result.future_count, 1)
+            self.assertEqual(payload["summary"]["future"], 1)
+            self.assertIn("🇨🇦 Kanada - Sieger Sechzehntelfinal 4", html)
+            self.assertNotIn("W75", html)
+
     def test_caddy_serves_extensionless_api_as_inline_json(self) -> None:
         caddyfile = Path(__file__).resolve().parents[1].joinpath("Caddyfile").read_text(encoding="utf-8")
 

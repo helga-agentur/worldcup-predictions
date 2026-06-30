@@ -75,7 +75,7 @@ class FixtureRecord:
 
     def to_record(self) -> dict[str, Any]:
         payload = {
-            "record_key": self.key,
+            "record_key": self.record_key,
             "fixture_key": self.key,
             "event_date": self.event_date,
             "home_team": self.home_team.name,
@@ -91,6 +91,26 @@ class FixtureRecord:
             "metadata": self.metadata,
         }
         return payload
+
+    @property
+    def record_key(self) -> str:
+        """Stable storage identity for one source fixture slot.
+
+        A fixture key intentionally includes the currently known teams. Knockout
+        placeholders can be renamed by an upstream source while still referring
+        to the same source slot, so use source ids for replacement when present.
+        """
+
+        if self.source_id:
+            source = str(self.metadata.get("source") or "")
+            return stable_hash(
+                {
+                    "source": source,
+                    "source_id": self.source_id,
+                    "event_date": normalize_datetime(self.event_date) or self.event_date,
+                }
+            )
+        return self.key
 
     @classmethod
     def from_record(cls, row: dict[str, Any]) -> "FixtureRecord":

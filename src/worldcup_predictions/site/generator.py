@@ -18,13 +18,14 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from worldcup_predictions.core.contracts import ScoreTip
 from worldcup_predictions.core.constants import ENV_GTM_CONTAINER_ID
-from worldcup_predictions.core.datasets import PROVIDER_POINTS, PUBLISHED_PREDICTION_LEDGER, TOURNAMENT_FIXTURES
+from worldcup_predictions.core.datasets import PROVIDER_POINTS, PUBLISHED_PREDICTION_LEDGER
 from worldcup_predictions.core.env import env_value
 from worldcup_predictions.entities.countries import CountryRegistry, load_country_registry
 from worldcup_predictions.entities.countries import normalize_entity_text
 from worldcup_predictions.evaluation.provider_points import points_for_row
 from worldcup_predictions.storage.ledger import normalize_datetime, utc_now
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamRef
+from worldcup_predictions.tournament.repository import load_active_fixture_rows
 
 
 HELGA_FONT_CADIZ_WOFF2 = "/assets/fonts/CadizWeb-Regular.woff2"
@@ -528,7 +529,7 @@ def _account_points_text(total: float, delta: float) -> str:
 
 def _unpredicted_fixture_rows(storage, ledger_rows: list[dict[str, Any]], *, country_registry: CountryRegistry) -> list[dict[str, Any]]:
     ledger_keys = {str(row.get("fixture_key") or "") for row in ledger_rows}
-    raw_fixtures = [_strip_record(row) for row in storage.read_records(TOURNAMENT_FIXTURES, latest_only=True)]
+    raw_fixtures = [_strip_record(row) for row in load_active_fixture_rows(storage)]
     candidate_rows = [
         row
         for row in raw_fixtures
