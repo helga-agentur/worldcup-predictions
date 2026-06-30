@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from worldcup_predictions.entities import CountryRegistry, load_country_registry
 from worldcup_predictions.tournament.contracts import TeamRef
+from worldcup_predictions.tournament.slots import slot_team_ref
 
 
 @dataclass
@@ -22,6 +23,9 @@ class TeamResolver:
 
     def resolve(self, label: str) -> TeamRef:
         normalized_label = " ".join(str(label or "").split())
+        slot = slot_team_ref(normalized_label)
+        if slot is not None:
+            return slot
         resolved = self.registry.resolve(normalized_label, locale=self.locale, source=self.source)
         if resolved and resolved.is_resolved and resolved.canonical_id:
             country = self.registry.get(resolved.canonical_id)

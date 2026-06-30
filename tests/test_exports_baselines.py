@@ -862,6 +862,72 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("🇨🇦 Kanada - Sieger Sechzehntelfinal 4", html)
             self.assertNotIn("W75", html)
 
+    def test_site_ignores_unpredicted_placeholder_when_prediction_covers_same_slot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            storage = DuckDBStorage.at_data_root(root / "data")
+            published_key = "2026-07-04T17:00:00Z|CAN|MAR"
+            storage.write_records(
+                PUBLISHED_PREDICTION_LEDGER,
+                [
+                    {
+                        "record_key": published_key,
+                        "fixture_key": published_key,
+                        "event_date": "2026-07-04T17:00:00Z",
+                        "home_team": "Canada",
+                        "away_team": "Morocco",
+                        "status": "future",
+                        "prediction_context": "latest_live_prediction",
+                        "most_likely_home": 0,
+                        "most_likely_away": 1,
+                    }
+                ],
+                source="published_prediction_ledger",
+            )
+            storage.write_records(
+                TOURNAMENT_FIXTURES,
+                [
+                    {
+                        "record_key": "2026-07-04T17:00:00Z|CAN|W75",
+                        "fixture_key": "2026-07-04T17:00:00Z|CAN|W75",
+                        "event_date": "2026-07-04T17:00:00Z",
+                        "home_team": "Canada",
+                        "away_team": "W75",
+                        "home_fifa_code": "CAN",
+                        "away_fifa_code": None,
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "source_id": "90",
+                        "metadata": {"source": "openfootball/worldcup:cup_finals.txt", "match_number": "90"},
+                    },
+                    {
+                        "record_key": "2026-07-04T17:00:00Z|PAR|W76",
+                        "fixture_key": "2026-07-04T17:00:00Z|PAR|W76",
+                        "event_date": "2026-07-04T17:00:00Z",
+                        "home_team": "Paraguay",
+                        "away_team": "W76",
+                        "home_fifa_code": "PAR",
+                        "away_fifa_code": None,
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "source_id": "91",
+                        "metadata": {"source": "openfootball/worldcup:cup_finals.txt", "match_number": "91"},
+                    },
+                ],
+                source="openfootball/worldcup:cup_finals.txt",
+            )
+
+            result = build_site(project_root=root, storage=storage, gtm_container_id="")
+            html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+            payload = json.loads((result.output_dir / "api" / "predictions").read_text(encoding="utf-8"))
+
+            self.assertEqual(result.row_count, 2)
+            self.assertEqual(result.future_count, 2)
+            self.assertIn("🇨🇦 Kanada - Marokko 🇲🇦", html)
+            self.assertIn("🇵🇾 Paraguay - Sieger Sechzehntelfinal 4", html)
+            self.assertNotIn("W75", html)
+            self.assertEqual({row["fixture_key"] for row in payload["predictions"]}, {published_key, "2026-07-04T17:00:00Z|PAR|W76"})
+
     def test_caddy_serves_extensionless_api_as_inline_json(self) -> None:
         caddyfile = Path(__file__).resolve().parents[1].joinpath("Caddyfile").read_text(encoding="utf-8")
 

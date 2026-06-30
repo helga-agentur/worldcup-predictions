@@ -25,7 +25,8 @@ from worldcup_predictions.entities.countries import normalize_entity_text
 from worldcup_predictions.evaluation.provider_points import points_for_row
 from worldcup_predictions.storage.ledger import normalize_datetime, utc_now
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamRef
-from worldcup_predictions.tournament.repository import load_active_fixture_rows
+from worldcup_predictions.tournament.repository import load_tournament_state
+from worldcup_predictions.tournament.slots import slot_display_name
 
 
 HELGA_FONT_CADIZ_WOFF2 = "/assets/fonts/CadizWeb-Regular.woff2"
@@ -530,12 +531,14 @@ def _account_points_text(total: float, delta: float) -> str:
 
 def _unpredicted_fixture_rows(storage, ledger_rows: list[dict[str, Any]], *, country_registry: CountryRegistry) -> list[dict[str, Any]]:
     ledger_keys = {str(row.get("fixture_key") or "") for row in ledger_rows}
-    raw_fixtures = [_strip_record(row) for row in load_active_fixture_rows(storage)]
+    raw_fixtures = [fixture.to_record() for fixture in load_tournament_state(storage).fixtures]
+    covered_slots = _covered_fixture_slots(raw_fixtures, ledger_rows, ledger_keys, country_registry=country_registry)
     candidate_rows = [
         row
         for row in raw_fixtures
         if str(row.get("fixture_key") or "") not in ledger_keys
         and str(row.get("status") or "").casefold() in {"open", "scheduled"}
+        and not (_fixture_slot_keys(row, country_registry=country_registry) & covered_slots)
     ]
     preferred_sources_by_date = {
         str(row.get("event_date") or "")
@@ -556,6 +559,49 @@ def _unpredicted_fixture_rows(storage, ledger_rows: list[dict[str, Any]], *, cou
         seen_keys.add(key)
         rows.append(_fixture_placeholder_row(row, country_registry=country_registry))
     return rows
+
+
+def _covered_fixture_slots(
+    raw_fixtures: list[dict[str, Any]],
+    ledger_rows: list[dict[str, Any]],
+    ledger_keys: set[str],
+    *,
+    country_registry: CountryRegistry,
+) -> set[str]:
+    slots: set[str] = set()
+    for row in ledger_rows:
+        slots.update(_fixture_slot_keys(row, country_registry=country_registry))
+    for row in raw_fixtures:
+        if str(row.get("fixture_key") or "") in ledger_keys:
+            slots.update(_fixture_slot_keys(row, country_registry=country_registry))
+    return slots
+
+
+def _fixture_slot_keys(row: dict[str, Any], *, country_registry: CountryRegistry) -> set[str]:
+    event_date = str(row.get("event_date") or "")
+    if not event_date:
+        return set()
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    slots = set()
+    match_number = str(metadata.get("match_number") or "").strip()
+    if match_number:
+        slots.add(f"match-number:{match_number}")
+    for side in ("home", "away"):
+        team_key = _known_team_slot_key(row, side=side, country_registry=country_registry)
+        if team_key:
+            slots.add(f"event-team:{event_date}:{team_key}")
+    return slots
+
+
+def _known_team_slot_key(row: dict[str, Any], *, side: str, country_registry: CountryRegistry) -> str:
+    code = str(row.get(f"{side}_fifa_code") or "").strip().upper()
+    if code and code in country_registry.countries:
+        return code
+    source_name = str(row.get(f"{side}_team") or "")
+    resolved = country_registry.resolve(source_name, locale="en") or country_registry.resolve(source_name, locale="de")
+    if resolved and resolved.canonical_id in country_registry.countries:
+        return resolved.canonical_id
+    return ""
 
 
 def _fixture_placeholder_row(row: dict[str, Any], *, country_registry: CountryRegistry) -> dict[str, Any]:
@@ -669,11 +715,17 @@ def _tip_display_text(value: Any, *, country_registry: CountryRegistry) -> str:
 
 def _country_display_name(row: dict[str, Any], *, side: str, country_registry: CountryRegistry) -> str:
     code = _country_code_from_fixture_key(str(row.get("fixture_key") or ""), side=side)
+    slot_label = slot_display_name(code, locale="de")
+    if slot_label:
+        return slot_label
     if code:
         country = country_registry.countries.get(code)
         if country is not None:
             return country.names.get("de") or country.names.get("en") or code
     source_name = str(row.get(f"{side}_team") or "")
+    slot_label = slot_display_name(source_name, locale="de")
+    if slot_label:
+        return slot_label
     resolved = country_registry.resolve(source_name, locale="en") or country_registry.resolve(source_name, locale="de")
     if resolved and resolved.canonical_id:
         country = country_registry.countries.get(resolved.canonical_id)

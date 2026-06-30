@@ -20,7 +20,9 @@ from worldcup_predictions.tournament import (
     TeamResolver,
     build_group_state_rows,
     build_tournament_state,
+    has_defined_teams,
     parse_openfootball_text,
+    slot_display_name,
 )
 from worldcup_predictions.tournament.repository import load_active_fixture_rows, load_tournament_state, write_fixtures, write_results
 
@@ -64,6 +66,23 @@ class TournamentStateTest(unittest.TestCase):
 
         self.assertNotEqual(old_placeholder.key, renamed_placeholder.key)
         self.assertEqual(old_placeholder.record_key, renamed_placeholder.record_key)
+
+    def test_team_resolver_normalizes_winner_slots(self) -> None:
+        resolver = TeamResolver.default()
+
+        direct = resolver.resolve("W75")
+        prose = resolver.resolve("Winner Match 75")
+
+        self.assertEqual(direct.name, "W75")
+        self.assertIsNone(direct.fifa_code)
+        self.assertEqual(direct.key, "W75")
+        self.assertEqual(prose.key, "W75")
+
+    def test_slot_display_names_include_knockout_round(self) -> None:
+        self.assertEqual(slot_display_name("W76"), "Sieger Sechzehntelfinal 4")
+        self.assertEqual(slot_display_name("W102"), "Sieger Halbfinal 2")
+        self.assertEqual(slot_display_name("L101"), "Verlierer Halbfinal 1")
+        self.assertEqual(slot_display_name("W10"), "Sieger Spiel 10")
 
     def test_openfootball_parser_returns_canonical_fixtures_and_results(self) -> None:
         fixtures, results = parse_openfootball_text(OPENFOOTBALL_SAMPLE)
@@ -176,6 +195,47 @@ class TournamentStateTest(unittest.TestCase):
         self.assertEqual(len(state.results), 1)
         self.assertEqual(state.result_checks[0]["status"], "confirmed")
         self.assertEqual(state.result_checks[0]["high_authority_source_count"], 2)
+
+    def test_tournament_state_canonicalizes_unresolved_knockout_slots(self) -> None:
+        resolver = TeamResolver.default()
+        round_of_32 = FixtureRecord(
+            event_date="2026-06-29T17:00:00Z",
+            home_team=resolver.resolve("Paraguay"),
+            away_team=resolver.resolve("Japan"),
+            stage="Round of 32",
+            source_id="74",
+            status="final",
+            metadata={"source": "fifa_match_centre", "match_number": "74"},
+        )
+        source_slot = FixtureRecord(
+            event_date="2026-07-04T21:00:00Z",
+            home_team=resolver.resolve("W74"),
+            away_team=resolver.resolve("W77"),
+            stage="Round of 16",
+            source_id="89",
+            metadata={"source": "openfootball/worldcup:cup_finals.txt", "match_number": "89"},
+        )
+        provider_slot = FixtureRecord(
+            event_date="2026-07-04T21:00:00Z",
+            home_team=resolver.resolve("Paraguay"),
+            away_team=resolver.resolve("Sieger Sechzehntelfinal 6"),
+            stage="knockout",
+            metadata={"source": "srf_public"},
+        )
+        results = [
+            ResultRecord(round_of_32.event_date, round_of_32.home_team, round_of_32.away_team, ScoreTip(1, 0), source=source)
+            for source in ("srf_public", "fifa_match_centre")
+        ]
+
+        state = build_tournament_state([round_of_32, source_slot, provider_slot], results)
+        fixture_keys = {fixture.key for fixture in state.fixtures}
+        canonical_fixture = next(fixture for fixture in state.fixtures if fixture.key.endswith("|PAR|W77"))
+
+        self.assertIn("2026-07-04T21:00:00Z|PAR|W77", fixture_keys)
+        self.assertNotIn("2026-07-04T21:00:00Z|W74|W77", fixture_keys)
+        self.assertNotIn("2026-07-04T21:00:00Z|PAR|Sieger Sechzehntelfinal 6", fixture_keys)
+        self.assertFalse(has_defined_teams(canonical_fixture))
+        self.assertFalse(any(fixture.key.endswith("|PAR|W77") for fixture in state.open_fixtures()))
 
     def test_conflicting_unconfirmed_sources_do_not_enter_state(self) -> None:
         resolver = TeamResolver.default()

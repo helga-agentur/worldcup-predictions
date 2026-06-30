@@ -148,6 +148,8 @@ Tournament state is the first model input layer. It owns canonical fixture ident
 - `ResultRecord`: one source-derived full-time score observation.
 - `TournamentState`: reconciled fixtures, consensus-confirmed results, group standings, and result checks.
 
+Fixture identity uses FIFA country codes for known teams and canonical winner/loser slot codes such as `W75` for unresolved knockout participants. Source-specific labels like SRF's German placeholder text are normalized before tournament state reaches the model or signal plugins; website rendering translates canonical slot codes back into human-readable round labels such as `Sieger Halbfinal 2`.
+
 The workflow fetches public fixture/result data through source plugins such as `srf_public`, `openfootball_source`, `football_data`, and `public_score_sources`. Public CLI workflows are automated-only; personal/manual score entry and ad-hoc local imports are not part of the runtime workflow.
 
 Raw result observations stay in `tournament_results`. A result enters `TournamentState.results` only when the exact score is confirmed by at least three independent sources, or by at least two high-authority sources (`srf_public`, `fifa_match_centre`, `football_data_org`, or `espn_scoreboard`). Website publishing, standings, live calibration, provider points, and model learning consume that confirmed state; lower-consensus rows remain internal diagnostics in `tournament_result_checks`.

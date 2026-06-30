@@ -21,6 +21,7 @@ from worldcup_predictions.plugins.source_runtime import SourceRuntime
 from worldcup_predictions.storage.ledger import SourceRequest, normalize_datetime
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamRef
 from worldcup_predictions.tournament.repository import load_tournament_state, write_derived_state, write_fixtures, write_results
+from worldcup_predictions.tournament.slots import slot_team_ref
 
 
 class FifaMatchCentrePlugin(BasePlugin):
@@ -250,6 +251,9 @@ def _team_ref(raw: Any) -> TeamRef | None:
     name = _localized(raw.get("TeamName")) or str(raw.get("ShortClubName") or code).strip()
     if not name:
         return None
+    slot = slot_team_ref(code) or slot_team_ref(name)
+    if slot is not None:
+        return slot
     return TeamRef(name=name, fifa_code=code or None)
 
 
