@@ -43,8 +43,9 @@ class DebugReportPlugin(BasePlugin):
         signals = workflow_signals(context)
         rows = debug_rows(predictions, optimized_tips, signals)
         impact_rows = signal_impact_rows(predictions, signals)
-        count = context.storage.write_records(DEBUG_REPORT_DATASET, rows, source=self.id, run_id=context.run_id)
-        impact_count = context.storage.write_records(PREDICTION_SIGNAL_IMPACTS, impact_rows, source=self.id, run_id=context.run_id)
+        writer = getattr(context.storage, "replace_records", context.storage.write_records)
+        count = writer(DEBUG_REPORT_DATASET, rows, source=self.id, run_id=context.run_id)
+        impact_count = writer(PREDICTION_SIGNAL_IMPACTS, impact_rows, source=self.id, run_id=context.run_id)
         return PluginResult(
             plugin_id=self.id,
             event=event_value(event),
@@ -155,7 +156,7 @@ def signal_impact_rows(predictions: list[Prediction], signals: list[Signal]) -> 
                     "away_team": prediction.fixture.away_team,
                     "signal_name": signal.name,
                     "signal_source": signal.source,
-                    "signal_value": signal.value,
+                    "signal_value": signal_impact_value(signal),
                     "signal_weight": signal.weight,
                     "signal_confidence": signal.confidence,
                     "signal_scope": scope,
@@ -172,3 +173,15 @@ def signal_impact_rows(predictions: list[Prediction], signals: list[Signal]) -> 
                 }
             )
     return rows
+
+
+def signal_impact_value(signal: Signal):
+    """Return a compact value for diagnostics, including metadata-only probability signals."""
+
+    if signal.value is not None:
+        return signal.value
+    metadata = signal.metadata or {}
+    probability_keys = ("prob_home", "prob_draw", "prob_away")
+    if all(key in metadata for key in probability_keys):
+        return {key: metadata.get(key) for key in probability_keys}
+    return None

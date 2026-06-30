@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from worldcup_predictions.core.contracts import ScoreTip
-from worldcup_predictions.core.datasets import OPTIMIZED_TIPS, PROVIDER_POINTS
+from worldcup_predictions.core.datasets import OPTIMIZED_TIPS, PREDICTION_BACKTEST, PREDICTION_LEDGER, PROVIDER_POINTS
 from worldcup_predictions.plugins.provider_optimizers.ch_srf.rules import srf_rules_for_fixture
 from worldcup_predictions.plugins.provider_optimizers.common import score_outcome
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TournamentState
@@ -24,6 +24,8 @@ def build_provider_points_rows(
         for row in optimized_rows
         if row.get("provider") == provider
     }
+    ledger_tips_by_fixture = _ledger_tips_by_fixture(storage, provider)
+    backtest_tips_by_fixture = _backtest_tips_by_fixture(storage, provider)
     fixtures = {fixture.key: fixture for fixture in state.fixtures}
     results = {result.fixture_key: result for result in state.results}
     rows = []
@@ -32,7 +34,11 @@ def build_provider_points_rows(
         fixture = fixtures.get(fixture_key)
         if not fixture:
             continue
-        source_row = tips_by_fixture.get(fixture_key)
+        source_row = (
+            tips_by_fixture.get(fixture_key)
+            or ledger_tips_by_fixture.get(fixture_key)
+            or backtest_tips_by_fixture.get(fixture_key)
+        )
         points, tip_text, source = points_for_row(provider, fixture, result, source_row)
         cumulative += points
         rows.append(
@@ -54,6 +60,55 @@ def build_provider_points_rows(
         )
     storage.write_records(PROVIDER_POINTS, rows, source="provider_points", run_id=run_id)
     return rows
+
+
+def _ledger_tips_by_fixture(storage, provider: str) -> dict[str, dict[str, Any]]:
+    rows = {}
+    for row in _safe_read_records(storage, PREDICTION_LEDGER):
+        fixture_key = str(row.get("fixture_key") or "")
+        provider_tips = row.get("provider_tips") if isinstance(row.get("provider_tips"), dict) else {}
+        tip = provider_tips.get(provider)
+        if fixture_key and isinstance(tip, dict):
+            rows[fixture_key] = {
+                **tip,
+                "provider": provider,
+                "fixture_key": fixture_key,
+                "source": tip.get("source") or row.get("prediction_context") or PREDICTION_LEDGER,
+            }
+    return rows
+
+
+def _backtest_tips_by_fixture(storage, provider: str) -> dict[str, dict[str, Any]]:
+    rows = {}
+    for row in _safe_read_records(storage, PREDICTION_BACKTEST):
+        fixture_key = str(row.get("fixture_key") or "")
+        if not fixture_key:
+            continue
+        if provider == "srf.ch":
+            rows[fixture_key] = {
+                "provider": provider,
+                "fixture_key": fixture_key,
+                "tip": row.get("srf_tip") or row.get("tip"),
+                "tip_home": row.get("srf_tip_home") if row.get("srf_tip_home") is not None else row.get("tip_home"),
+                "tip_away": row.get("srf_tip_away") if row.get("srf_tip_away") is not None else row.get("tip_away"),
+                "source": PREDICTION_BACKTEST,
+            }
+        elif provider == "20min.ch":
+            rows[fixture_key] = {
+                "provider": provider,
+                "fixture_key": fixture_key,
+                "selection": row.get("twenty_min_selection") or row.get("twenty_min_tip"),
+                "selection_type": row.get("twenty_min_selection_type") or "outcome",
+                "source": PREDICTION_BACKTEST,
+            }
+    return rows
+
+
+def _safe_read_records(storage, dataset: str) -> list[dict[str, Any]]:
+    try:
+        return storage.read_records(dataset, latest_only=True)
+    except Exception:  # noqa: BLE001 - provider points should degrade to missing-tip rows.
+        return []
 
 
 def points_for_row(provider: str, fixture: FixtureRecord, result: ResultRecord, row: dict[str, Any] | None) -> tuple[float, str, str]:

@@ -111,12 +111,14 @@ class Phase1MetricsTest(unittest.TestCase):
 
         rows = calibrate_baseline_model(history)
 
-        # 3 rho x 3 overdispersion x 4 ml_weight candidates.
-        self.assertEqual(len(rows), 36)
+        # 4 rho x 3 overdispersion x 4 ml_weight candidates.
+        self.assertEqual(len(rows), 48)
         self.assertTrue(rows[0]["selected"])
         self.assertEqual(rows[0]["rank"], 1)
         ml_weights = {row["parameters"]["ml_hda_max_weight"] for row in rows}
         self.assertEqual(ml_weights, {0.0, 0.18, 0.30, 0.40})
+        rhos = {row["parameters"]["dixon_coles_rho"] for row in rows}
+        self.assertIn(0.0, rhos)
         for row in rows:
             self.assertIn("expected_points_per_match", row)
             self.assertIn("dixon_coles_rho", row["parameters"])

@@ -37,6 +37,18 @@ class StructuredStorage(Protocol):
     ) -> int:
         ...
 
+    def replace_records(
+        self,
+        dataset: str,
+        rows: Iterable[Mapping[str, Any]],
+        *,
+        source: str,
+        run_id: str | None = None,
+        fixture_key: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> int:
+        ...
+
     def read_records(
         self,
         dataset: str,

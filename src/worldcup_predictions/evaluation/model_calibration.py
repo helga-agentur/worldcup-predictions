@@ -43,7 +43,7 @@ DEFAULT_TUNING_YEARS = (2014, 2018, 2022)
 
 # History-derivable grid. dixon_coles_rho/score_overdispersion shape the exact-score
 # matrix; ml_hda_max_weight caps the historical-outcome signal blend.
-CANDIDATE_DIXON_COLES_RHO = (-0.12, -0.08, -0.04)
+CANDIDATE_DIXON_COLES_RHO = (-0.12, -0.08, -0.04, 0.0)
 CANDIDATE_SCORE_OVERDISPERSION = (0.04, 0.06, 0.08)
 CANDIDATE_ML_WEIGHTS = (0.0, 0.18, 0.30, 0.40)
 

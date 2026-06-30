@@ -101,7 +101,7 @@ class BaselineModelConfig:
 
     base_rating: float = 1500.0
     home_advantage: float = 65.0
-    dixon_coles_rho: float = 0.0
+    dixon_coles_rho: float = -0.12
     score_overdispersion: float = 0.06
     max_goals: int = 8
     profile_since: dt.date = dt.date(2018, 1, 1)

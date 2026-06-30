@@ -114,7 +114,8 @@ def write_diagnostics_completeness_audit(
     """Persist diagnostics-completeness findings for the current workflow state."""
 
     rows = build_diagnostics_completeness_rows(storage, plugins, run_id=run_id)
-    storage.write_records(
+    writer = getattr(storage, "replace_records", storage.write_records)
+    writer(
         DIAGNOSTICS_COMPLETENESS_AUDIT,
         rows,
         source="diagnostics_completeness",
@@ -201,15 +202,22 @@ def _plugin_run_presence_rows(
     if run_id:
         rows = [row for row in rows if row.get("run_id") == run_id or row.get("_record", {}).get("run_id") == run_id]
     seen = {str(row.get("plugin_id") or "") for row in rows}
+    observed_events = {str(row.get("event") or "") for row in rows}
     audit_rows: list[dict[str, Any]] = []
     for plugin in sorted(plugins, key=lambda item: item.id):
-        if not getattr(plugin, "subscribed_events", ()):
+        subscribed_events = tuple(getattr(plugin, "subscribed_events", ()))
+        if not subscribed_events:
             continue
         if plugin.id in seen:
             status = "ok"
             reason = "plugin emitted core run diagnostics"
             severity = "info"
             missing: list[str] = []
+        elif observed_events.isdisjoint(set(subscribed_events)):
+            status = "ok"
+            reason = "no subscribed event was dispatched in this workflow"
+            severity = "info"
+            missing = []
         else:
             status = "warning"
             reason = "plugin did not run in this workflow or emitted no core diagnostics"
@@ -226,7 +234,8 @@ def _plugin_run_presence_rows(
                 missing_fields=missing,
                 metadata={
                     "run_id": run_id,
-                    "events": list(getattr(plugin, "subscribed_events", ())),
+                    "events": list(subscribed_events),
+                    "observed_events": sorted(observed_events),
                     "observed_plugin_diagnostic_rows": sum(1 for row in rows if row.get("plugin_id") == plugin.id),
                 },
             )
@@ -294,7 +303,7 @@ def _missing_required_fields(record: Mapping[str, Any], fields: tuple[str, ...])
     missing: list[str] = []
     for field in fields:
         value = record.get(field)
-        if value is None or value == "" or value == [] or value == {}:
+        if value is None or value == "":
             missing.append(field)
     return missing
 
@@ -328,6 +337,6 @@ def _row(
         "metadata": metadata,
     }
     return {
-        "record_key": stable_hash(payload),
+        "record_key": stable_hash({"scope": scope, "subject": subject}),
         **payload,
     }

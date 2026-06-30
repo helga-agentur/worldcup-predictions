@@ -33,7 +33,7 @@ from worldcup_predictions.evaluation import (
     write_provider_knockout_audit,
 )
 from worldcup_predictions.evaluation.baseline_bundle import create_baseline_bundle
-from worldcup_predictions.evaluation.model_calibration import calibrate_baseline_model
+from worldcup_predictions.evaluation.model_calibration import calibrate_baseline_model, write_model_calibration
 from worldcup_predictions.evaluation.audit import build_prediction_audit_rows
 from worldcup_predictions.evaluation.diagnostics_completeness import write_diagnostics_completeness_audit
 from worldcup_predictions.evaluation.bonus_tracker import build_bonus_tracker_rows
@@ -179,6 +179,11 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
     refreshed_state = load_tournament_state(workflow.context.storage)
     open_count = len(refreshed_state.open_fixtures())
     historical_results = load_historical_results(workflow.context.storage)
+    model_calibration_count = write_model_calibration(
+        workflow.context.storage,
+        historical_results,
+        run_id=workflow.context.run_id,
+    )
     backtest_rows = backtest_srf(refreshed_state, historical_results, signals=_workflow_signals(workflow))
     workflow.context.storage.write_records(
         PREDICTION_BACKTEST,
@@ -202,6 +207,9 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
         run_id=workflow.context.run_id,
     )
 
+    ledger_count = write_prediction_ledger(workflow.context.storage, run_id=workflow.context.run_id)
+    published_ledger_count = write_published_prediction_ledger(workflow.context.storage, run_id=workflow.context.run_id)
+
     provider_summary = {}
     for provider in ("srf.ch", "20min.ch"):
         point_rows = build_provider_points_rows(
@@ -222,8 +230,6 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
             "bonus_rows": len(bonus_rows),
         }
 
-    ledger_count = write_prediction_ledger(workflow.context.storage, run_id=workflow.context.run_id)
-    published_ledger_count = write_published_prediction_ledger(workflow.context.storage, run_id=workflow.context.run_id)
     export_manifest = write_prediction_export(
         workflow.context.storage,
         project_root / "data" / "exports" / "predictions.json",
@@ -253,6 +259,7 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
         "initial_open_fixtures": initial_open_count,
         "open_fixtures": open_count,
         "backtest_rows": len(backtest_rows),
+        "model_calibration_rows": model_calibration_count,
         "audit_rows": len(audit_rows),
         "postmatch_learning_rows": learning_count,
         "postmatch_review_rows": review_count,

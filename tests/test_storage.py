@@ -15,18 +15,21 @@ from worldcup_predictions.core.datasets import (
     DIAGNOSTICS_COMPLETENESS_AUDIT,
     PLUGIN_EVENT_OUTPUTS,
     PLUGIN_RUN_DIAGNOSTICS,
+    PREDICTION_BACKTEST,
     PREDICTION_SIGNAL_IMPACTS,
     TOURNAMENT_FIXTURES,
 )
 from worldcup_predictions.core.events import EventName, event_value
 from worldcup_predictions.core.plugin import BasePlugin, PluginManager, PluginResult
-from worldcup_predictions.core.signals import TOTAL_GOALS_FACTOR
+from worldcup_predictions.core.signals import ML_HDA_PROBABILITIES, TOTAL_GOALS_FACTOR
 from worldcup_predictions.core.workflow import PredictionWorkflow, WorkflowContext
 from worldcup_predictions.evaluation.audit import build_prediction_audit_rows
 from worldcup_predictions.evaluation.diagnostics_completeness import write_diagnostics_completeness_audit
+from worldcup_predictions.evaluation.provider_points import build_provider_points_rows
 from worldcup_predictions.evaluation.reports import write_standard_reports
 from worldcup_predictions.evaluation.scheduled_update import summarize_source_ledger_rows
 from worldcup_predictions.plugins.debug_report import DebugReportPlugin
+from worldcup_predictions.plugins.debug_report.plugin import signal_impact_rows
 from worldcup_predictions.plugins.source_runtime import SourceRuntime
 from worldcup_predictions.plugins.structured_output import StructuredOutputPlugin
 from worldcup_predictions.plugins.provider_optimizers import SrfChProviderOptimizerPlugin
@@ -146,6 +149,74 @@ def prediction(event_date: str, home: str, away: str) -> Prediction:
 
 @unittest.skipIf(duckdb is None, "duckdb dependency is not installed")
 class StorageTest(unittest.TestCase):
+    def test_provider_points_fall_back_to_backtest_tips_for_finished_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            resolver = TeamResolver.default()
+            fixture = FixtureRecord(
+                event_date="2026-07-10T18:00:00Z",
+                home_team=resolver.resolve("Brazil"),
+                away_team=resolver.resolve("Japan"),
+                stage="Group Stage",
+                group="Group A",
+            )
+            state = TournamentState(
+                fixtures=[fixture],
+                results=[
+                    ResultRecord(
+                        event_date=fixture.event_date,
+                        home_team=fixture.home_team,
+                        away_team=fixture.away_team,
+                        score=ScoreTip(2, 0),
+                    )
+                ],
+                standings={},
+            )
+            storage.write_records(
+                PREDICTION_BACKTEST,
+                [
+                    {
+                        "record_key": fixture.key,
+                        "fixture_key": fixture.key,
+                        "points": 10,
+                        "srf_tip": "2:0",
+                        "srf_tip_home": 2,
+                        "srf_tip_away": 0,
+                        "twenty_min_selection": "Brazil",
+                        "twenty_min_selection_type": "outcome",
+                    }
+                ],
+                source="test",
+            )
+
+            srf_rows = build_provider_points_rows(storage, state, provider="srf.ch")
+            twenty_rows = build_provider_points_rows(storage, state, provider="20min.ch")
+
+            self.assertEqual(srf_rows[0]["points"], 10)
+            self.assertEqual(srf_rows[0]["source"], PREDICTION_BACKTEST)
+            self.assertEqual(twenty_rows[0]["points"], 5)
+            self.assertEqual(twenty_rows[0]["source"], PREDICTION_BACKTEST)
+
+    def test_signal_impact_rows_expose_probability_signal_value(self) -> None:
+        match_prediction = prediction("2026-07-10T18:00:00Z", "Brazil", "Japan")
+        rows = signal_impact_rows(
+            [match_prediction],
+            [
+                Signal(
+                    name=ML_HDA_PROBABILITIES,
+                    source="ml_outcome",
+                    fixture_key=match_prediction.fixture.key,
+                    value=None,
+                    weight=0.85,
+                    confidence=0.78,
+                    rationale="test probabilities",
+                    metadata={"prob_home": 0.5, "prob_draw": 0.25, "prob_away": 0.25},
+                )
+            ],
+        )
+
+        self.assertEqual(rows[0]["signal_value"], {"prob_home": 0.5, "prob_draw": 0.25, "prob_away": 0.25})
+
     def test_source_ledger_blocks_fresh_successful_fetch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             storage = DuckDBStorage.at_data_root(Path(tmp) / "data")

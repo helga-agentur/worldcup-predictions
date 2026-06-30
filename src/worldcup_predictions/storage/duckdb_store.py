@@ -339,6 +339,33 @@ class DuckDBStorage:
             con.close()
         return len(prepared)
 
+    def replace_records(
+        self,
+        dataset: str,
+        rows: Iterable[Mapping[str, Any]],
+        *,
+        source: str,
+        run_id: str | None = None,
+        fixture_key: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> int:
+        """Replace one generated structured dataset and export a fresh Parquet file."""
+
+        con = self._connect()
+        try:
+            con.execute("DELETE FROM structured_records WHERE dataset = ?", [dataset])
+            self._export_dataset(con, dataset)
+        finally:
+            con.close()
+        return self.write_records(
+            dataset,
+            rows,
+            source=source,
+            run_id=run_id,
+            fixture_key=fixture_key,
+            metadata=metadata,
+        )
+
     def read_records(
         self,
         dataset: str,
