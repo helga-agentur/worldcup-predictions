@@ -23,6 +23,8 @@ venv/
 !/logs/.gitkeep
 /reports/*
 !/reports/.gitkeep
+/blog-posts/*
+!/blog-posts/.gitkeep
 /public/
 
 # Python build artifacts
