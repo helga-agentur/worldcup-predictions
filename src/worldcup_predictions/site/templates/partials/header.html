@@ -1,0 +1,15 @@
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Helga Tippspiel Prognosen">
+    {% include "partials/logo.html" %}
+  </a>
+  <nav aria-label="Hauptnavigation">
+    <label class="theme-switch">
+      <span class="theme-switch-label">Dark Mode</span>
+      <input class="theme-switch-input" type="checkbox" data-theme-toggle aria-label="Dark Mode umschalten">
+      <span class="theme-switch-track" aria-hidden="true">
+        <span class="theme-switch-thumb"></span>
+      </span>
+    </label>
+    <a href="{{ json_feed_path }}">JSON API</a>
+  </nav>
+</header>

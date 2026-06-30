@@ -1,0 +1,1182 @@
+{
+  "schema_version": 1,
+  "entity_type": "country",
+  "locales": [
+    "en",
+    "de"
+  ],
+  "countries": [
+    {
+      "fifa_code": "ALG",
+      "names": {
+        "en": "Algeria",
+        "de": "Algerien"
+      },
+      "codes": [
+        "ALG"
+      ],
+      "aliases": {
+        "en": [
+          "Algeria",
+          "Algerian national team",
+          "Desert Foxes",
+          "El Khadra",
+          "Les Fennecs",
+          "The Greens"
+        ],
+        "de": [
+          "Algerien",
+          "algerische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "ARG",
+      "names": {
+        "en": "Argentina",
+        "de": "Argentinien"
+      },
+      "codes": [
+        "ARG"
+      ],
+      "aliases": {
+        "en": [
+          "Argentina",
+          "Argentine national team",
+          "La Albiceleste",
+          "Argentina national team"
+        ],
+        "de": [
+          "Argentinien",
+          "argentinische Nationalmannschaft",
+          "Albiceleste"
+        ]
+      }
+    },
+    {
+      "fifa_code": "AUS",
+      "names": {
+        "en": "Australia",
+        "de": "Australien"
+      },
+      "codes": [
+        "AUS"
+      ],
+      "aliases": {
+        "en": [
+          "Australia",
+          "Australian national team",
+          "Socceroos",
+          "Australia national team"
+        ],
+        "de": [
+          "Australien",
+          "australische Nationalmannschaft",
+          "Socceroos"
+        ]
+      }
+    },
+    {
+      "fifa_code": "AUT",
+      "names": {
+        "en": "Austria",
+        "de": "Österreich"
+      },
+      "codes": [
+        "AUT"
+      ],
+      "aliases": {
+        "en": [
+          "Austria",
+          "Austrian national team",
+          "Austria national team",
+          "OFB-Team",
+          "OeFB-Team"
+        ],
+        "de": [
+          "Österreich",
+          "Oesterreich",
+          "österreichische Nationalmannschaft",
+          "Das Team"
+        ]
+      }
+    },
+    {
+      "fifa_code": "BEL",
+      "names": {
+        "en": "Belgium",
+        "de": "Belgien"
+      },
+      "codes": [
+        "BEL"
+      ],
+      "aliases": {
+        "en": [
+          "Belgium",
+          "Belgian national team",
+          "Red Devils",
+          "Belgian Red Devils",
+          "Diables Rouges",
+          "Rode Duivels"
+        ],
+        "de": [
+          "Belgien",
+          "belgische Nationalmannschaft",
+          "Rote Teufel"
+        ]
+      }
+    },
+    {
+      "fifa_code": "BIH",
+      "names": {
+        "en": "Bosnia and Herzegovina",
+        "de": "Bosnien und Herzegowina"
+      },
+      "codes": [
+        "BIH"
+      ],
+      "aliases": {
+        "en": [
+          "Bosnia and Herzegovina",
+          "Bosnia-Herzegovina",
+          "Bosnia",
+          "Bosnia-H.",
+          "Bosnian Dragons",
+          "Dragons",
+          "Zmajevi"
+        ],
+        "de": [
+          "Bosnien und Herzegowina",
+          "Bosnien-Herzegowina",
+          "Bosnien",
+          "Bosnien-Herzeg."
+        ]
+      }
+    },
+    {
+      "fifa_code": "BRA",
+      "names": {
+        "en": "Brazil",
+        "de": "Brasilien"
+      },
+      "codes": [
+        "BRA"
+      ],
+      "aliases": {
+        "en": [
+          "Brazil",
+          "Brazilian national team",
+          "Seleção",
+          "Brazil national team",
+          "Canarinha",
+          "Verde-Amarela"
+        ],
+        "de": [
+          "Brasilien",
+          "brasilianische Nationalmannschaft",
+          "Seleção"
+        ]
+      }
+    },
+    {
+      "fifa_code": "CAN",
+      "names": {
+        "en": "Canada",
+        "de": "Kanada"
+      },
+      "codes": [
+        "CAN"
+      ],
+      "aliases": {
+        "en": [
+          "Canada",
+          "Canadian national team",
+          "CanMNT",
+          "Canada Soccer",
+          "Canada national team",
+          "Canadian men",
+          "Les Rouges"
+        ],
+        "de": [
+          "Kanada",
+          "kanadische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "CIV",
+      "names": {
+        "en": "Ivory Coast",
+        "de": "Elfenbeinküste"
+      },
+      "codes": [
+        "CIV"
+      ],
+      "aliases": {
+        "en": [
+          "Ivory Coast",
+          "Côte d'Ivoire",
+          "Elephants",
+          "Les Elephants",
+          "The Elephants"
+        ],
+        "de": [
+          "Elfenbeinküste",
+          "Elfenbeinkueste",
+          "Côte d'Ivoire"
+        ]
+      }
+    },
+    {
+      "fifa_code": "COD",
+      "names": {
+        "en": "DR Congo",
+        "de": "DR Kongo"
+      },
+      "codes": [
+        "COD",
+        "DRC"
+      ],
+      "aliases": {
+        "en": [
+          "DR Congo",
+          "D.R. Congo",
+          "Democratic Republic of Congo",
+          "Congo DR",
+          "Congo-Kinshasa",
+          "Democratic Republic of the Congo",
+          "Leopards",
+          "Les Leopards",
+          "The Leopards"
+        ],
+        "de": [
+          "DR Kongo",
+          "D. R. Kongo",
+          "Demokratische Republik Kongo",
+          "Kongo DR",
+          "Kongo-Kinshasa"
+        ]
+      },
+      "ambiguous_aliases": {
+        "en": [
+          "Congo"
+        ],
+        "de": [
+          "Kongo"
+        ]
+      }
+    },
+    {
+      "fifa_code": "COL",
+      "names": {
+        "en": "Colombia",
+        "de": "Kolumbien"
+      },
+      "codes": [
+        "COL"
+      ],
+      "aliases": {
+        "en": [
+          "Colombia",
+          "Colombian national team",
+          "Cafeteros",
+          "Colombia national team",
+          "Los Cafeteros"
+        ],
+        "de": [
+          "Kolumbien",
+          "kolumbianische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "CPV",
+      "names": {
+        "en": "Cape Verde",
+        "de": "Kap Verde"
+      },
+      "codes": [
+        "CPV"
+      ],
+      "aliases": {
+        "en": [
+          "Cape Verde",
+          "Cabo Verde",
+          "Cape Verde Islands",
+          "Blue Sharks",
+          "Cape Verde national team",
+          "Tubaroes Azuis"
+        ],
+        "de": [
+          "Kap Verde",
+          "Cabo Verde",
+          "Kapverden",
+          "Kapverdische Inseln"
+        ]
+      }
+    },
+    {
+      "fifa_code": "CRO",
+      "names": {
+        "en": "Croatia",
+        "de": "Kroatien"
+      },
+      "codes": [
+        "CRO"
+      ],
+      "aliases": {
+        "en": [
+          "Croatia",
+          "Croatian national team",
+          "Croatia national team",
+          "Kockasti",
+          "The Blazers",
+          "Vatreni"
+        ],
+        "de": [
+          "Kroatien",
+          "kroatische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "CUW",
+      "names": {
+        "en": "Curaçao",
+        "de": "Curaçao"
+      },
+      "codes": [
+        "CUW"
+      ],
+      "aliases": {
+        "en": [
+          "Curaçao",
+          "Curaçao national team",
+          "La Familia Azul"
+        ],
+        "de": [
+          "Curaçao",
+          "Nationalmannschaft Curaçao"
+        ]
+      }
+    },
+    {
+      "fifa_code": "CZE",
+      "names": {
+        "en": "Czech Republic",
+        "de": "Tschechien"
+      },
+      "codes": [
+        "CZE"
+      ],
+      "aliases": {
+        "en": [
+          "Czech Republic",
+          "Czechia",
+          "Czech national team",
+          "Czech Republic national team",
+          "Czechia national team"
+        ],
+        "de": [
+          "Tschechien",
+          "Tschechische Republik",
+          "tschechische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "ECU",
+      "names": {
+        "en": "Ecuador",
+        "de": "Ecuador"
+      },
+      "codes": [
+        "ECU"
+      ],
+      "aliases": {
+        "en": [
+          "Ecuador",
+          "Ecuadorian national team",
+          "Ecuador national team",
+          "La Tri"
+        ],
+        "de": [
+          "Ecuador",
+          "ecuadorianische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "EGY",
+      "names": {
+        "en": "Egypt",
+        "de": "Ägypten"
+      },
+      "codes": [
+        "EGY"
+      ],
+      "aliases": {
+        "en": [
+          "Egypt",
+          "Egyptian national team",
+          "Pharaohs",
+          "Egypt national team",
+          "The Pharaohs"
+        ],
+        "de": [
+          "Ägypten",
+          "Aegypten",
+          "ägyptische Nationalmannschaft",
+          "Pharaonen"
+        ]
+      }
+    },
+    {
+      "fifa_code": "ENG",
+      "names": {
+        "en": "England",
+        "de": "England"
+      },
+      "codes": [
+        "ENG"
+      ],
+      "aliases": {
+        "en": [
+          "England",
+          "English national team",
+          "Three Lions",
+          "England national team"
+        ],
+        "de": [
+          "England",
+          "englische Nationalmannschaft",
+          "Three Lions"
+        ]
+      }
+    },
+    {
+      "fifa_code": "ESP",
+      "names": {
+        "en": "Spain",
+        "de": "Spanien"
+      },
+      "codes": [
+        "ESP"
+      ],
+      "aliases": {
+        "en": [
+          "Spain",
+          "Spanish national team",
+          "La Roja",
+          "Spain national team"
+        ],
+        "de": [
+          "Spanien",
+          "spanische Nationalmannschaft",
+          "La Roja"
+        ]
+      }
+    },
+    {
+      "fifa_code": "FRA",
+      "names": {
+        "en": "France",
+        "de": "Frankreich"
+      },
+      "codes": [
+        "FRA"
+      ],
+      "aliases": {
+        "en": [
+          "France",
+          "French national team",
+          "Les Bleus",
+          "France national team"
+        ],
+        "de": [
+          "Frankreich",
+          "französische Nationalmannschaft",
+          "Les Bleus"
+        ]
+      }
+    },
+    {
+      "fifa_code": "GER",
+      "names": {
+        "en": "Germany",
+        "de": "Deutschland"
+      },
+      "codes": [
+        "GER"
+      ],
+      "aliases": {
+        "en": [
+          "Germany",
+          "German national team",
+          "DFB Team",
+          "Die Mannschaft",
+          "Allemagne",
+          "Germany national team",
+          "Nationalelf"
+        ],
+        "de": [
+          "Deutschland",
+          "deutsche Nationalmannschaft",
+          "DFB-Team",
+          "Die Mannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "GHA",
+      "names": {
+        "en": "Ghana",
+        "de": "Ghana"
+      },
+      "codes": [
+        "GHA"
+      ],
+      "aliases": {
+        "en": [
+          "Ghana",
+          "Ghanaian national team",
+          "Black Stars",
+          "Ghana national team"
+        ],
+        "de": [
+          "Ghana",
+          "ghanaische Nationalmannschaft",
+          "Black Stars"
+        ]
+      }
+    },
+    {
+      "fifa_code": "HAI",
+      "names": {
+        "en": "Haiti",
+        "de": "Haiti"
+      },
+      "codes": [
+        "HAI"
+      ],
+      "aliases": {
+        "en": [
+          "Haiti",
+          "Haitian national team",
+          "Grenadiers",
+          "Haiti national team",
+          "Les Grenadiers"
+        ],
+        "de": [
+          "Haiti",
+          "haitianische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "IRN",
+      "names": {
+        "en": "Iran",
+        "de": "Iran"
+      },
+      "codes": [
+        "IRN"
+      ],
+      "aliases": {
+        "en": [
+          "Iran",
+          "Iranian national team",
+          "Team Melli",
+          "Iran national team"
+        ],
+        "de": [
+          "Iran",
+          "iranische Nationalmannschaft",
+          "Team Melli"
+        ]
+      }
+    },
+    {
+      "fifa_code": "IRQ",
+      "names": {
+        "en": "Iraq",
+        "de": "Irak"
+      },
+      "codes": [
+        "IRQ"
+      ],
+      "aliases": {
+        "en": [
+          "Iraq",
+          "Iraqi national team",
+          "Iraq national team",
+          "Lions of Mesopotamia",
+          "Usood Al-Rafidain"
+        ],
+        "de": [
+          "Irak",
+          "irakische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "JOR",
+      "names": {
+        "en": "Jordan",
+        "de": "Jordanien"
+      },
+      "codes": [
+        "JOR"
+      ],
+      "aliases": {
+        "en": [
+          "Jordan",
+          "Jordanian national team",
+          "Jordan national team",
+          "Nashama",
+          "The Chivalrous"
+        ],
+        "de": [
+          "Jordanien",
+          "jordanische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "JPN",
+      "names": {
+        "en": "Japan",
+        "de": "Japan"
+      },
+      "codes": [
+        "JPN"
+      ],
+      "aliases": {
+        "en": [
+          "Japan",
+          "Japanese national team",
+          "Samurai Blue",
+          "Japan national team"
+        ],
+        "de": [
+          "Japan",
+          "japanische Nationalmannschaft",
+          "Samurai Blue"
+        ]
+      }
+    },
+    {
+      "fifa_code": "KOR",
+      "names": {
+        "en": "South Korea",
+        "de": "Südkorea"
+      },
+      "codes": [
+        "KOR"
+      ],
+      "aliases": {
+        "en": [
+          "South Korea",
+          "Korea Republic",
+          "Republic of Korea",
+          "Korean national team",
+          "Korea Republic national team",
+          "South Korea national team",
+          "Taegeuk Warriors"
+        ],
+        "de": [
+          "Südkorea",
+          "Suedkorea",
+          "Republik Korea",
+          "südkoreanische Nationalmannschaft"
+        ]
+      },
+      "ambiguous_aliases": {
+        "en": [
+          "Korea"
+        ],
+        "de": [
+          "Korea"
+        ]
+      }
+    },
+    {
+      "fifa_code": "KSA",
+      "names": {
+        "en": "Saudi Arabia",
+        "de": "Saudi-Arabien"
+      },
+      "codes": [
+        "KSA"
+      ],
+      "aliases": {
+        "en": [
+          "Saudi Arabia",
+          "Saudi national team",
+          "Saudi",
+          "Green Falcons",
+          "Saudi Arabia national team"
+        ],
+        "de": [
+          "Saudi-Arabien",
+          "saudische Nationalmannschaft",
+          "Saudi"
+        ]
+      }
+    },
+    {
+      "fifa_code": "MAR",
+      "names": {
+        "en": "Morocco",
+        "de": "Marokko"
+      },
+      "codes": [
+        "MAR"
+      ],
+      "aliases": {
+        "en": [
+          "Morocco",
+          "Moroccan national team",
+          "Atlas Lions",
+          "Lions de l'Atlas",
+          "Morocco national team"
+        ],
+        "de": [
+          "Marokko",
+          "marokkanische Nationalmannschaft",
+          "Atlas-Löwen",
+          "Atlas Loewen"
+        ]
+      }
+    },
+    {
+      "fifa_code": "MEX",
+      "names": {
+        "en": "Mexico",
+        "de": "Mexiko"
+      },
+      "codes": [
+        "MEX"
+      ],
+      "aliases": {
+        "en": [
+          "Mexico",
+          "Mexican national team",
+          "El Tri",
+          "Mexico national team"
+        ],
+        "de": [
+          "Mexiko",
+          "mexikanische Nationalmannschaft",
+          "El Tri"
+        ]
+      }
+    },
+    {
+      "fifa_code": "NED",
+      "names": {
+        "en": "Netherlands",
+        "de": "Niederlande"
+      },
+      "codes": [
+        "NED"
+      ],
+      "aliases": {
+        "en": [
+          "Netherlands",
+          "Holland",
+          "Dutch national team",
+          "Oranje",
+          "Netherlands national team"
+        ],
+        "de": [
+          "Niederlande",
+          "Holland",
+          "niederländische Nationalmannschaft",
+          "Oranje"
+        ]
+      }
+    },
+    {
+      "fifa_code": "NOR",
+      "names": {
+        "en": "Norway",
+        "de": "Norwegen"
+      },
+      "codes": [
+        "NOR"
+      ],
+      "aliases": {
+        "en": [
+          "Norway",
+          "Norwegian national team",
+          "Norway national team"
+        ],
+        "de": [
+          "Norwegen",
+          "norwegische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "NZL",
+      "names": {
+        "en": "New Zealand",
+        "de": "Neuseeland"
+      },
+      "codes": [
+        "NZL"
+      ],
+      "aliases": {
+        "en": [
+          "New Zealand",
+          "New Zealand national team",
+          "All Whites"
+        ],
+        "de": [
+          "Neuseeland",
+          "neuseeländische Nationalmannschaft",
+          "All Whites"
+        ]
+      }
+    },
+    {
+      "fifa_code": "PAN",
+      "names": {
+        "en": "Panama",
+        "de": "Panama"
+      },
+      "codes": [
+        "PAN"
+      ],
+      "aliases": {
+        "en": [
+          "Panama",
+          "Panamanian national team",
+          "Canal Men",
+          "Los Canaleros",
+          "Panama national team"
+        ],
+        "de": [
+          "Panama",
+          "panamaische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "PAR",
+      "names": {
+        "en": "Paraguay",
+        "de": "Paraguay"
+      },
+      "codes": [
+        "PAR"
+      ],
+      "aliases": {
+        "en": [
+          "Paraguay",
+          "Paraguayan national team",
+          "Albirroja",
+          "La Albirroja",
+          "Paraguay national team"
+        ],
+        "de": [
+          "Paraguay",
+          "paraguayische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "POR",
+      "names": {
+        "en": "Portugal",
+        "de": "Portugal"
+      },
+      "codes": [
+        "POR"
+      ],
+      "aliases": {
+        "en": [
+          "Portugal",
+          "Portuguese national team",
+          "Seleção das Quinas",
+          "Portugal national team"
+        ],
+        "de": [
+          "Portugal",
+          "portugiesische Nationalmannschaft",
+          "Seleção das Quinas"
+        ]
+      }
+    },
+    {
+      "fifa_code": "QAT",
+      "names": {
+        "en": "Qatar",
+        "de": "Katar"
+      },
+      "codes": [
+        "QAT"
+      ],
+      "aliases": {
+        "en": [
+          "Qatar",
+          "Qatari national team",
+          "Al Annabi",
+          "Qatar national team",
+          "The Maroons"
+        ],
+        "de": [
+          "Katar",
+          "katarische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "RSA",
+      "names": {
+        "en": "South Africa",
+        "de": "Südafrika"
+      },
+      "codes": [
+        "RSA"
+      ],
+      "aliases": {
+        "en": [
+          "South Africa",
+          "South African national team",
+          "Bafana Bafana",
+          "South Africa national team"
+        ],
+        "de": [
+          "Südafrika",
+          "Suedafrika",
+          "südafrikanische Nationalmannschaft",
+          "Bafana Bafana"
+        ]
+      }
+    },
+    {
+      "fifa_code": "SCO",
+      "names": {
+        "en": "Scotland",
+        "de": "Schottland"
+      },
+      "codes": [
+        "SCO"
+      ],
+      "aliases": {
+        "en": [
+          "Scotland",
+          "Scottish national team",
+          "Tartan Army",
+          "Scotland national team"
+        ],
+        "de": [
+          "Schottland",
+          "schottische Nationalmannschaft",
+          "Tartan Army"
+        ]
+      }
+    },
+    {
+      "fifa_code": "SEN",
+      "names": {
+        "en": "Senegal",
+        "de": "Senegal"
+      },
+      "codes": [
+        "SEN"
+      ],
+      "aliases": {
+        "en": [
+          "Senegal",
+          "Senegalese national team",
+          "Lions of Teranga",
+          "Senegal national team",
+          "Teranga Lions"
+        ],
+        "de": [
+          "Senegal",
+          "senegalesische Nationalmannschaft",
+          "Löwen von Teranga",
+          "Loewen von Teranga"
+        ]
+      }
+    },
+    {
+      "fifa_code": "SUI",
+      "names": {
+        "en": "Switzerland",
+        "de": "Schweiz"
+      },
+      "codes": [
+        "SUI"
+      ],
+      "aliases": {
+        "en": [
+          "Switzerland",
+          "Swiss national team",
+          "Nati",
+          "La Nati",
+          "Suisse",
+          "Switzerland national team"
+        ],
+        "de": [
+          "Schweiz",
+          "Schweizer Nationalmannschaft",
+          "Nati",
+          "Schweizer Nati"
+        ]
+      }
+    },
+    {
+      "fifa_code": "SWE",
+      "names": {
+        "en": "Sweden",
+        "de": "Schweden"
+      },
+      "codes": [
+        "SWE"
+      ],
+      "aliases": {
+        "en": [
+          "Sweden",
+          "Swedish national team",
+          "Blagult",
+          "Sweden national team"
+        ],
+        "de": [
+          "Schweden",
+          "schwedische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "TUN",
+      "names": {
+        "en": "Tunisia",
+        "de": "Tunesien"
+      },
+      "codes": [
+        "TUN"
+      ],
+      "aliases": {
+        "en": [
+          "Tunisia",
+          "Tunisian national team",
+          "Eagles of Carthage",
+          "Tunisia national team"
+        ],
+        "de": [
+          "Tunesien",
+          "tunesische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "TUR",
+      "names": {
+        "en": "Turkey",
+        "de": "Türkei"
+      },
+      "codes": [
+        "TUR"
+      ],
+      "aliases": {
+        "en": [
+          "Turkey",
+          "Türkiye",
+          "Turkish national team",
+          "Ay-Yildizlilar",
+          "Ay-Yıldızlılar",
+          "Crescent-Stars",
+          "Turkey national team",
+          "Türkiye national team"
+        ],
+        "de": [
+          "Türkei",
+          "Tuerkei",
+          "Türkiye",
+          "türkische Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "URU",
+      "names": {
+        "en": "Uruguay",
+        "de": "Uruguay"
+      },
+      "codes": [
+        "URU",
+        "URY"
+      ],
+      "aliases": {
+        "en": [
+          "Uruguay",
+          "Uruguayan national team",
+          "La Celeste",
+          "Charruas",
+          "Uruguay national team"
+        ],
+        "de": [
+          "Uruguay",
+          "uruguayische Nationalmannschaft",
+          "La Celeste"
+        ]
+      }
+    },
+    {
+      "fifa_code": "USA",
+      "names": {
+        "en": "United States",
+        "de": "USA"
+      },
+      "codes": [
+        "USA"
+      ],
+      "aliases": {
+        "en": [
+          "United States",
+          "USA",
+          "USMNT",
+          "United States men's national team",
+          "America",
+          "Team USA",
+          "US national team",
+          "USA national team",
+          "United States of America"
+        ],
+        "de": [
+          "USA",
+          "Vereinigte Staaten",
+          "USMNT",
+          "US-Nationalmannschaft"
+        ]
+      }
+    },
+    {
+      "fifa_code": "UZB",
+      "names": {
+        "en": "Uzbekistan",
+        "de": "Usbekistan"
+      },
+      "codes": [
+        "UZB"
+      ],
+      "aliases": {
+        "en": [
+          "Uzbekistan",
+          "Uzbek national team",
+          "Uzbekistan national team",
+          "White Wolves"
+        ],
+        "de": [
+          "Usbekistan",
+          "usbekische Nationalmannschaft"
+        ]
+      }
+    }
+  ]
+}

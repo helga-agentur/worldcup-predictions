@@ -1,0 +1,412 @@
+from __future__ import annotations
+
+import datetime as dt
+import tempfile
+import unittest
+from pathlib import Path
+
+try:
+    import duckdb  # noqa: F401
+except ModuleNotFoundError:  # pragma: no cover - local editable runs may not have deps installed.
+    duckdb = None
+
+from worldcup_predictions.core.contracts import Fixture, OutcomeProbabilities, Prediction, ScoreMatrixEntry, ScoreTip, Signal
+from worldcup_predictions.core.datasets import (
+    DIAGNOSTICS_COMPLETENESS_AUDIT,
+    PLUGIN_EVENT_OUTPUTS,
+    PLUGIN_RUN_DIAGNOSTICS,
+    PREDICTION_SIGNAL_IMPACTS,
+    TOURNAMENT_FIXTURES,
+)
+from worldcup_predictions.core.events import EventName, event_value
+from worldcup_predictions.core.plugin import BasePlugin, PluginManager, PluginResult
+from worldcup_predictions.core.signals import TOTAL_GOALS_FACTOR
+from worldcup_predictions.core.workflow import PredictionWorkflow, WorkflowContext
+from worldcup_predictions.evaluation.audit import build_prediction_audit_rows
+from worldcup_predictions.evaluation.diagnostics_completeness import write_diagnostics_completeness_audit
+from worldcup_predictions.evaluation.reports import write_standard_reports
+from worldcup_predictions.evaluation.scheduled_update import summarize_source_ledger_rows
+from worldcup_predictions.plugins.debug_report import DebugReportPlugin
+from worldcup_predictions.plugins.source_runtime import SourceRuntime
+from worldcup_predictions.plugins.structured_output import StructuredOutputPlugin
+from worldcup_predictions.plugins.provider_optimizers import SrfChProviderOptimizerPlugin
+from worldcup_predictions.storage import DuckDBStorage, SourceLedgerRecord, SourceRequest
+from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamResolver, TournamentState
+
+
+class StaticPredictionPlugin(BasePlugin):
+    id = "static_prediction"
+    priority = 10
+    subscribed_events = (EventName.PREDICTIONS_REQUESTED.value,)
+
+    def __init__(self, prediction: Prediction) -> None:
+        self.prediction = prediction
+
+    def handle(self, event, context, payload):
+        return PluginResult(
+            plugin_id=self.id,
+            event=event_value(event),
+            predictions=[self.prediction],
+        )
+
+
+class StaticSignalPlugin(BasePlugin):
+    id = "static_signal"
+    priority = 5
+    subscribed_events = (EventName.FEATURE_SIGNALS_REQUESTED.value,)
+
+    def __init__(self, fixture_key: str) -> None:
+        self.fixture_key = fixture_key
+
+    def handle(self, event, context, payload):
+        return PluginResult(
+            plugin_id=self.id,
+            event=event_value(event),
+            signals=[
+                Signal(
+                    name=TOTAL_GOALS_FACTOR,
+                    source="test_signal",
+                    fixture_key=self.fixture_key,
+                    value=0.95,
+                    weight=0.25,
+                    confidence=0.8,
+                    rationale="test signal",
+                )
+            ],
+        )
+
+
+class WorkflowLimitTest(unittest.TestCase):
+    def test_limit_zero_means_all_predictions(self) -> None:
+        match_prediction = prediction("2026-07-10T18:00:00Z", "Brazil", "Japan")
+        manager = PluginManager([StaticPredictionPlugin(match_prediction)])
+        workflow = PredictionWorkflow(
+            manager,
+            context=WorkflowContext(project_root=Path("."), data_root=Path("data")),
+        )
+
+        run = workflow.next_predictions(limit=0)
+
+        self.assertEqual(len(run.predictions), 1)
+
+
+class PredictionAuditStorageTest(unittest.TestCase):
+    @unittest.skipIf(duckdb is None, "duckdb dependency is not installed")
+    def test_missing_snapshot_audit_row_satisfies_dataset_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            resolver = TeamResolver.default()
+            fixture = FixtureRecord(
+                event_date="2026-07-10T18:00:00Z",
+                home_team=resolver.resolve("Brazil"),
+                away_team=resolver.resolve("Japan"),
+                stage="Group Stage",
+            )
+            state = TournamentState(
+                fixtures=[fixture],
+                results=[
+                    ResultRecord(
+                        event_date=fixture.event_date,
+                        home_team=fixture.home_team,
+                        away_team=fixture.away_team,
+                        score=ScoreTip(2, 0),
+                    )
+                ],
+                standings={},
+            )
+
+            rows = build_prediction_audit_rows(storage, state, run_id="test_run")
+
+            self.assertEqual(rows[0]["source"], "missing_snapshot")
+            self.assertTrue(rows[0]["snapshot_id"].startswith("missing_snapshot:"))
+            self.assertEqual(storage.read_records("prediction_audit")[0]["snapshot_id"], rows[0]["snapshot_id"])
+
+
+def prediction(event_date: str, home: str, away: str) -> Prediction:
+    probabilities = OutcomeProbabilities(home=0.49, draw=0.29, away=0.22)
+    return Prediction(
+        fixture=Fixture(event_date=event_date, home_team=home, away_team=away),
+        most_likely=ScoreTip(1, 1),
+        outcome_probabilities=probabilities,
+        confidence_label="Medium-low",
+        confidence_percent=probabilities.max_probability(),
+        expected_home_goals=1.2,
+        expected_away_goals=0.9,
+        source="static_prediction",
+        score_matrix=[
+            ScoreMatrixEntry(1, 1, 0.30),
+            ScoreMatrixEntry(1, 0, 0.24),
+            ScoreMatrixEntry(2, 1, 0.20),
+            ScoreMatrixEntry(0, 0, 0.16),
+            ScoreMatrixEntry(0, 1, 0.10),
+        ],
+        metadata={"signal_adjustments": [{"signal": TOTAL_GOALS_FACTOR, "weight": 0.2, "factor": 0.95}]},
+    )
+
+
+@unittest.skipIf(duckdb is None, "duckdb dependency is not installed")
+class StorageTest(unittest.TestCase):
+    def test_source_ledger_blocks_fresh_successful_fetch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            request = SourceRequest(
+                source="odds_api",
+                endpoint="/v4/sports/soccer/odds",
+                purpose="fixture_odds",
+                params={"markets": "h2h"},
+                min_refresh_interval=dt.timedelta(hours=2),
+            )
+            now = dt.datetime(2026, 6, 28, 12, tzinfo=dt.timezone.utc)
+
+            self.assertTrue(storage.should_fetch(request, now=now).should_fetch)
+
+            storage.record_fetch(
+                SourceLedgerRecord(
+                    request=request,
+                    status="success",
+                    fetched_at_utc="2026-06-28T11:30:00Z",
+                    quota_remaining=10,
+                )
+            )
+            decision = storage.should_fetch(request, now=now)
+
+            self.assertFalse(decision.should_fetch)
+            self.assertEqual(decision.reason, "fresh_enough")
+
+    def test_source_ledger_respects_next_safe_fetch_time(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            request = SourceRequest(
+                source="news_api",
+                endpoint="/v2/everything",
+                purpose="lineup_news",
+                params={"q": "Brazil Japan"},
+            )
+            storage.record_fetch(
+                SourceLedgerRecord(
+                    request=request,
+                    status="rate_limited",
+                    fetched_at_utc="2026-06-28T11:00:00Z",
+                    next_safe_fetch_at="2026-06-28T13:00:00Z",
+                    message="429",
+                )
+            )
+
+            decision = storage.should_fetch(request, now=dt.datetime(2026, 6, 28, 12, tzinfo=dt.timezone.utc))
+
+            self.assertFalse(decision.should_fetch)
+            self.assertEqual(decision.reason, "next_safe_fetch_at_not_reached")
+
+    def test_source_ledger_is_filterable_by_run_id_and_summarizes_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            request = SourceRequest(
+                source="weather",
+                endpoint="https://api.open-meteo.com/v1/forecast",
+                purpose="match_window_weather",
+                params={"fixture": "fixture-a"},
+                fixture_key="fixture-a",
+            )
+            storage.record_fetch(
+                SourceLedgerRecord(
+                    request=request,
+                    status="error",
+                    run_id="run-a",
+                    fetched_at_utc="2026-06-28T12:00:00Z",
+                    message="timeout",
+                )
+            )
+            storage.record_fetch(
+                SourceLedgerRecord(
+                    request=request,
+                    status="success",
+                    run_id="run-b",
+                    fetched_at_utc="2026-06-28T13:00:00Z",
+                    metadata={"rows": 0},
+                )
+            )
+
+            rows = storage.read_source_ledger(run_id="run-a")
+            summary = summarize_source_ledger_rows(rows)
+
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["run_id"], "run-a")
+            self.assertEqual(summary["status_counts"], {"error": 1})
+            self.assertEqual(summary["source_status_counts"], {"weather:error": 1})
+            self.assertEqual(summary["calls_made"], 1)
+            self.assertEqual(summary["calls_avoided"], 0)
+            self.assertEqual(summary["failures"][0]["message"], "timeout")
+
+    def test_source_runtime_records_skipped_fetches_as_avoided_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            request = SourceRequest(
+                source="odds_api",
+                endpoint="/v4/sports/soccer/odds",
+                purpose="fixture_odds",
+                params={"markets": "h2h"},
+                min_refresh_interval=dt.timedelta(hours=2),
+            )
+            storage.record_fetch(
+                SourceLedgerRecord(
+                    request=request,
+                    status="success",
+                    run_id="run-a",
+                    fetched_at_utc=dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+                    quota_remaining=10,
+                )
+            )
+            context = WorkflowContext(
+                project_root=Path(tmp),
+                data_root=Path(tmp) / "data",
+                storage=storage,
+                run_id="run-b",
+            )
+            runtime = SourceRuntime(BasePlugin(), EventName.FIXTURES_REQUESTED, context)
+
+            decision = runtime.should_fetch(request)
+            rows = storage.read_source_ledger(run_id="run-b")
+            summary = summarize_source_ledger_rows(rows)
+
+            self.assertFalse(decision.should_fetch)
+            self.assertEqual(rows[0]["status"], "skipped")
+            self.assertEqual(rows[0]["message"], "fresh_enough")
+            self.assertEqual(summary["calls_made"], 0)
+            self.assertEqual(summary["calls_avoided"], 1)
+            self.assertEqual(summary["quota_cost_avoided"], 1)
+
+    def test_structured_records_are_append_only_and_latest_reads_reuse_last_available_row(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            dataset = "test_hourly_source"
+
+            first_count = storage.write_records(
+                dataset,
+                [{"record_key": "fixture-a:weather", "fixture_key": "fixture-a", "value": 0.91}],
+                source="weather",
+                run_id="run-a",
+            )
+            latest_after_empty_run = storage.read_records(dataset, latest_only=True)
+            second_count = storage.write_records(
+                dataset,
+                [{"record_key": "fixture-a:weather", "fixture_key": "fixture-a", "value": 0.84}],
+                source="weather",
+                run_id="run-c",
+            )
+
+            all_rows = storage.read_records(dataset)
+            latest_rows = storage.read_records(dataset, latest_only=True)
+
+            self.assertEqual(first_count, 1)
+            self.assertEqual(second_count, 1)
+            self.assertEqual(len(all_rows), 2)
+            self.assertEqual(latest_after_empty_run[0]["value"], 0.91)
+            self.assertEqual(latest_rows[0]["value"], 0.84)
+            self.assertEqual(latest_rows[0]["_record"]["run_id"], "run-c")
+
+    def test_structured_output_plugin_persists_predictions(self) -> None:
+        now = dt.datetime.now(dt.timezone.utc)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            match_prediction = prediction(
+                (now + dt.timedelta(hours=2)).isoformat().replace("+00:00", "Z"),
+                "Brazil",
+                "Japan",
+            )
+            manager = PluginManager(
+                [
+                    StaticPredictionPlugin(match_prediction),
+                    SrfChProviderOptimizerPlugin(),
+                    StructuredOutputPlugin(),
+                ]
+            )
+            workflow = PredictionWorkflow.from_project_root(root, manager)
+
+            run = workflow.next_predictions(limit=1)
+
+            self.assertEqual(len(run.predictions), 1)
+            self.assertEqual(len(run.optimized_tips), 1)
+            self.assertTrue((root / "data" / "structured" / "predictions.parquet").exists())
+            self.assertTrue((root / "data" / "structured" / "optimized_tips.parquet").exists())
+            storage = workflow.context.storage
+            self.assertIsNotNone(storage)
+
+    def test_core_plugin_diagnostics_and_signal_impacts_are_persisted(self) -> None:
+        now = dt.datetime.now(dt.timezone.utc)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            match_prediction = prediction(
+                (now + dt.timedelta(hours=2)).isoformat().replace("+00:00", "Z"),
+                "Brazil",
+                "Japan",
+            )
+            manager = PluginManager(
+                [
+                    StaticSignalPlugin(match_prediction.fixture.key),
+                    StaticPredictionPlugin(match_prediction),
+                    DebugReportPlugin(),
+                ]
+            )
+            workflow = PredictionWorkflow.from_project_root(root, manager)
+
+            workflow.next_predictions(limit=1)
+
+            storage = workflow.context.storage
+            self.assertIsNotNone(storage)
+            plugin_rows = storage.read_records(PLUGIN_RUN_DIAGNOSTICS, latest_only=True)
+            event_output_rows = storage.read_records(PLUGIN_EVENT_OUTPUTS, latest_only=True)
+            impact_rows = storage.read_records(PREDICTION_SIGNAL_IMPACTS, latest_only=True)
+            self.assertTrue(any(row["plugin_id"] == "static_prediction" for row in plugin_rows))
+            self.assertTrue(any(row["plugin_id"] == "debug_report" for row in plugin_rows))
+            self.assertTrue(any(row["plugin_id"] == "static_signal" and row["output_type"] == "signal" for row in event_output_rows))
+            self.assertTrue(any(row["plugin_id"] == "static_prediction" and row["output_type"] == "prediction" for row in event_output_rows))
+            self.assertEqual(impact_rows[0]["signal_name"], TOTAL_GOALS_FACTOR)
+            self.assertTrue(impact_rows[0]["applied"])
+
+    def test_diagnostics_completeness_audit_is_persisted_and_reported(self) -> None:
+        now = dt.datetime.now(dt.timezone.utc)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            match_prediction = prediction(
+                (now + dt.timedelta(hours=2)).isoformat().replace("+00:00", "Z"),
+                "Brazil",
+                "Japan",
+            )
+            manager = PluginManager(
+                [
+                    StaticSignalPlugin(match_prediction.fixture.key),
+                    StaticPredictionPlugin(match_prediction),
+                    StructuredOutputPlugin(),
+                    SrfChProviderOptimizerPlugin(),
+                    DebugReportPlugin(),
+                ]
+            )
+            workflow = PredictionWorkflow.from_project_root(root, manager)
+
+            workflow.next_predictions(limit=1)
+            storage = workflow.context.storage
+            self.assertIsNotNone(storage)
+            rows = write_diagnostics_completeness_audit(storage, workflow.manager.plugins, run_id=workflow.context.run_id)
+            reports = write_standard_reports(storage, root, run_id=workflow.context.run_id)
+
+            persisted_rows = storage.read_records(DIAGNOSTICS_COMPLETENESS_AUDIT, latest_only=True)
+            self.assertGreater(len(rows), 0)
+            self.assertTrue(any(row["scope"] == "dataset_fields" for row in persisted_rows))
+            self.assertTrue(any(row["scope"] == "plugin_run" for row in persisted_rows))
+            self.assertTrue(any(report["report_key"] == "diagnostics-completeness" for report in reports))
+            self.assertTrue((root / "reports" / "diagnostics-completeness.md").exists())
+
+    def test_structured_records_validate_registered_dataset_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+
+            with self.assertRaisesRegex(ValueError, "missing required fields"):
+                storage.write_records(
+                    TOURNAMENT_FIXTURES,
+                    [{"fixture_key": "2026-06-29_BRA_JPN"}],
+                    source="test",
+                )
+
+
+if __name__ == "__main__":
+    unittest.main()

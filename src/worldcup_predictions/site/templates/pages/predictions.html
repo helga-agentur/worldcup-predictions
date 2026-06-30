@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "partials/page_intro.html" import page_intro %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/" aria-current="page">Prognosen</a>
+</nav>
+
+<section class="intro" aria-labelledby="page-title">
+  {{ page_intro(
+    "page-title",
+    "Helga Tippspiel Prognosen",
+    "Provider-neutrale Score-Prognosen, SRF-Optimierung und 20min-Optimierung aus dem aktuellen Datenlauf."
+  ) }}
+  <section class="summary-dashboard" aria-labelledby="summary-title">
+    <h2 id="summary-title" class="visually-hidden">Prognosen Übersicht</h2>
+    <dl class="summary-metrics">
+      <div class="summary-card">
+        <dt class="summary-label">Getippte Tipps</dt>
+        <dd class="summary-value">{{ summary.tipped }}</dd>
+      </div>
+      <div class="summary-card">
+        <dt class="summary-label">Offene Tipps</dt>
+        <dd class="summary-value">{{ summary.future }}</dd>
+      </div>
+      <div class="summary-card">
+        <dt class="summary-label">SRF Punkte</dt>
+        <dd class="summary-value">{{ summary.srf_points_display }}</dd>
+      </div>
+      <div class="summary-card">
+        <dt class="summary-label">20min Punkte</dt>
+        <dd class="summary-value">{{ summary.twenty_min_points_display }}</dd>
+      </div>
+    </dl>
+  </section>
+</section>
+
+<section class="table-section" aria-labelledby="future-title">
+  <header class="section-heading">
+    <section class="section-heading-copy">
+      <h2 id="future-title">Kommende Spiele</h2>
+      <p>Diese Daten können sich bis zum jeweiligen Spielstart noch verändern.</p>
+    </section>
+  </header>
+  {% if future_rows %}
+    {% set rows_to_show = future_rows %}
+    {% set show_account_columns = false %}
+    {% set score_column_label = "Vorhersage" %}
+    {% set score_column_source = "prediction" %}
+    {% include "partials/prediction_table.html" %}
+  {% else %}
+    <p class="empty">Keine offenen Spiele im veröffentlichten Spielplan.</p>
+  {% endif %}
+</section>
+
+<section class="table-section" aria-labelledby="past-title">
+  <header class="section-heading">
+    <section class="section-heading-copy">
+      <h2 id="past-title">Getippte Spiele</h2>
+      <p>Diese Prognosen sind für die Webseite eingefroren; Resultate werden nur ergänzt.</p>
+    </section>
+  </header>
+  {% if tipped_rows %}
+    {% set rows_to_show = tipped_rows %}
+    {% set show_account_columns = true %}
+    {% set score_column_label = "Resultat" %}
+    {% set score_column_source = "actual" %}
+    {% include "partials/prediction_table.html" %}
+  {% else %}
+    <p class="empty">Noch keine gespielten Spiele.</p>
+  {% endif %}
+</section>
+{% endblock %}

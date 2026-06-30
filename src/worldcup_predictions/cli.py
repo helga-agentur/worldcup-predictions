@@ -1,0 +1,875 @@
+"""Command line interface for the new plugin workflow."""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+from pathlib import Path
+from typing import Sequence
+
+from worldcup_predictions import __version__
+from worldcup_predictions.core.datasets import (
+    MARKET_OUTRIGHTS,
+    MODEL_CALIBRATION,
+    PREDICTION_BACKTEST,
+    PREDICTION_LEDGER,
+    SIMULATION_RUNS,
+    SIMULATION_SUMMARY,
+)
+from worldcup_predictions.core.contracts import ScoreTip
+from worldcup_predictions.core.i18n import load_translation_catalog
+from worldcup_predictions.core.plugin import PluginManager
+from worldcup_predictions.core.workflow import PredictionWorkflow
+from worldcup_predictions.documentation import render_plugin_catalog
+from worldcup_predictions.entities.dynamic_aliases import build_generated_alias_rows
+from worldcup_predictions.entities.validation import build_entity_validation_rows
+from worldcup_predictions.evaluation import (
+    BACKTEST_DATASET,
+    backtest_historical,
+    backtest_srf,
+    knockout_backtest_summary,
+    summarize_backtest_by,
+    summarize_backtest_rows,
+    write_provider_knockout_audit,
+)
+from worldcup_predictions.evaluation.baseline_bundle import create_baseline_bundle
+from worldcup_predictions.evaluation.model_calibration import calibrate_baseline_model
+from worldcup_predictions.evaluation.audit import build_prediction_audit_rows
+from worldcup_predictions.evaluation.diagnostics_completeness import write_diagnostics_completeness_audit
+from worldcup_predictions.evaluation.bonus_tracker import build_bonus_tracker_rows
+from worldcup_predictions.evaluation.postmatch import write_postmatch_outputs
+from worldcup_predictions.evaluation.prediction_export import write_prediction_export
+from worldcup_predictions.evaluation.prediction_ledger import write_prediction_ledger
+from worldcup_predictions.evaluation.prediction_snapshots import (
+    compare_snapshots,
+    comparison_summary,
+    utc_label,
+    write_prediction_snapshot,
+)
+from worldcup_predictions.evaluation.published_prediction_ledger import write_published_prediction_ledger
+from worldcup_predictions.evaluation.provider_points import build_provider_points_rows
+from worldcup_predictions.evaluation.reports import write_standard_reports
+from worldcup_predictions.evaluation.scheduled_update import summarize_source_ledger_rows, write_prediction_run_summary
+from worldcup_predictions.model import load_historical_results
+from worldcup_predictions.model import BaselineModelConfig, HistoricalResult
+from worldcup_predictions.model.baseline import compute_elo
+from worldcup_predictions.plugins import builtin_plugins
+from worldcup_predictions.plugins.provider_optimizers.ch_srf import best_srf_bonus_answers, evaluate_srf_bonus_questions
+from worldcup_predictions.plugins.provider_optimizers.ch_20min import best_twenty_min_bonus_answers, evaluate_twenty_min_bonus_questions
+from worldcup_predictions.simulations import SimulationInputs, TournamentSimulator
+from worldcup_predictions.site import build_site, serve_site
+from worldcup_predictions.site.generator import gtm_container_id_from_env
+from worldcup_predictions.tournament.repository import (
+    load_tournament_state,
+)
+
+
+def build_manager(project_root: Path | None = None) -> PluginManager:
+    return PluginManager(list(builtin_plugins()))
+
+
+def build_workflow(project_root: Path) -> PredictionWorkflow:
+    return PredictionWorkflow.from_project_root(project_root=project_root, manager=build_manager(project_root))
+
+
+def print_predictions_table(run, *, locale: str | None = None) -> None:
+    translations = load_translation_catalog(locale)
+    if not run.predictions:
+        print(translations.translate("workflow.no_open_predictions"))
+        return
+    tips_by_fixture_provider = {
+        (tip.fixture_key, tip.ruleset.provider): tip
+        for tip in run.optimized_tips
+    }
+    print(
+        "| "
+        f"{translations.translate('prediction.table.match')} | "
+        f"{translations.translate('prediction.table.expected_goals')} | "
+        f"{translations.translate('prediction.table.most_likely')} | "
+        f"{translations.translate('prediction.table.srf_tip')} | "
+        f"{translations.translate('prediction.table.20min_tip')} | "
+        f"{translations.translate('prediction.table.hda')} | "
+        f"{translations.translate('prediction.table.confidence')} | "
+        f"{translations.translate('prediction.table.source')} |"
+    )
+    print("| --- | ---: | ---: | ---: | ---: | ---: | --- | --- |")
+    for prediction in run.predictions:
+        match = f"{prediction.fixture.home_team} - {prediction.fixture.away_team}"
+        confidence = f"{prediction.confidence_label} ({prediction.confidence_percent:.0%})"
+        expected_goals = "-"
+        if prediction.expected_home_goals is not None and prediction.expected_away_goals is not None:
+            expected_goals = f"{prediction.expected_home_goals:.2f}:{prediction.expected_away_goals:.2f}"
+        srf_tip = tips_by_fixture_provider.get((prediction.fixture.key, "srf.ch"))
+        twenty_min_tip = tips_by_fixture_provider.get((prediction.fixture.key, "20min.ch"))
+        print(
+            "| "
+            f"{match} | "
+            f"{expected_goals} | "
+            f"{prediction.most_likely.as_text()} | "
+            f"{srf_tip.display_text() if srf_tip else '-'} | "
+            f"{twenty_min_tip.display_text() if twenty_min_tip else '-'} | "
+            f"{prediction.outcome_probabilities.as_percentages()} | "
+            f"{confidence} | "
+            f"{prediction.source} |"
+        )
+
+
+def command_plugins(_args: argparse.Namespace) -> int:
+    manager = build_manager(Path(_args.project_root).resolve())
+    for plugin in manager.list_plugins():
+        events = ", ".join(plugin["events"])
+        kind = plugin["metadata"]["kind"]
+        print(f"{plugin['id']} {plugin['version']} kind={kind} priority={plugin['priority']} events={events}")
+    return 0
+
+
+def command_docs_plugins(args: argparse.Namespace) -> int:
+    project_root = Path(args.project_root).resolve()
+    manager = build_manager(project_root)
+    docs_path = project_root / "docs" / "plugins.md"
+    docs_path.parent.mkdir(parents=True, exist_ok=True)
+    docs_path.write_text(render_plugin_catalog(manager.plugins), encoding="utf-8")
+    print(f"Wrote {docs_path}.")
+    return 0
+
+
+def command_predict(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    run = workflow.next_predictions(limit=args.limit, include_closed=args.include_closed)
+    if args.json:
+        print(run.to_json())
+    else:
+        print_predictions_table(run, locale=args.locale)
+        diagnostics = [diagnostic for diagnostic in run.diagnostics if diagnostic.level != "info"]
+        if diagnostics:
+            print()
+            print("Diagnostics:")
+            for diagnostic in diagnostics:
+                print(f"- {diagnostic.level}: {diagnostic.message}")
+    return 0
+
+
+def command_workflow(args: argparse.Namespace) -> int:
+    """Run the standard prediction workflow."""
+
+    return command_predict(args)
+
+
+def command_scheduled_update(args: argparse.Namespace) -> int:
+    """Run the cron-friendly full update cycle."""
+
+    project_root = Path(args.project_root).resolve()
+    workflow = build_workflow(project_root)
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot run scheduled update.")
+        return 1
+
+    initial_state = load_tournament_state(workflow.context.storage)
+    initial_open_count = len(initial_state.open_fixtures())
+    run = workflow.next_predictions(limit=0, include_closed=False)
+    snapshot_id = f"scheduled_{utc_label()}"
+    snapshot_count = write_prediction_snapshot(
+        workflow.context.storage,
+        snapshot_id,
+        run.predictions,
+        run.optimized_tips,
+        run_id=workflow.context.run_id,
+    )
+
+    refreshed_state = load_tournament_state(workflow.context.storage)
+    open_count = len(refreshed_state.open_fixtures())
+    historical_results = load_historical_results(workflow.context.storage)
+    backtest_rows = backtest_srf(refreshed_state, historical_results, signals=_workflow_signals(workflow))
+    workflow.context.storage.write_records(
+        PREDICTION_BACKTEST,
+        backtest_rows,
+        source="scheduled_update:backtest",
+        run_id=workflow.context.run_id,
+    )
+    knockout_summary = knockout_backtest_summary(backtest_rows)
+    knockout_audit_rows = write_provider_knockout_audit(
+        workflow.context.storage,
+        backtest_rows,
+        run_id=workflow.context.run_id,
+    )
+    audit_rows = build_prediction_audit_rows(
+        workflow.context.storage,
+        refreshed_state,
+        run_id=workflow.context.run_id,
+    )
+    learning_count, review_count, postmatch_summary = write_postmatch_outputs(
+        workflow.context.storage,
+        run_id=workflow.context.run_id,
+    )
+
+    provider_summary = {}
+    for provider in ("srf.ch", "20min.ch"):
+        point_rows = build_provider_points_rows(
+            workflow.context.storage,
+            refreshed_state,
+            provider=provider,
+            run_id=workflow.context.run_id,
+        )
+        bonus_rows = build_bonus_tracker_rows(
+            workflow.context.storage,
+            refreshed_state,
+            provider=provider,
+            run_id=workflow.context.run_id,
+        )
+        provider_summary[provider] = {
+            "point_rows": len(point_rows),
+            "points": sum(float(row.get("points") or 0.0) for row in point_rows),
+            "bonus_rows": len(bonus_rows),
+        }
+
+    ledger_count = write_prediction_ledger(workflow.context.storage, run_id=workflow.context.run_id)
+    published_ledger_count = write_published_prediction_ledger(workflow.context.storage, run_id=workflow.context.run_id)
+    export_manifest = write_prediction_export(
+        workflow.context.storage,
+        project_root / "data" / "exports" / "predictions.json",
+        export_id=f"{snapshot_id}:export",
+        run_id=workflow.context.run_id,
+    )
+    site_build = build_site(
+        project_root=project_root,
+        storage=workflow.context.storage,
+        gtm_container_id=gtm_container_id_from_env(project_root),
+    )
+    diagnostics_completeness_rows = write_diagnostics_completeness_audit(
+        workflow.context.storage,
+        workflow.manager.plugins,
+        run_id=workflow.context.run_id,
+    )
+    reports = write_standard_reports(workflow.context.storage, project_root, run_id=workflow.context.run_id)
+    source_ledger_path = ""
+    source_ledger_summary = {}
+    if hasattr(workflow.context.storage, "export_source_ledger"):
+        source_ledger_path = str(workflow.context.storage.export_source_ledger())
+    if hasattr(workflow.context.storage, "read_source_ledger"):
+        source_ledger_rows = workflow.context.storage.read_source_ledger(run_id=workflow.context.run_id)
+        source_ledger_summary = summarize_source_ledger_rows(source_ledger_rows)
+
+    maintenance = {
+        "initial_open_fixtures": initial_open_count,
+        "open_fixtures": open_count,
+        "backtest_rows": len(backtest_rows),
+        "audit_rows": len(audit_rows),
+        "postmatch_learning_rows": learning_count,
+        "postmatch_review_rows": review_count,
+        "postmatch_summary": postmatch_summary,
+        "knockout_backtest_summary": knockout_summary,
+        "provider_knockout_audit_rows": len(knockout_audit_rows),
+        "providers": provider_summary,
+        "prediction_ledger_rows": ledger_count,
+        "published_prediction_ledger_rows": published_ledger_count,
+        "prediction_export": export_manifest,
+        "site_build": site_build.to_dict(),
+        "diagnostics_completeness_rows": len(diagnostics_completeness_rows),
+        "reports": [report["path"] for report in reports],
+        "source_ledger_path": source_ledger_path,
+        "source_ledger": source_ledger_summary,
+    }
+    write_prediction_run_summary(
+        workflow.context.storage,
+        run,
+        snapshot_id=snapshot_id,
+        snapshot_rows=snapshot_count,
+        maintenance=maintenance,
+    )
+
+    print(f"Scheduled update {snapshot_id}: {len(run.predictions)} prediction(s), {snapshot_count} snapshot row(s).")
+    print(
+        "Maintenance: {backtest_rows} backtest row(s), {audit_rows} audit row(s), "
+        "{postmatch_learning_rows} postmatch-learning row(s), "
+        "{prediction_ledger_rows} prediction-ledger row(s), "
+        "{published_prediction_ledger_rows} published row(s).".format(**maintenance)
+    )
+    return 0
+
+
+def _workflow_signals(workflow) -> list:
+    signals = []
+    for result in workflow.context.event_results:
+        signals.extend(result.signals)
+    return signals
+
+
+def command_build_site(args: argparse.Namespace) -> int:
+    """Build the static website from the published prediction ledger."""
+
+    project_root = Path(args.project_root).resolve()
+    workflow = build_workflow(project_root)
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot build site.")
+        return 1
+    _ensure_published_ledger(workflow.context.storage, run_id=workflow.context.run_id)
+    result = build_site(
+        project_root=project_root,
+        storage=workflow.context.storage,
+        gtm_container_id=gtm_container_id_from_env(project_root),
+    )
+    print(
+        f"Built static site in {result.output_dir} with {result.row_count} row(s) "
+        f"({result.future_count} future, {result.locked_count} locked, {result.final_count} final)."
+    )
+    return 0
+
+
+def command_serve_site(args: argparse.Namespace) -> int:
+    """Serve the generated static website locally."""
+
+    project_root = Path(args.project_root).resolve()
+    workflow = build_workflow(project_root)
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot serve site.")
+        return 1
+    _ensure_published_ledger(workflow.context.storage, run_id=workflow.context.run_id)
+    output_dir = project_root / "public" / "current"
+    if not (output_dir / "index.html").exists():
+        build_site(
+            project_root=project_root,
+            storage=workflow.context.storage,
+            gtm_container_id=gtm_container_id_from_env(project_root),
+        )
+    serve_site(directory=output_dir, host=args.host, port=args.port)
+    return 0
+
+
+def _ensure_published_ledger(storage, *, run_id: str | None = None) -> int:
+    """Refresh the website-facing ledger from the latest prediction ledger."""
+
+    if not storage.read_records(PREDICTION_LEDGER, latest_only=True):
+        write_prediction_ledger(storage, run_id=run_id)
+    return write_published_prediction_ledger(storage, run_id=run_id)
+
+
+def command_export_predictions(args: argparse.Namespace) -> int:
+    """Write the latest prediction state to one comparison-friendly JSON file."""
+
+    project_root = Path(args.project_root).resolve()
+    workflow = build_workflow(project_root)
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot export predictions.")
+        return 1
+    output = Path(args.output_file) if args.output_file else project_root / "data" / "exports" / "predictions.json"
+    if not output.is_absolute():
+        output = project_root / output
+    export_id = f"prediction_export_{utc_label()}"
+    manifest = write_prediction_export(
+        workflow.context.storage,
+        output,
+        export_id=export_id,
+        run_id=workflow.context.run_id,
+    )
+    print(f"Wrote prediction export {manifest['export_id']} with {manifest['prediction_count']} match row(s): {manifest['path']}")
+    return 0
+
+
+def command_baseline_bundle(args: argparse.Namespace) -> int:
+    """Run the workflow and create a refactor-safety baseline bundle."""
+
+    project_root = Path(args.project_root).resolve()
+    workflow = build_workflow(project_root)
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot create baseline bundle.")
+        return 1
+    baseline_id = args.baseline_id or f"baseline_{utc_label()}"
+    run = workflow.next_predictions(limit=0, include_closed=False)
+    manifest = create_baseline_bundle(
+        project_root=project_root,
+        storage=workflow.context.storage,
+        run=run,
+        plugins=workflow.manager.plugins,
+        baseline_id=baseline_id,
+    )
+    print(
+        f"Created baseline bundle {manifest['baseline_id']} with "
+        f"{manifest['prediction_count']} prediction(s): {manifest['path']}"
+    )
+    return 0
+
+
+def command_backtest(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot run backtest.")
+        return 1
+    state = load_tournament_state(workflow.context.storage)
+    historical_results = load_historical_results(workflow.context.storage)
+    rows = backtest_srf(state, historical_results)
+    count = workflow.context.storage.write_records(BACKTEST_DATASET, rows, source="backtest_srf", run_id=workflow.context.run_id)
+
+    current = summarize_backtest_rows(rows)
+    print(
+        "Current tournament: {matches} finished fixture(s) | {points_per_match:.2f} pts/match "
+        "(expected {expected_points_per_match:.2f}) | outcome {outcome_hit_rate:.1%} | "
+        "exact {exact_hit_rate:.1%} | RPS {rps:.3f}.".format(**current)
+    )
+    for phase, summary in summarize_backtest_by(rows, "phase").items():
+        if summary["matches"]:
+            print(
+                "  {phase}: {matches} match(es) | {points_per_match:.2f} pts/match | "
+                "outcome {outcome_hit_rate:.1%} | RPS {rps:.3f}.".format(phase=phase or "unknown", **summary)
+            )
+
+    historical_rows = backtest_historical(historical_results)
+    if historical_rows:
+        print("Historical World Cup baseline (no live signals):")
+        for year, summary in summarize_backtest_by(historical_rows, "year").items():
+            print(
+                "  {year}: {matches} match(es) | {points_per_match:.2f} pts/match | "
+                "outcome {outcome_hit_rate:.1%} | exact {exact_hit_rate:.1%} | RPS {rps:.3f}.".format(year=year, **summary)
+            )
+        total = summarize_backtest_rows(historical_rows)
+        print(
+            "  TOTAL: {matches} match(es) | {points_per_match:.2f} pts/match "
+            "(expected {expected_points_per_match:.2f}) | outcome {outcome_hit_rate:.1%} | "
+            "exact {exact_hit_rate:.1%} | RPS {rps:.3f}.".format(**total)
+        )
+    return 0
+
+
+def command_calibrate_model(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot calibrate model.")
+        return 1
+    historical_results = load_historical_results(workflow.context.storage)
+    rows = calibrate_baseline_model(historical_results)
+    count = workflow.context.storage.write_records(
+        MODEL_CALIBRATION,
+        rows,
+        source="model_calibration",
+        run_id=workflow.context.run_id,
+    )
+    selected = next((row for row in rows if row.get("selected")), None)
+    if selected is None:
+        print("No historical World Cup calibration sample is available.")
+        return 0
+    parameters = selected.get("parameters") or {}
+    print(
+        "Calibrated {count} candidate(s) over {sample_matches} historical World Cup match(es).".format(
+            count=count,
+            sample_matches=selected.get("sample_matches", 0),
+        )
+    )
+    print(
+        "Selected {calibration_id}: rho {rho}, overdispersion {overdispersion}, ml_weight {ml_weight} | "
+        "{srf_points_per_match:.2f} pts/match (expected {expected_points_per_match:.2f}) | "
+        "outcome {outcome_hit_rate:.1%} | RPS {rps:.3f}.".format(
+            calibration_id=selected["calibration_id"],
+            rho=parameters.get("dixon_coles_rho"),
+            overdispersion=parameters.get("score_overdispersion"),
+            ml_weight=parameters.get("ml_hda_max_weight"),
+            **{key: selected[key] for key in ("srf_points_per_match", "expected_points_per_match", "outcome_hit_rate", "rps")},
+        )
+    )
+    print("Market and expert weights are not tunable here (no historical odds/expert data); validate those forward on the live tournament.")
+    return 0
+
+
+def command_snapshot_predictions(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot snapshot predictions.")
+        return 1
+    snapshot_id = args.snapshot_id or utc_label()
+    run = workflow.next_predictions(limit=args.limit, include_closed=args.include_closed)
+    count = write_prediction_snapshot(workflow.context.storage, snapshot_id, run.predictions, run.optimized_tips, run_id=workflow.context.run_id)
+    print(f"Created prediction snapshot {snapshot_id} with {count} fixture rows.")
+    return 0
+
+
+def command_compare_snapshots(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot compare prediction snapshots.")
+        return 1
+    rows = compare_snapshots(workflow.context.storage, args.baseline_snapshot, args.candidate_snapshot, run_id=workflow.context.run_id)
+    summary = comparison_summary(rows)
+    print(
+        "Compared {rows} rows: {most_likely_changes} most-likely changes, {tip_changes} provider-tip changes, "
+        "max H/D/A delta {max_hda_probability_delta:.2%}, max matrix TV {max_matrix_total_variation:.4f}.".format(**summary)
+    )
+    return 0
+
+
+def command_audit_predictions(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot audit predictions.")
+        return 1
+    state = load_tournament_state(workflow.context.storage)
+    rows = build_prediction_audit_rows(workflow.context.storage, state, run_id=workflow.context.run_id)
+    total_by_provider: dict[str, float] = {}
+    for row in rows:
+        provider = str(row.get("provider") or "missing")
+        total_by_provider[provider] = total_by_provider.get(provider, 0.0) + float(row.get("points") or 0.0)
+    summary = ", ".join(f"{provider}: {points:.0f}" for provider, points in sorted(total_by_provider.items())) or "no rows"
+    print(f"Audited {len(rows)} frozen prediction row(s): {summary}.")
+    return 0
+
+
+def command_validate_entities(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot validate entities.")
+        return 1
+    rows = build_entity_validation_rows(workflow.context.storage, run_id=workflow.context.run_id)
+    unresolved = sum(1 for row in rows if row.get("status") == "unresolved")
+    print(f"Validated {len(rows)} stored entity label(s): {unresolved} unresolved.")
+    return 0
+
+
+def command_generate_entity_aliases(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot generate aliases.")
+        return 1
+    rows = build_generated_alias_rows(workflow.context.storage, run_id=workflow.context.run_id)
+    ambiguous = sum(1 for row in rows if row.get("ambiguous"))
+    print(f"Generated {len(rows)} entity alias candidate row(s), {ambiguous} ambiguous.")
+    return 0
+
+
+def command_reports(args: argparse.Namespace) -> int:
+    project_root = Path(args.project_root).resolve()
+    workflow = build_workflow(project_root)
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot write reports.")
+        return 1
+    reports = write_standard_reports(workflow.context.storage, project_root, run_id=workflow.context.run_id)
+    print("Wrote reports:")
+    for report in reports:
+        print(f"- {report['path']}")
+    return 0
+
+
+def command_simulate_tournament(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot run simulation.")
+        return 1
+    if args.from_day_one:
+        simulation_inputs = _simulation_inputs_from_day_one(workflow)
+        mode = "from_day_one"
+    else:
+        simulation_inputs = _simulation_inputs_from_current_state(workflow)
+        mode = "current_state"
+    summary = TournamentSimulator(simulation_inputs).run()
+    simulation_id = f"simulation_{utc_label()}"
+    summary_row = {
+        "record_key": simulation_id,
+        "simulation_id": simulation_id,
+        "mode": mode,
+        "iterations": summary.iterations,
+        "seed": summary.seed,
+        "distributions": summary.distributions,
+        "metadata": summary.metadata,
+        "srf_bonus": evaluate_srf_bonus_questions(summary),
+        "srf_best_answers": best_srf_bonus_answers(summary),
+        "twenty_min_bonus": evaluate_twenty_min_bonus_questions(summary),
+        "twenty_min_best_answers": best_twenty_min_bonus_answers(summary),
+    }
+    workflow.context.storage.write_records(SIMULATION_SUMMARY, [summary_row], source="simulate_tournament", run_id=workflow.context.run_id)
+    sample_rows = [
+        {
+            "record_key": f"{simulation_id}:{index}:{row.get('match_id')}",
+            "simulation_id": simulation_id,
+            **row,
+        }
+        for index, row in enumerate(summary.metadata.get("sample_results") or [])
+    ]
+    workflow.context.storage.write_records(SIMULATION_RUNS, sample_rows, source="simulate_tournament", run_id=workflow.context.run_id)
+
+    # Daily maintenance: regenerate entity-alias candidates and revalidate stored team
+    # labels. These change rarely (squads are fixed during the tournament), so daily
+    # cadence is sufficient and keeps the hourly prediction run lean. The regenerated
+    # aliases are read by subsequent hourly predictions.
+    alias_rows = build_generated_alias_rows(workflow.context.storage, run_id=workflow.context.run_id)
+    validation_rows = build_entity_validation_rows(workflow.context.storage, run_id=workflow.context.run_id)
+    unresolved = sum(1 for row in validation_rows if row.get("status") == "unresolved")
+
+    print(f"Ran {summary.iterations} tournament simulations ({simulation_id}).")
+    print(f"Simulation mode: {mode}.")
+    print(
+        f"Daily maintenance: {len(alias_rows)} alias candidate(s); "
+        f"{len(validation_rows)} entity label(s) validated ({unresolved} unresolved)."
+    )
+    print(f"SRF best bonus answers: {best_srf_bonus_answers(summary)}")
+    print(f"20min best bonus answers: {best_twenty_min_bonus_answers(summary)}")
+    return 0
+
+
+def _simulation_inputs_from_current_state(workflow: PredictionWorkflow) -> SimulationInputs:
+    """Prepare simulation inputs that fix confirmed scores already in storage."""
+
+    run = workflow.next_predictions(limit=0, include_closed=False)
+    state = load_tournament_state(workflow.context.storage)
+    return _simulation_inputs_from_state(
+        workflow,
+        state,
+        run,
+        known_results={result.fixture_key: result.score for result in state.results},
+        include_current_results_in_ratings=True,
+    )
+
+
+def _simulation_inputs_from_day_one(workflow: PredictionWorkflow) -> SimulationInputs:
+    """Prepare simulation inputs as if no tournament match had been played yet."""
+
+    workflow.context.settings["ignore_tournament_results_for_model"] = True
+    run = workflow.next_predictions(limit=0, include_closed=True, include_all_fixtures=True)
+    state = load_tournament_state(workflow.context.storage)
+    return _simulation_inputs_from_state(
+        workflow,
+        state,
+        run,
+        known_results={},
+        include_current_results_in_ratings=False,
+    )
+
+
+def _simulation_inputs_from_state(
+    workflow: PredictionWorkflow,
+    state,
+    run,
+    *,
+    known_results: dict[str, ScoreTip],
+    include_current_results_in_ratings: bool,
+) -> SimulationInputs:
+    matrices = {prediction.fixture.key: prediction.score_matrix for prediction in run.predictions}
+    team_strengths = _team_strengths_from_outrights(workflow.context.storage.read_records(MARKET_OUTRIGHTS, latest_only=True))
+    team_ratings = _team_ratings_for_simulation(
+        workflow.context.storage,
+        state,
+        include_current_results=include_current_results_in_ratings,
+    )
+    return SimulationInputs(
+        fixtures=[fixture.to_fixture() for fixture in state.fixtures],
+        known_results=known_results,
+        score_matrices=matrices,
+        team_strengths=team_strengths,
+        team_ratings=team_ratings,
+    )
+
+
+def command_postmatch_learning(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot build postmatch learning.")
+        return 1
+    learning_count, review_count, summary = write_postmatch_outputs(workflow.context.storage, run_id=workflow.context.run_id)
+    print(
+        "Built {learning_rows} postmatch-learning rows and {review_rows} review rows "
+        "({high_priority} high, {medium_priority} medium).".format(**summary)
+    )
+    return 0
+
+
+def command_provider_points(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot build provider points.")
+        return 1
+    state = load_tournament_state(workflow.context.storage)
+    rows = build_provider_points_rows(
+        workflow.context.storage,
+        state,
+        provider=args.provider,
+        run_id=workflow.context.run_id,
+    )
+    total = sum(float(row.get("points") or 0.0) for row in rows)
+    print(f"Built {len(rows)} {args.provider} point rows: {total:.0f} points.")
+    return 0
+
+
+def command_bonus_tracker(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    if workflow.context.storage is None:
+        print("Structured storage is unavailable; cannot build bonus tracker.")
+        return 1
+    state = load_tournament_state(workflow.context.storage)
+    rows = build_bonus_tracker_rows(workflow.context.storage, state, provider=args.provider, run_id=workflow.context.run_id)
+    impossible = sum(1 for row in rows if row.get("status") == "impossible")
+    virtual_points = next((row for row in rows if row.get("question_key") == "virtual_match_points"), None)
+    suffix = ""
+    if virtual_points is not None:
+        suffix = f", virtual match points {float(virtual_points.get('current_value') or 0.0):.0f}"
+    print(f"Built {len(rows)} {args.provider} bonus-tracker rows ({impossible} impossible{suffix}).")
+    return 0
+
+
+def _team_ratings_for_simulation(storage, state, *, include_current_results: bool = True) -> dict[str, float]:
+    """Elo ratings keyed by team display name and FIFA code for shootout resolution.
+
+    Includes already-finished tournament results so ratings reflect current form, and
+    is keyed the way the simulator identifies teams (display names from ``to_fixture``).
+    """
+
+    config = BaselineModelConfig()
+    historical_results = load_historical_results(storage)
+    tournament_history = []
+    if include_current_results:
+        tournament_history = [
+            HistoricalResult(
+                date=result.event_date[:10],
+                home_team=result.home_team,
+                away_team=result.away_team,
+                score=result.score,
+                tournament="FIFA World Cup",
+                neutral=True,
+                source=result.source,
+            )
+            for result in state.results
+        ]
+    ratings_by_key = compute_elo(
+        historical_results + tournament_history,
+        cutoff=dt.datetime.now(dt.timezone.utc),
+        config=config,
+    )
+    ratings: dict[str, float] = {}
+    for fixture in state.fixtures:
+        for team in (fixture.home_team, fixture.away_team):
+            rating = ratings_by_key.get(team.key, config.base_rating)
+            ratings[team.name] = rating
+            if team.fifa_code:
+                ratings[team.fifa_code] = rating
+    return ratings
+
+
+def _team_strengths_from_outrights(rows: list[dict]) -> dict[str, float]:
+    strengths = {}
+    for row in rows:
+        probability = row.get("fair_probability") or row.get("avg_implied_probability")
+        if probability in (None, ""):
+            continue
+        try:
+            strength = max(0.01, float(probability))
+        except (TypeError, ValueError):
+            continue
+        if row.get("team"):
+            strengths[str(row["team"])] = strength
+        if row.get("fifa_code"):
+            strengths[str(row["fifa_code"])] = strength
+    return strengths
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="worldcup-predictions")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument("--project-root", default=".", help="Repository root. Defaults to current directory.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    plugins_parser = subparsers.add_parser("plugins", help="List registered workflow plugins.")
+    plugins_parser.set_defaults(func=command_plugins)
+
+    docs_plugins_parser = subparsers.add_parser("docs-plugins", help="Regenerate docs/plugins.md from plugin metadata.")
+    docs_plugins_parser.set_defaults(func=command_docs_plugins)
+
+    predict_parser = subparsers.add_parser("predict", help="Render next predictions through the plugin workflow.")
+    predict_parser.add_argument("--limit", type=int, default=4)
+    predict_parser.add_argument("--include-closed", action="store_true")
+    predict_parser.add_argument("--json", action="store_true", help="Print machine-readable workflow output.")
+    predict_parser.add_argument("--locale", default=None, help="Output locale for user-facing labels. Defaults to en.")
+    predict_parser.set_defaults(func=command_predict)
+
+    workflow_parser = subparsers.add_parser(
+        "workflow",
+        help="Run the standard source-signal, prediction, provider-tip, and debug-report workflow.",
+    )
+    workflow_parser.add_argument("--limit", type=int, default=4)
+    workflow_parser.add_argument("--include-closed", action="store_true")
+    workflow_parser.add_argument("--json", action="store_true", help="Print machine-readable workflow output.")
+    workflow_parser.add_argument("--locale", default=None, help="Output locale for user-facing labels. Defaults to en.")
+    workflow_parser.set_defaults(func=command_workflow)
+
+    scheduled_parser = subparsers.add_parser(
+        "scheduled-update",
+        help="Run the cron-friendly full update cycle and store a timestamped prediction snapshot.",
+    )
+    scheduled_parser.set_defaults(func=command_scheduled_update)
+
+    site_build_parser = subparsers.add_parser(
+        "site-build",
+        help="Build the static public website from the published prediction ledger.",
+    )
+    site_build_parser.set_defaults(func=command_build_site)
+
+    site_serve_parser = subparsers.add_parser(
+        "site-serve",
+        help="Serve the generated static website locally with production-like cache headers.",
+    )
+    site_serve_parser.add_argument("--host", default="127.0.0.1")
+    site_serve_parser.add_argument("--port", type=int, default=8000)
+    site_serve_parser.set_defaults(func=command_serve_site)
+
+    export_parser = subparsers.add_parser(
+        "export-predictions",
+        help="Write latest predictions, tips, diagnostics, and score matrices to one JSON file.",
+    )
+    export_parser.add_argument("output_file", nargs="?", default="")
+    export_parser.set_defaults(func=command_export_predictions)
+
+    baseline_bundle_parser = subparsers.add_parser(
+        "baseline-bundle",
+        help="Run the workflow and create a refactor-safety baseline artifact folder.",
+    )
+    baseline_bundle_parser.add_argument("baseline_id", nargs="?", default="")
+    baseline_bundle_parser.set_defaults(func=command_baseline_bundle)
+
+    backtest_parser = subparsers.add_parser("backtest", help="Backtest current SRF predictions on finished fixtures.")
+    backtest_parser.set_defaults(func=command_backtest)
+
+    calibrate_parser = subparsers.add_parser("calibrate-model", help="Evaluate transparent model candidates on historical World Cups.")
+    calibrate_parser.set_defaults(func=command_calibrate_model)
+
+    snapshot_parser = subparsers.add_parser("snapshot-predictions", help="Run predictions and store a regression snapshot.")
+    snapshot_parser.add_argument("snapshot_id", nargs="?", default="")
+    snapshot_parser.add_argument("--limit", type=int, default=64)
+    snapshot_parser.add_argument("--include-closed", action="store_true")
+    snapshot_parser.set_defaults(func=command_snapshot_predictions)
+
+    compare_parser = subparsers.add_parser("compare-snapshots", help="Compare two stored prediction snapshots.")
+    compare_parser.add_argument("baseline_snapshot")
+    compare_parser.add_argument("candidate_snapshot")
+    compare_parser.set_defaults(func=command_compare_snapshots)
+
+    audit_parser = subparsers.add_parser("audit-predictions", help="Audit frozen pre-match prediction snapshots against final scores.")
+    audit_parser.set_defaults(func=command_audit_predictions)
+
+    validate_entities_parser = subparsers.add_parser("validate-entities", help="Validate stored team labels against the canonical country registry.")
+    validate_entities_parser.set_defaults(func=command_validate_entities)
+
+    generate_aliases_parser = subparsers.add_parser("generate-entity-aliases", help="Generate structured entity alias candidates from stored data.")
+    generate_aliases_parser.set_defaults(func=command_generate_entity_aliases)
+
+    reports_parser = subparsers.add_parser("reports", help="Write standard Markdown reports under reports/.")
+    reports_parser.set_defaults(func=command_reports)
+
+    simulate_parser = subparsers.add_parser("simulate-tournament", help="Run the standard 20,000-iteration tournament simulation.")
+    simulate_parser.add_argument(
+        "--from-day-one",
+        action="store_true",
+        help="Simulate as if no tournament matches had been played yet, ignoring stored final scores.",
+    )
+    simulate_parser.set_defaults(func=command_simulate_tournament)
+
+    postmatch_parser = subparsers.add_parser("postmatch-learning", help="Build postmatch learning and review queue rows.")
+    postmatch_parser.set_defaults(func=command_postmatch_learning)
+
+    provider_points_parser = subparsers.add_parser("provider-points", help="Score provider tips against confirmed results.")
+    provider_points_parser.add_argument("provider", choices=["srf.ch", "20min.ch"])
+    provider_points_parser.set_defaults(func=command_provider_points)
+
+    bonus_tracker_parser = subparsers.add_parser("bonus-tracker", help="Track provider bonus answers and virtual match-tip points.")
+    bonus_tracker_parser.add_argument("provider", choices=["srf.ch", "20min.ch"])
+    bonus_tracker_parser.set_defaults(func=command_bonus_tracker)
+
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return int(args.func(args))

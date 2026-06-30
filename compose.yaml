@@ -1,0 +1,11 @@
+services:
+  predictions:
+    build: .
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      PYTHONPATH: /app/src
+    command: worldcup-predictions --help

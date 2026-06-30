@@ -1,0 +1,27 @@
+# Local secrets
+.env
+
+# macOS and editor files
+.DS_Store
+.idea/
+
+# Python bytecode and tool caches
+.pycache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Generated runtime data and published site output
+/data/
+/public/
+
+# Python build artifacts
+/dist/
+/build/
+*.egg-info/

@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "locales": [
+    "en",
+    "de"
+  ],
+  "entities": [
+    {
+      "entity_type": "player_position",
+      "canonical_id": "goalkeeper",
+      "names": {
+        "en": "goalkeeper",
+        "de": "Torhüter"
+      },
+      "aliases": {
+        "en": ["goalkeeper", "keeper", "goalie", "GK"],
+        "de": ["Torhüter", "Torwart", "Goalie"]
+      }
+    },
+    {
+      "entity_type": "player_position",
+      "canonical_id": "defender",
+      "names": {
+        "en": "defender",
+        "de": "Verteidiger"
+      },
+      "aliases": {
+        "en": ["defender", "centre-back", "center back", "full-back", "CB", "LB", "RB"],
+        "de": ["Verteidiger", "Innenverteidiger", "Aussenverteidiger", "Abwehrspieler"]
+      }
+    },
+    {
+      "entity_type": "player_position",
+      "canonical_id": "midfielder",
+      "names": {
+        "en": "midfielder",
+        "de": "Mittelfeldspieler"
+      },
+      "aliases": {
+        "en": ["midfielder", "central midfielder", "defensive midfielder", "playmaker", "CM", "DM", "AM"],
+        "de": ["Mittelfeldspieler", "Sechser", "Achter", "Zehner", "Spielmacher"]
+      }
+    },
+    {
+      "entity_type": "player_position",
+      "canonical_id": "forward",
+      "names": {
+        "en": "forward",
+        "de": "Stürmer"
+      },
+      "aliases": {
+        "en": ["forward", "striker", "winger", "attacker", "centre-forward", "CF", "ST", "LW", "RW"],
+        "de": ["Stürmer", "Angreifer", "Flügelspieler", "Mittelstürmer"]
+      }
+    },
+    {
+      "entity_type": "availability_context",
+      "canonical_id": "injury",
+      "names": {
+        "en": "injury",
+        "de": "Verletzung"
+      },
+      "aliases": {
+        "en": ["injury", "injured", "fitness test", "doubtful", "ruled out", "limped off"],
+        "de": ["Verletzung", "verletzt", "fraglich", "angeschlagen", "fällt aus"]
+      }
+    },
+    {
+      "entity_type": "availability_context",
+      "canonical_id": "suspension",
+      "names": {
+        "en": "suspension",
+        "de": "Sperre"
+      },
+      "aliases": {
+        "en": ["suspension", "suspended", "ban", "yellow-card ban"],
+        "de": ["Sperre", "gesperrt", "Gelbsperre", "Rotsperre"]
+      }
+    },
+    {
+      "entity_type": "availability_context",
+      "canonical_id": "rotation",
+      "names": {
+        "en": "rotation",
+        "de": "Rotation"
+      },
+      "aliases": {
+        "en": ["rotation", "rested", "bench", "second string", "changed XI"],
+        "de": ["Rotation", "geschont", "Ersatzbank", "B-Elf"]
+      }
+    },
+    {
+      "entity_type": "match_context",
+      "canonical_id": "lineup",
+      "names": {
+        "en": "lineup",
+        "de": "Aufstellung"
+      },
+      "aliases": {
+        "en": ["lineup", "line-up", "starting XI", "starting lineup", "team news"],
+        "de": ["Aufstellung", "Startelf", "Mannschaftsaufstellung", "Teamnews"]
+      }
+    },
+    {
+      "entity_type": "match_context",
+      "canonical_id": "red_card",
+      "names": {
+        "en": "red card",
+        "de": "rote Karte"
+      },
+      "aliases": {
+        "en": ["red card", "sent off", "dismissed"],
+        "de": ["rote Karte", "Platzverweis", "vom Platz gestellt"]
+      }
+    },
+    {
+      "entity_type": "match_context",
+      "canonical_id": "storm_weather",
+      "names": {
+        "en": "storm weather",
+        "de": "Unwetter"
+      },
+      "aliases": {
+        "en": ["storm", "thunderstorm", "heavy rain", "rain delay", "weather delay"],
+        "de": ["Sturm", "Gewitter", "Unwetter", "Starkregen", "Wetterunterbruch"]
+      }
+    },
+    {
+      "entity_type": "match_stat",
+      "canonical_id": "xg",
+      "names": {
+        "en": "expected goals",
+        "de": "Expected Goals"
+      },
+      "aliases": {
+        "en": ["xG", "expected goals"],
+        "de": ["xG", "Expected Goals", "erwartete Tore"]
+      }
+    },
+    {
+      "entity_type": "match_stat",
+      "canonical_id": "shots_on_target",
+      "names": {
+        "en": "shots on target",
+        "de": "Schüsse aufs Tor"
+      },
+      "aliases": {
+        "en": ["shots on target", "SOT", "on-target shots"],
+        "de": ["Schüsse aufs Tor", "Torschüsse"]
+      }
+    },
+    {
+      "entity_type": "match_stat",
+      "canonical_id": "shots",
+      "names": {
+        "en": "shots",
+        "de": "Schüsse"
+      },
+      "aliases": {
+        "en": ["shots", "attempts"],
+        "de": ["Schüsse", "Abschlüsse"]
+      }
+    },
+    {
+      "entity_type": "match_stat",
+      "canonical_id": "corners",
+      "names": {
+        "en": "corners",
+        "de": "Eckbälle"
+      },
+      "aliases": {
+        "en": ["corners", "corner kicks"],
+        "de": ["Eckbälle", "Corners"]
+      }
+    },
+    {
+      "entity_type": "provider",
+      "canonical_id": "srf.ch",
+      "names": {
+        "en": "srf.ch",
+        "de": "srf.ch"
+      },
+      "aliases": {
+        "en": ["srf.ch", "SRF", "SRF Tippspiel"],
+        "de": ["srf.ch", "SRF", "SRF Tippspiel"]
+      }
+    },
+    {
+      "entity_type": "provider",
+      "canonical_id": "20min.ch",
+      "names": {
+        "en": "20min.ch",
+        "de": "20min.ch"
+      },
+      "aliases": {
+        "en": ["20min.ch", "20 Minuten", "20min"],
+        "de": ["20min.ch", "20 Minuten", "20min"]
+      }
+    }
+  ]
+}

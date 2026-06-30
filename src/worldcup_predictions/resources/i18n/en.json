@@ -1,0 +1,11 @@
+{
+  "prediction.table.match": "Match",
+  "prediction.table.expected_goals": "Expected goals",
+  "prediction.table.most_likely": "Most likely result",
+  "prediction.table.srf_tip": "SRF tip",
+  "prediction.table.20min_tip": "20min tip",
+  "prediction.table.hda": "H/D/A",
+  "prediction.table.confidence": "Confidence",
+  "prediction.table.source": "Source",
+  "workflow.no_open_predictions": "No open predictions found."
+}

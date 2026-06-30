@@ -1,0 +1,11 @@
+{
+  "prediction.table.match": "Partie",
+  "prediction.table.expected_goals": "Erwartete Tore",
+  "prediction.table.most_likely": "Wahrscheinlichstes Resultat",
+  "prediction.table.srf_tip": "SRF-Tipp",
+  "prediction.table.20min_tip": "20min-Tipp",
+  "prediction.table.hda": "H/U/A",
+  "prediction.table.confidence": "Konfidenz",
+  "prediction.table.source": "Quelle",
+  "workflow.no_open_predictions": "Keine offenen Prognosen gefunden."
+}

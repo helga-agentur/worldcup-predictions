@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "worldcup-predictions"
+version = "0.1.0"
+description = "Plugin-based FIFA World Cup 2026 score prediction and provider optimization workflow."
+readme = "README.md"
+requires-python = ">=3.14"
+license = { text = "MIT" }
+authors = [
+  { name = "David Pacassi Torrico" }
+]
+dependencies = [
+  "duckdb>=1.4.0",
+  "jinja2>=3.1.0",
+  "python-dotenv>=1.0.0",
+  "scikit-learn>=1.6.0",
+]
+
+[project.scripts]
+worldcup-predictions = "worldcup_predictions.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+worldcup_predictions = [
+  "resources/*.json",
+  "resources/i18n/*.json",
+  "site/static/*.css",
+  "site/static/*.js",
+  "site/static/*.svg",
+  "site/static/fonts/*.woff2",
+  "site/templates/*.html",
+  "site/templates/pages/*.html",
+  "site/templates/partials/*.html",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

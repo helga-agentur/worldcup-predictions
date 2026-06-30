@@ -1,0 +1,20 @@
+:8080 {
+	root * /srv/public/current
+	encode gzip zstd
+	try_files {path} {path}/index.html =404
+	file_server
+
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=3600, immutable"
+
+	@json path /api/* /site-manifest.json
+	header @json {
+		Cache-Control "public, max-age=60, stale-while-revalidate=300"
+		>Content-Type "application/json; charset=utf-8"
+		Content-Disposition "inline"
+		X-Content-Type-Options "nosniff"
+	}
+
+	@html path / /index.html /spiele/*
+	header @html Cache-Control "public, max-age=300, stale-while-revalidate=3600"
+}
