@@ -184,7 +184,18 @@ Create `DEPLOY_KNOWN_HOSTS` from a trusted machine and verify the fingerprint be
 ssh-keyscan -p 22 -H 49.13.7.69
 ```
 
-The workflow uses the built-in `GITHUB_TOKEN` to push the image to GHCR. Because the production server pulls the image anonymously, keep the package visibility public after the first image has been published.
+The workflow uses the built-in `GITHUB_TOKEN` to push the image to GHCR. The production server pulls the image as the `deploy` user, so that user must be logged in to GHCR when the package is private or organization policy blocks public package visibility.
+
+Create a GitHub token with `read:packages` only, authorize it for the organization if SSO is required, then log in once on the server as `deploy`:
+
+```bash
+read -rsp 'GitHub token: ' GHCR_PAT
+echo
+printf '%s' "$GHCR_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+unset GHCR_PAT
+```
+
+Docker stores this pull credential under the deploy user's Docker config. Do not put the GHCR token in the repository, GitHub Actions secrets, cron, or `/etc/worldcup-predictions/env`.
 
 The server deploy step runs:
 
