@@ -123,11 +123,39 @@ Google Tag Manager is rendered only when `GTM_CONTAINER_ID` is set. Leave it emp
 Example host cron shape:
 
 ```cron
-5 * * * * cd /path/to/worldcup2026 && docker compose run --rm predictions worldcup-predictions scheduled-update
-20 3 * * * cd /path/to/worldcup2026 && docker compose run --rm predictions worldcup-predictions simulate-tournament
+30 * * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-scheduled.lock ./scripts/run-with-timing.sh scheduled-update docker compose run --rm predictions worldcup-predictions scheduled-update >> logs/scheduled-update.log 2>&1
+15 7 * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-simulate.lock ./scripts/run-with-timing.sh simulate-tournament docker compose run --rm predictions worldcup-predictions simulate-tournament >> logs/simulate-tournament.log 2>&1
 ```
 
 Use whatever process supervisor fits the deployment. The important part is the cadence: hourly prediction updates, daily simulation maintenance.
+
+`scripts/run-with-timing.sh` writes one `START` line and one `FINISH` line around the Docker command, including the exit status and wall-clock duration. The application still writes its own run manifest and prediction counts; the wrapper records the scheduler-level runtime, including Docker startup and teardown.
+
+## GitHub Actions Deployment
+
+The repository includes a production deploy workflow at `.github/workflows/deploy.yml`. It runs on every push to `main` and can also be started manually from GitHub Actions.
+
+Required repository secrets:
+
+- `DEPLOY_HOST`: server hostname or IP address.
+- `DEPLOY_USER`: SSH user, for example `deploy`.
+- `DEPLOY_SSH_KEY`: private SSH key with access to the server.
+- `DEPLOY_KNOWN_HOSTS`: pinned SSH known-hosts entry for the server.
+- `DEPLOY_PORT`: optional SSH port. Defaults to `22`.
+
+Create `DEPLOY_KNOWN_HOSTS` from a trusted machine and verify the fingerprint before saving it as a GitHub secret:
+
+```bash
+ssh-keyscan -p 22 -H 49.13.7.69
+```
+
+The workflow connects to `/opt/worldcup-predictions`, fetches `origin/main`, resets the deployment checkout to that revision, rebuilds the `predictions` Docker image, and runs:
+
+```bash
+docker compose run --rm predictions worldcup-predictions scheduled-update
+```
+
+The deploy command waits up to 30 minutes for `/tmp/worldcup-predictions-scheduled.lock`, so it does not overlap with the hourly cron job when both use the same lock.
 
 ## Failure Behavior
 
