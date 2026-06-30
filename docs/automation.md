@@ -123,17 +123,52 @@ Google Tag Manager is rendered only when `GTM_CONTAINER_ID` is set. Leave it emp
 Example host cron shape:
 
 ```cron
-30 * * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-scheduled.lock ./scripts/run-with-timing.sh scheduled-update docker compose run --rm predictions worldcup-predictions scheduled-update >> logs/scheduled-update.log 2>&1
-15 7 * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-simulate.lock ./scripts/run-with-timing.sh simulate-tournament docker compose run --rm predictions worldcup-predictions simulate-tournament >> logs/simulate-tournament.log 2>&1
+30 * * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-scheduled.lock ./scripts/run-with-timing.sh scheduled-update ./scripts/run-prod-compose.sh run --rm predictions worldcup-predictions scheduled-update >> logs/scheduled-update.log 2>&1
+15 7 * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-simulate.lock ./scripts/run-with-timing.sh simulate-tournament ./scripts/run-prod-compose.sh run --rm predictions worldcup-predictions simulate-tournament >> logs/simulate-tournament.log 2>&1
 ```
 
 Use whatever process supervisor fits the deployment. The important part is the cadence: hourly prediction updates, daily simulation maintenance.
 
 `scripts/run-with-timing.sh` writes one `START` line and one `FINISH` line around the Docker command, including the exit status and wall-clock duration. The application still writes its own run manifest and prediction counts; the wrapper records the scheduler-level runtime, including Docker startup and teardown.
 
+## Production Compose
+
+Local development uses `compose.yaml`, which bind-mounts the full repository into the container and can use a repository-local `.env`. Production uses `compose.prod.yaml`, which runs the immutable GHCR image, receives supported variables from the host environment, and mounts only runtime state:
+
+- `data/` for structured DuckDB/Parquet state
+- `public/` for generated static site output
+- `reports/` for generated diagnostics reports
+- `logs/` for cron logs
+
+Set production secrets outside the repository, for example in `/etc/worldcup-predictions/env` owned by root and readable by the deploy user. `scripts/run-prod-compose.sh` loads this file into the host process environment before calling `docker compose -f compose.prod.yaml`.
+
+```bash
+sudo install -m 0750 -o root -g deploy -d /etc/worldcup-predictions
+sudoedit /etc/worldcup-predictions/env
+sudo chown root:deploy /etc/worldcup-predictions/env
+sudo chmod 0640 /etc/worldcup-predictions/env
+```
+
+Supported production variables:
+
+```bash
+ODDS_API_KEY=
+FOOTBALL_DATA_API_KEY=
+KAGGLE_API_TOKEN=
+NEWS_API_KEY=
+GTM_CONTAINER_ID=
+```
+
 ## GitHub Actions Deployment
 
 The repository includes a production deploy workflow at `.github/workflows/deploy.yml`. It runs on every push to `main` and can also be started manually from GitHub Actions.
+
+Deployment follows an image-promotion model:
+
+1. GitHub Actions builds the Docker image with Buildx.
+2. The image is pushed to GitHub Container Registry as `ghcr.io/helga-agentur/worldcup-predictions:main`.
+3. GitHub Actions connects to the server, resets `/opt/worldcup-predictions` to `origin/main`, and pulls the new image with `compose.prod.yaml`.
+4. Cron remains responsible for running `scheduled-update` and publishing the next generated site.
 
 Required repository secrets:
 
@@ -149,13 +184,17 @@ Create `DEPLOY_KNOWN_HOSTS` from a trusted machine and verify the fingerprint be
 ssh-keyscan -p 22 -H 49.13.7.69
 ```
 
-The workflow connects to `/opt/worldcup-predictions`, fetches `origin/main`, resets the deployment checkout to that revision, rebuilds the `predictions` Docker image, and runs:
+The workflow uses the built-in `GITHUB_TOKEN` to push the image to GHCR. Because the production server pulls the image anonymously, keep the package visibility public after the first image has been published.
+
+The server deploy step runs:
 
 ```bash
-docker compose run --rm predictions worldcup-predictions scheduled-update
+git fetch origin main
+git reset --hard origin/main
+docker compose -f compose.prod.yaml pull predictions
 ```
 
-The deploy command waits up to 30 minutes for `/tmp/worldcup-predictions-scheduled.lock`, so it does not overlap with the hourly cron job when both use the same lock.
+The deploy command waits up to 10 minutes for `/tmp/worldcup-predictions-scheduled.lock`, so it does not reset the checkout or pull a new image while the hourly cron job is running. The next `scheduled-update` cron run publishes the regenerated site with the newly pulled image.
 
 ## Failure Behavior
 

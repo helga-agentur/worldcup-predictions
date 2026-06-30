@@ -182,13 +182,15 @@ Writes:
 
 ## Optional Keys
 
-Copy `.env.example` to `.env` and fill whichever keys you have:
+For local development, copy `.env.example` to `.env` and fill whichever keys you have:
 
 ```bash
 cp .env.example .env
 ```
 
 The project loads `.env` with `python-dotenv` and keeps values in `os.environ`. Existing process environment variables take precedence over `.env` values.
+
+Production should provide these as real process environment variables instead of mounting or relying on a repository-local `.env` file. The production Compose file passes the supported host environment variables into the container explicitly.
 
 Supported variables:
 

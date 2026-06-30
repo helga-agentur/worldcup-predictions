@@ -6,7 +6,13 @@ on:
       - main
   workflow_dispatch:
 
-permissions: {}
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 concurrency:
   group: production-deploy
@@ -16,12 +22,45 @@ jobs:
   deploy:
     name: Deploy to Hetzner
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     environment:
       name: production
       url: https://tippspiel.helga.ch
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=main
+            type=sha,format=short
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Configure SSH
         env:
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
@@ -44,10 +83,9 @@ jobs:
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" <<'REMOTE'
           set -euo pipefail
           cd /opt/worldcup-predictions
-          flock -w 1800 /tmp/worldcup-predictions-scheduled.lock bash -lc '
+          flock -w 600 /tmp/worldcup-predictions-scheduled.lock bash -lc '
             git fetch origin main
             git reset --hard origin/main
-            docker compose build predictions
-            docker compose run --rm predictions worldcup-predictions scheduled-update
+            docker compose -f compose.prod.yaml pull predictions
           '
           REMOTE
