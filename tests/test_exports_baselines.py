@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 try:
     import duckdb  # noqa: F401
@@ -469,9 +470,17 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("helga_theme", html)
             self.assertIn("data-theme-toggle", html)
             self.assertIn("Dark Mode", html)
+            generated_at_zurich = dt.datetime.fromisoformat(result.generated_at_utc.replace("Z", "+00:00")).astimezone(
+                ZoneInfo("Europe/Zurich")
+            )
+            self.assertIn(
+                f'<p>Letztes Update: <time datetime="{result.generated_at_utc}">{generated_at_zurich:%d.%m.%Y, %H:%M:%S}</time></p>',
+                html,
+            )
             self.assertNotIn("<span>Tippspiel Prognosen</span>", html)
             self.assertIn('<nav class="breadcrumb" aria-label="Breadcrumb">\n  <a href="/" aria-current="page">Prognosen</a>\n</nav>', html)
             self.assertIn('<header class="page-intro" aria-labelledby="page-title">', html)
+            self.assertIn('Der gesamte Code ist öffentlich auf <a href="https://github.com/helga-agentur/worldcup-predictions">GitHub</a>.', html)
             self.assertIn('<section class="summary-dashboard" aria-labelledby="summary-title">', html)
             self.assertIn('<h2 id="summary-title" class="visually-hidden">Prognosen Übersicht</h2>', html)
             self.assertIn('<dl class="summary-metrics">', html)

@@ -184,6 +184,7 @@ def build_site(
         "title": "Helga Tippspiel Prognosen",
         "description": "Öffentliche FIFA-WM-2026-Prognosen, provider-neutrale Scores und optimierte Tippspiel-Empfehlungen.",
         "generated_at_utc": generated_at,
+        "generated_at_display": _date_time_text(generated_at),
         "asset_css": f"/{asset_path}",
         "asset_js": f"/{script_path}",
         "gtm_container_id": (gtm_container_id or "").strip(),
@@ -787,6 +788,19 @@ def _date_text(value: Any) -> str:
         parsed = parsed.replace(tzinfo=dt.timezone.utc)
     zurich = parsed.astimezone(ZoneInfo("Europe/Zurich"))
     return zurich.strftime("%d.%m.%Y, %H:%M")
+
+
+def _date_time_text(value: Any) -> str:
+    if not value:
+        return "-"
+    try:
+        parsed = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return str(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    zurich = parsed.astimezone(ZoneInfo("Europe/Zurich"))
+    return zurich.strftime("%d.%m.%Y, %H:%M:%S")
 
 
 def _sitemap_xml(generated_at_utc: str, rows: list[dict[str, Any]]) -> str:
