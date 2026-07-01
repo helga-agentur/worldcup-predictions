@@ -81,12 +81,12 @@ def build_published_prediction_ledger_rows(storage, *, now: dt.datetime | None =
             published_rows.append(_merge_frozen_row(existing, current, now_iso=now_iso))
         else:
             published_rows.append(_merge_live_row(existing, current, now_iso=now_iso))
-    return published_rows
+    return _dedupe_published_rows(published_rows)
 
 
 def write_published_prediction_ledger(storage, *, run_id: str | None = None, now: dt.datetime | None = None) -> int:
     rows = build_published_prediction_ledger_rows(storage, now=now)
-    return storage.write_records(PUBLISHED_PREDICTION_LEDGER, rows, source="published_prediction_ledger", run_id=run_id)
+    return storage.replace_records(PUBLISHED_PREDICTION_LEDGER, rows, source="published_prediction_ledger", run_id=run_id)
 
 
 def _as_published_row(row: dict[str, Any], *, now: dt.datetime, now_iso: str) -> dict[str, Any]:
@@ -213,6 +213,52 @@ def _is_missing_archived_value(value: Any) -> bool:
     if isinstance(value, dict):
         return len(value) == 0
     return False
+
+
+def _dedupe_published_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep one website row per logical match page.
+
+    Upstream fixture sources can correct kickoff times after a row has already
+    been locked. Since website slugs intentionally use date + teams, a shifted
+    fixture key such as 01:00 MEX-ECU and 02:00 MEX-ECU would otherwise render
+    twice and point at the same detail page.
+    """
+
+    best_by_match: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        key = _website_match_key(row)
+        if not key:
+            key = str(row.get("fixture_key") or row.get("record_key") or "")
+        current = best_by_match.get(key)
+        if current is None or _published_row_rank(row) >= _published_row_rank(current):
+            best_by_match[key] = row
+    return sorted(best_by_match.values(), key=lambda item: (str(item.get("event_date") or ""), str(item.get("fixture_key") or "")))
+
+
+def _website_match_key(row: dict[str, Any]) -> str:
+    fixture_key = str(row.get("fixture_key") or "")
+    parts = fixture_key.split("|")
+    if len(parts) == 3:
+        date = parts[0][:10]
+        home = parts[1].strip().upper()
+        away = parts[2].strip().upper()
+    else:
+        date = str(row.get("event_date") or "")[:10]
+        home = str(row.get("home_fifa_code") or row.get("home_team") or "").strip().upper()
+        away = str(row.get("away_fifa_code") or row.get("away_team") or "").strip().upper()
+    if not (date and home and away):
+        return ""
+    return f"{date}|{home}|{away}"
+
+
+def _published_row_rank(row: dict[str, Any]) -> tuple[int, str, str]:
+    status_rank = {"future": 0, "locked": 1, "final": 2}.get(str(row.get("status") or ""), 0)
+    actual_rank = 1 if row.get("actual_score") else 0
+    return (
+        status_rank + actual_rank,
+        str(row.get("published_at_utc") or row.get("first_published_at_utc") or ""),
+        str(row.get("event_date") or ""),
+    )
 
 
 def _mapping(value: Any) -> dict[str, Any]:

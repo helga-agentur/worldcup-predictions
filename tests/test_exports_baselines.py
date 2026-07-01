@@ -123,6 +123,74 @@ class ExportAndBaselineTest(unittest.TestCase):
         self.assertEqual(normalized_base_url("http://127.0.0.1:8000/"), "http://127.0.0.1:8000")
         self.assertEqual(normalized_base_url("https://tippspiel.helga.ch"), "https://tippspiel.helga.ch")
 
+    def test_published_ledger_replaces_stale_shifted_fixture_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            storage = DuckDBStorage.at_data_root(root / "data")
+            stale_key = "2026-07-01T01:00:00Z|MEX|ECU"
+            corrected_key = "2026-07-01T02:00:00Z|MEX|ECU"
+            storage.write_records(
+                PREDICTION_LEDGER,
+                [
+                    {
+                        "record_key": stale_key,
+                        "fixture_key": stale_key,
+                        "event_date": "2026-07-01T01:00:00Z",
+                        "home_team": "Mexico",
+                        "away_team": "Ecuador",
+                        "status": "future",
+                        "prediction_context": "latest_live_prediction",
+                        "most_likely_home": 1,
+                        "most_likely_away": 0,
+                        "srf_tip": "1:0",
+                        "twenty_min_tip": "Mexico",
+                    }
+                ],
+                source="test",
+            )
+            write_published_prediction_ledger(
+                storage,
+                run_id="stale",
+                now=dt.datetime(2026, 7, 1, 1, 40, tzinfo=dt.timezone.utc),
+            )
+            self.assertEqual(
+                [row["fixture_key"] for row in storage.read_records(PUBLISHED_PREDICTION_LEDGER, latest_only=True)],
+                [stale_key],
+            )
+
+            storage.replace_records(
+                PREDICTION_LEDGER,
+                [
+                    {
+                        "record_key": corrected_key,
+                        "fixture_key": corrected_key,
+                        "event_date": "2026-07-01T02:00:00Z",
+                        "home_team": "Mexico",
+                        "away_team": "Ecuador",
+                        "status": "past",
+                        "prediction_context": "retrospective_current_model_before_kickoff",
+                        "actual_score": "2:1",
+                        "actual_home": 2,
+                        "actual_away": 1,
+                        "most_likely_home": 2,
+                        "most_likely_away": 1,
+                        "srf_tip": "2:1",
+                        "twenty_min_tip": "Mexico",
+                    }
+                ],
+                source="test",
+            )
+            write_published_prediction_ledger(
+                storage,
+                run_id="corrected",
+                now=dt.datetime(2026, 7, 1, 4, 40, tzinfo=dt.timezone.utc),
+            )
+
+            rows = storage.read_records(PUBLISHED_PREDICTION_LEDGER, latest_only=True)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["fixture_key"], corrected_key)
+            self.assertEqual(rows[0]["status"], "final")
+
     def test_prediction_export_writes_one_file_with_score_matrix_and_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -790,7 +858,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                 source="test",
             )
 
-            result = build_site(project_root=root, storage=storage, gtm_container_id="")
+            result = build_site(project_root=root, storage=storage, gtm_container_id="", base_url="https://tippspiel.helga.ch")
             payload = json.loads((result.output_dir / "api" / "predictions").read_text(encoding="utf-8"))
 
             self.assertEqual(payload["summary"]["srf_points"], 20.0)
@@ -859,7 +927,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                 source="test",
             )
 
-            result = build_site(project_root=root, storage=storage, gtm_container_id="")
+            result = build_site(project_root=root, storage=storage, gtm_container_id="", base_url="https://tippspiel.helga.ch")
             html = (result.output_dir / "de" / "index.html").read_text(encoding="utf-8")
             payload = json.loads((result.output_dir / "api" / "predictions").read_text(encoding="utf-8"))
             future_section = html.split('id="future-title"', 1)[1].split('id="past-title"', 1)[0]
