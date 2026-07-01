@@ -82,15 +82,18 @@ class TournamentStateTest(unittest.TestCase):
         self.assertEqual(prose.key, "W75")
         self.assertEqual(german_round.key, "W76")
         self.assertEqual(english_round.key, "W76")
-        self.assertEqual(canonical_slot_code("Verlierer Halbfinal 2"), "L102")
+        self.assertEqual(canonical_slot_code("Verlierer Halbfinal 2"), "RU102")
+        self.assertEqual(canonical_slot_code("Loser Match 101"), "RU101")
+        self.assertEqual(canonical_slot_code("RU101"), "RU101")
+        self.assertEqual(canonical_slot_code("L101"), "")
 
     def test_slot_display_names_include_knockout_round(self) -> None:
         self.assertEqual(slot_display_name("W76"), "Sieger Sechzehntelfinal 4")
         self.assertEqual(slot_display_name("W76", locale="en"), "Winner Round of 32 match 4")
         self.assertEqual(slot_display_name("W102"), "Sieger Halbfinal 2")
         self.assertEqual(slot_display_name("W102", locale="en"), "Winner Semi-final match 2")
-        self.assertEqual(slot_display_name("L101"), "Verlierer Halbfinal 1")
-        self.assertEqual(slot_display_name("L101", locale="en"), "Loser Semi-final match 1")
+        self.assertEqual(slot_display_name("RU101"), "Verlierer Halbfinal 1")
+        self.assertEqual(slot_display_name("RU101", locale="en"), "Loser Semi-final match 1")
         self.assertEqual(slot_display_name("W10"), "Sieger Spiel 10")
 
     def test_openfootball_parser_returns_canonical_fixtures_and_results(self) -> None:
@@ -245,6 +248,28 @@ class TournamentStateTest(unittest.TestCase):
         self.assertNotIn("2026-07-04T21:00:00Z|PAR|Sieger Sechzehntelfinal 5", fixture_keys)
         self.assertFalse(has_defined_teams(canonical_fixture))
         self.assertFalse(any(fixture.key.endswith("|PAR|W77") for fixture in state.open_fixtures()))
+
+    def test_tournament_state_preserves_official_placeholder_order(self) -> None:
+        resolver = TeamResolver.default()
+        official_slot = FixtureRecord(
+            event_date="2026-07-06T19:00:00Z",
+            home_team=resolver.resolve("W83"),
+            away_team=resolver.resolve("W84"),
+            stage="Round of 16",
+            source_id="93",
+            metadata={"source": "fifa_match_centre", "match_number": "93"},
+        )
+        reversed_provider_slot = FixtureRecord(
+            event_date="2026-07-06T19:00:00Z",
+            home_team=resolver.resolve("W84"),
+            away_team=resolver.resolve("W83"),
+            stage="knockout",
+            metadata={"source": "srf_public"},
+        )
+
+        state = build_tournament_state([reversed_provider_slot, official_slot], [])
+
+        self.assertEqual([fixture.key for fixture in state.fixtures], ["2026-07-06T19:00:00Z|W83|W84"])
 
     def test_conflicting_unconfirmed_sources_do_not_enter_state(self) -> None:
         resolver = TeamResolver.default()

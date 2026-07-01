@@ -37,6 +37,7 @@ from worldcup_predictions.evaluation.model_calibration import calibrate_baseline
 from worldcup_predictions.evaluation.audit import build_prediction_audit_rows
 from worldcup_predictions.evaluation.diagnostics_completeness import write_diagnostics_completeness_audit
 from worldcup_predictions.evaluation.bonus_tracker import build_bonus_tracker_rows
+from worldcup_predictions.evaluation.data_hooks import run_data_update_hooks
 from worldcup_predictions.evaluation.postmatch import write_postmatch_outputs
 from worldcup_predictions.evaluation.prediction_export import write_prediction_export
 from worldcup_predictions.evaluation.prediction_ledger import write_prediction_ledger
@@ -133,6 +134,21 @@ def command_docs_plugins(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_data_update_hooks(args: argparse.Namespace) -> int:
+    workflow = build_workflow(Path(args.project_root).resolve())
+    if workflow.context.storage is None:
+        raise RuntimeError("Structured storage is unavailable.")
+    results = run_data_update_hooks(workflow.context.storage, run_id=workflow.context.run_id)
+    for result in results:
+        if result.get("status") == "success":
+            print(f"{result['hook_id']}: applied ({result.get('rows_changed', 0)} row(s) changed).")
+        elif result.get("status") == "skipped":
+            print(f"{result['hook_id']}: skipped ({result.get('reason', 'already_applied')}).")
+        else:
+            print(f"{result.get('hook_id', 'unknown')}: {result.get('status', 'unknown')}.")
+    return 0
+
+
 def command_predict(args: argparse.Namespace) -> int:
     workflow = build_workflow(Path(args.project_root).resolve())
     run = workflow.next_predictions(limit=args.limit, include_closed=args.include_closed)
@@ -163,6 +179,11 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
     if workflow.context.storage is None:
         print("Structured storage is unavailable; cannot run scheduled update.")
         return 1
+
+    hook_results = run_data_update_hooks(workflow.context.storage, run_id=workflow.context.run_id)
+    applied_hooks = [row for row in hook_results if row.get("status") == "success" and int(row.get("rows_changed") or 0) > 0]
+    for row in applied_hooks:
+        print(f"{row['hook_id']}: applied ({row.get('rows_changed', 0)} row(s) changed).")
 
     initial_state = load_tournament_state(workflow.context.storage)
     initial_open_count = len(initial_state.open_fixtures())
@@ -773,6 +794,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     docs_plugins_parser = subparsers.add_parser("docs-plugins", help="Regenerate docs/plugins.md from plugin metadata.")
     docs_plugins_parser.set_defaults(func=command_docs_plugins)
+
+    data_hooks_parser = subparsers.add_parser("data-update-hooks", help="Run pending one-shot runtime data update hooks.")
+    data_hooks_parser.set_defaults(func=command_data_update_hooks)
 
     predict_parser = subparsers.add_parser("predict", help="Render next predictions through the plugin workflow.")
     predict_parser.add_argument("--limit", type=int, default=4)

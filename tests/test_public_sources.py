@@ -151,6 +151,62 @@ class PublicSourcesTest(unittest.TestCase):
         self.assertEqual(details[0]["referee"], "Wilton SAMPAIO")
         self.assertEqual(formation_rows[0]["signal_type"], "official_formation_available")
 
+    def test_fifa_match_centre_parses_official_placeholder_sides(self) -> None:
+        rows = [
+            {
+                "IdCompetition": "17",
+                "IdSeason": "285023",
+                "IdMatch": "400021534",
+                "MatchNumber": 92,
+                "Date": "2026-07-06T00:00:00Z",
+                "Home": {
+                    "IdCountry": "MEX",
+                    "TeamName": [{"Locale": "en-GB", "Description": "Mexico"}],
+                    "Abbreviation": "MEX",
+                },
+                "Away": None,
+                "PlaceHolderA": "W79",
+                "PlaceHolderB": "W80",
+                "StageName": [{"Locale": "en-GB", "Description": "Round of 16"}],
+                "Stadium": {"Name": [{"Locale": "en-GB", "Description": "Mexico City Stadium"}]},
+                "MatchStatus": 1,
+            }
+        ]
+
+        fixtures = parse_fifa_match_fixtures(rows)
+        details = parse_fifa_match_details(rows)
+
+        self.assertEqual(fixtures[0].key, "2026-07-06T00:00:00Z|MEX|W80")
+        self.assertEqual(fixtures[0].home_team.fifa_code, "MEX")
+        self.assertEqual(fixtures[0].away_team.name, "W80")
+        self.assertIsNone(fixtures[0].away_team.fifa_code)
+        self.assertEqual(details[0]["fixture_key"], "2026-07-06T00:00:00Z|MEX|W80")
+
+    def test_fifa_match_centre_keeps_official_runner_up_placeholder_ids(self) -> None:
+        rows = [
+            {
+                "IdCompetition": "17",
+                "IdSeason": "285023",
+                "IdMatch": "400021545",
+                "MatchNumber": 103,
+                "Date": "2026-07-18T21:00:00Z",
+                "Home": None,
+                "Away": None,
+                "PlaceHolderA": "RU101",
+                "PlaceHolderB": "RU102",
+                "StageName": [{"Locale": "en-GB", "Description": "Play-off for third place"}],
+                "MatchStatus": 1,
+            }
+        ]
+
+        fixtures = parse_fifa_match_fixtures(rows)
+        details = parse_fifa_match_details(rows)
+
+        self.assertEqual(fixtures[0].key, "2026-07-18T21:00:00Z|RU101|RU102")
+        self.assertEqual(fixtures[0].home_team.key, "RU101")
+        self.assertEqual(fixtures[0].away_team.key, "RU102")
+        self.assertEqual(details[0]["fixture_key"], "2026-07-18T21:00:00Z|RU101|RU102")
+
     def test_lineup_availability_extracts_side_specific_signal(self) -> None:
         rows = lineup_availability_rows_from_articles(
             [article("Brazil team news", "Brazil forward is doubtful after an injury in training.")],

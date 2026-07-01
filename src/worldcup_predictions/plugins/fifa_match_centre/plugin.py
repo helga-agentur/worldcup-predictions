@@ -117,8 +117,8 @@ def parse_fifa_match_fixtures(matches: list[dict[str, Any]]) -> list[FixtureReco
     fixtures = []
     for match in matches:
         date = normalize_datetime(match.get("Date"))
-        home = _team_ref(match.get("Home"))
-        away = _team_ref(match.get("Away"))
+        home = _team_ref(match.get("Home"), placeholder=match.get("PlaceHolderA"))
+        away = _team_ref(match.get("Away"), placeholder=match.get("PlaceHolderB"))
         if not date or home is None or away is None:
             continue
         fixtures.append(
@@ -175,8 +175,8 @@ def parse_fifa_match_details(matches: list[dict[str, Any]]) -> list[dict[str, An
     rows = []
     for match in matches:
         date = normalize_datetime(match.get("Date"))
-        home = _team_ref(match.get("Home"))
-        away = _team_ref(match.get("Away"))
+        home = _team_ref(match.get("Home"), placeholder=match.get("PlaceHolderA"))
+        away = _team_ref(match.get("Away"), placeholder=match.get("PlaceHolderB"))
         if not date or home is None or away is None:
             continue
         fixture_key = FixtureRecord(event_date=date, home_team=home, away_team=away).key
@@ -244,9 +244,10 @@ def _calendar_params() -> dict[str, Any]:
     }
 
 
-def _team_ref(raw: Any) -> TeamRef | None:
+def _team_ref(raw: Any, *, placeholder: Any = None) -> TeamRef | None:
     if not isinstance(raw, dict):
-        return None
+        slot = slot_team_ref(placeholder)
+        return slot
     code = str(raw.get("IdCountry") or raw.get("Abbreviation") or "").strip().upper()
     name = _localized(raw.get("TeamName")) or str(raw.get("ShortClubName") or code).strip()
     if not name:

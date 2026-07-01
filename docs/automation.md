@@ -141,6 +141,18 @@ Use whatever process supervisor fits the deployment. The important part is the c
 - `scripts/run-prod-compose.sh`: production compose wrapper that loads `/etc/worldcup-predictions/env` into the host process environment before calling `docker compose -f compose.prod.yaml`.
 - `scripts/sync-live-data.sh`: local development helper that pulls ignored live runtime data from the production server into local `./data/`.
 
+## Runtime Data Update Hooks
+
+Runtime data migrations are handled by versioned one-shot hooks:
+
+```bash
+./scripts/run-prod-compose.sh run --rm predictions worldcup-predictions data-update-hooks
+```
+
+Each hook records a successful run in the `data_update_hooks` structured dataset. Later deploys skip hook ids that are already marked successful. These hooks are for cleanup of persisted runtime data only; they should not run predictions or publish tips.
+
+The hourly `scheduled-update` command runs pending data update hooks before it reads tournament state or writes new prediction outputs. In normal runs where all hooks are already applied, this is just a cheap no-op check.
+
 ## Production Compose
 
 Local development uses `compose.yaml`, which bind-mounts the full repository into the container and can use a repository-local `.env`. Production uses `compose.prod.yaml`, which runs the immutable GHCR image, receives supported variables from the host environment, and mounts only runtime state:
@@ -208,7 +220,7 @@ Deployment follows an image-promotion model:
 1. GitHub Actions builds the Docker image with Buildx.
 2. The image is pushed to GitHub Container Registry as `ghcr.io/helga-agentur/worldcup-predictions:main`.
 3. GitHub Actions connects to the server, resets `/opt/worldcup-predictions` to `origin/main`, and pulls the new image with `compose.prod.yaml`.
-4. Cron remains responsible for running `scheduled-update` and publishing the next generated site.
+4. Cron remains responsible for running data update hooks, `scheduled-update`, and publishing the next generated site.
 
 Required repository secrets:
 
@@ -245,7 +257,7 @@ git reset --hard origin/main
 docker compose -f compose.prod.yaml pull predictions
 ```
 
-The deploy command waits up to 10 minutes for `/tmp/worldcup-predictions-scheduled.lock`, so it does not reset the checkout or pull a new image while the hourly cron job is running. The next `scheduled-update` cron run publishes the regenerated site with the newly pulled image.
+The deploy command waits up to 10 minutes for `/tmp/worldcup-predictions-scheduled.lock`, so it does not reset the checkout or pull a new image while the hourly cron job is running. The next `scheduled-update` cron run applies any pending data update hooks and publishes the regenerated site with the newly pulled image.
 
 ## Failure Behavior
 

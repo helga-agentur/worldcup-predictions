@@ -12,6 +12,7 @@ except ModuleNotFoundError:  # pragma: no cover - local editable runs may not ha
 
 from worldcup_predictions.core.contracts import Fixture, OutcomeProbabilities, Prediction, ScoreMatrixEntry, ScoreTip, Signal
 from worldcup_predictions.core.datasets import (
+    DATA_UPDATE_HOOKS,
     DIAGNOSTICS_COMPLETENESS_AUDIT,
     PLUGIN_EVENT_OUTPUTS,
     PLUGIN_RUN_DIAGNOSTICS,
@@ -25,6 +26,7 @@ from worldcup_predictions.core.signals import ML_HDA_PROBABILITIES, TOTAL_GOALS_
 from worldcup_predictions.core.workflow import PredictionWorkflow, WorkflowContext
 from worldcup_predictions.evaluation.audit import build_prediction_audit_rows
 from worldcup_predictions.evaluation.diagnostics_completeness import write_diagnostics_completeness_audit
+from worldcup_predictions.evaluation.data_hooks import run_data_update_hooks
 from worldcup_predictions.evaluation.provider_points import build_provider_points_rows
 from worldcup_predictions.evaluation.reports import write_standard_reports
 from worldcup_predictions.evaluation.scheduled_update import summarize_source_ledger_rows
@@ -149,6 +151,37 @@ def prediction(event_date: str, home: str, away: str) -> Prediction:
 
 @unittest.skipIf(duckdb is None, "duckdb dependency is not installed")
 class StorageTest(unittest.TestCase):
+    def test_data_update_hooks_normalize_legacy_fifa_slot_codes_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            storage.write_records(
+                "custom_runtime_dataset",
+                [
+                    {
+                        "record_key": "2026-07-18T21:00:00Z|L101|L102",
+                        "fixture_key": "2026-07-18T21:00:00Z|L101|L102",
+                        "home_team": "L101",
+                        "away_team": "L102",
+                        "nested": {"slot": "L101"},
+                    }
+                ],
+                source="test",
+            )
+
+            first = run_data_update_hooks(storage, run_id="test_run")
+            rows = storage.read_records("custom_runtime_dataset", latest_only=True)
+            second = run_data_update_hooks(storage, run_id="test_run_2")
+            hook_rows = storage.read_records(DATA_UPDATE_HOOKS, latest_only=True)
+
+            self.assertEqual(first[0]["status"], "success")
+            self.assertEqual(first[0]["rows_changed"], 1)
+            self.assertEqual(rows[0]["record_key"], "2026-07-18T21:00:00Z|RU101|RU102")
+            self.assertEqual(rows[0]["fixture_key"], "2026-07-18T21:00:00Z|RU101|RU102")
+            self.assertEqual(rows[0]["home_team"], "RU101")
+            self.assertEqual(rows[0]["nested"]["slot"], "RU101")
+            self.assertEqual(second[0]["status"], "skipped")
+            self.assertEqual(len(hook_rows), 1)
+
     def test_provider_points_fall_back_to_backtest_tips_for_finished_matches(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             storage = DuckDBStorage.at_data_root(Path(tmp) / "data")

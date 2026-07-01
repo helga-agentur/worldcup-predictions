@@ -290,13 +290,13 @@ def _best_result(results: list[ResultRecord]) -> ResultRecord:
 
 def _source_rank(source: str) -> int:
     source = source.casefold()
-    if "srf_public" in source:
-        return 1
     if "fifa_match_centre" in source:
-        return 2
+        return 1
     if "football_data" in source:
-        return 3
+        return 2
     if "openfootball" in source:
+        return 3
+    if "srf_public" in source:
         return 4
     if "espn_scoreboard" in source:
         return 5
