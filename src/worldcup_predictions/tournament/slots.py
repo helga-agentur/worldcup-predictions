@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from worldcup_predictions.core.i18n import load_translation_catalog
 from worldcup_predictions.simulations.worldcup_2026 import ROUND_NAMES
 
 if TYPE_CHECKING:
@@ -14,12 +15,32 @@ if TYPE_CHECKING:
 SLOT_CODE_RE = re.compile(r"^[WL]\d{1,3}$", re.I)
 WINNER_SLOT_TEXT_RE = re.compile(r"^(?:winner|sieger)\s+(?:of\s+)?(?:match|spiel|m)?\s*(?P<number>\d{1,3})$", re.I)
 LOSER_SLOT_TEXT_RE = re.compile(r"^(?:loser|verlierer)\s+(?:of\s+)?(?:match|spiel|m)?\s*(?P<number>\d{1,3})$", re.I)
-ROUND_LABELS_DE = {
-    "Round of 32": "Sechzehntelfinal",
-    "Round of 16": "Achtelfinal",
-    "Quarter-final": "Viertelfinal",
-    "Semi-final": "Halbfinal",
-    "Final": "Final",
+ROUND_SLOT_TEXT_RE = re.compile(
+    r"^(?P<outcome>winner|sieger|loser|verlierer)\s+"
+    r"(?P<round>round\s+of\s+32|round\s+of\s+16|quarter[- ]final|semi[- ]final|final|"
+    r"sechzehntelfinal|achtelfinal|viertelfinal|halbfinal)\s+"
+    r"(?:(?:match|spiel)\s+)?(?P<position>\d{1,2})$",
+    re.I,
+)
+ROUND_LABEL_KEYS = {
+    "Round of 32": "slot.round.round_of_32",
+    "Round of 16": "slot.round.round_of_16",
+    "Quarter-final": "slot.round.quarter_final",
+    "Semi-final": "slot.round.semi_final",
+    "Final": "slot.round.final",
+}
+ROUND_ALIASES = {
+    "round of 32": "Round of 32",
+    "sechzehntelfinal": "Round of 32",
+    "round of 16": "Round of 16",
+    "achtelfinal": "Round of 16",
+    "quarter-final": "Quarter-final",
+    "quarter final": "Quarter-final",
+    "viertelfinal": "Quarter-final",
+    "semi-final": "Semi-final",
+    "semi final": "Semi-final",
+    "halbfinal": "Semi-final",
+    "final": "Final",
 }
 
 
@@ -38,6 +59,16 @@ def canonical_slot_code(value: object) -> str:
     loser = LOSER_SLOT_TEXT_RE.fullmatch(text)
     if loser:
         return f"L{int(loser.group('number'))}"
+    round_slot = ROUND_SLOT_TEXT_RE.fullmatch(text)
+    if round_slot:
+        outcome = round_slot.group("outcome").casefold()
+        prefix = "W" if outcome in {"winner", "sieger"} else "L"
+        round_name = ROUND_ALIASES.get(" ".join(round_slot.group("round").casefold().replace("-", " ").split()))
+        position = int(round_slot.group("position"))
+        if round_name:
+            match_number = _match_number_for_round_position(round_name, position)
+            if match_number is not None:
+                return f"{prefix}{match_number}"
     return ""
 
 
@@ -67,16 +98,15 @@ def slot_display_name(value: object, *, locale: str = "de") -> str:
     prefix = code[:1]
     number = int(code[1:])
     round_name, round_position = _slot_round_position(number)
-    if locale.casefold().startswith("de"):
-        label = "Sieger" if prefix == "W" else "Verlierer"
-        round_label = ROUND_LABELS_DE.get(round_name or "")
-        if round_label:
-            return f"{label} {round_label} {round_position}" if round_position else f"{label} {round_label}"
-        return f"{label} Spiel {number}"
-    label = "Winner" if prefix == "W" else "Loser"
-    if round_name:
-        return f"{label} {round_name} {round_position}" if round_position else f"{label} {round_name}"
-    return f"{label} Match {number}"
+    catalog = load_translation_catalog(locale)
+    outcome = "winner" if prefix == "W" else "loser"
+    round_label_key = ROUND_LABEL_KEYS.get(round_name or "")
+    if round_label_key:
+        round_label = catalog.translate(round_label_key)
+        if round_position:
+            return catalog.translate(f"slot.{outcome}_round_position", round=round_label, position=round_position)
+        return catalog.translate(f"slot.{outcome}_round", round=round_label)
+    return catalog.translate(f"slot.{outcome}_match", match=number)
 
 
 def _slot_round_position(match_number: int) -> tuple[str | None, int | None]:
@@ -91,3 +121,18 @@ def _slot_round_position(match_number: int) -> tuple[str | None, int | None]:
     if len(round_match_numbers) == 1:
         return round_name, None
     return round_name, round_match_numbers.index(match_number) + 1
+
+
+def _match_number_for_round_position(round_name: str, position: int) -> int | None:
+    round_match_numbers = sorted(
+        int(match_id.removeprefix("M"))
+        for match_id, name in ROUND_NAMES.items()
+        if name == round_name
+    )
+    if not round_match_numbers:
+        return None
+    if len(round_match_numbers) == 1 and position == 1:
+        return round_match_numbers[0]
+    if 1 <= position <= len(round_match_numbers):
+        return round_match_numbers[position - 1]
+    return None

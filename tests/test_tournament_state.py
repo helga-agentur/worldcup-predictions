@@ -20,6 +20,7 @@ from worldcup_predictions.tournament import (
     TeamResolver,
     build_group_state_rows,
     build_tournament_state,
+    canonical_slot_code,
     has_defined_teams,
     parse_openfootball_text,
     slot_display_name,
@@ -72,16 +73,24 @@ class TournamentStateTest(unittest.TestCase):
 
         direct = resolver.resolve("W75")
         prose = resolver.resolve("Winner Match 75")
+        german_round = resolver.resolve("Sieger Sechzehntelfinal 4")
+        english_round = resolver.resolve("Winner Round of 32 match 4")
 
         self.assertEqual(direct.name, "W75")
         self.assertIsNone(direct.fifa_code)
         self.assertEqual(direct.key, "W75")
         self.assertEqual(prose.key, "W75")
+        self.assertEqual(german_round.key, "W76")
+        self.assertEqual(english_round.key, "W76")
+        self.assertEqual(canonical_slot_code("Verlierer Halbfinal 2"), "L102")
 
     def test_slot_display_names_include_knockout_round(self) -> None:
         self.assertEqual(slot_display_name("W76"), "Sieger Sechzehntelfinal 4")
+        self.assertEqual(slot_display_name("W76", locale="en"), "Winner Round of 32 match 4")
         self.assertEqual(slot_display_name("W102"), "Sieger Halbfinal 2")
+        self.assertEqual(slot_display_name("W102", locale="en"), "Winner Semi-final match 2")
         self.assertEqual(slot_display_name("L101"), "Verlierer Halbfinal 1")
+        self.assertEqual(slot_display_name("L101", locale="en"), "Loser Semi-final match 1")
         self.assertEqual(slot_display_name("W10"), "Sieger Spiel 10")
 
     def test_openfootball_parser_returns_canonical_fixtures_and_results(self) -> None:
@@ -218,7 +227,7 @@ class TournamentStateTest(unittest.TestCase):
         provider_slot = FixtureRecord(
             event_date="2026-07-04T21:00:00Z",
             home_team=resolver.resolve("Paraguay"),
-            away_team=resolver.resolve("Sieger Sechzehntelfinal 6"),
+            away_team=resolver.resolve("Sieger Sechzehntelfinal 5"),
             stage="knockout",
             metadata={"source": "srf_public"},
         )
@@ -233,7 +242,7 @@ class TournamentStateTest(unittest.TestCase):
 
         self.assertIn("2026-07-04T21:00:00Z|PAR|W77", fixture_keys)
         self.assertNotIn("2026-07-04T21:00:00Z|W74|W77", fixture_keys)
-        self.assertNotIn("2026-07-04T21:00:00Z|PAR|Sieger Sechzehntelfinal 6", fixture_keys)
+        self.assertNotIn("2026-07-04T21:00:00Z|PAR|Sieger Sechzehntelfinal 5", fixture_keys)
         self.assertFalse(has_defined_teams(canonical_fixture))
         self.assertFalse(any(fixture.key.endswith("|PAR|W77") for fixture in state.open_fixtures()))
 
@@ -336,7 +345,7 @@ class TournamentStateTest(unittest.TestCase):
             rows = load_active_fixture_rows(storage)
 
             self.assertEqual(len(rows), 1)
-            self.assertEqual(rows[0]["away_team"], "Sieger Sechzehntelfinal 4")
+            self.assertEqual(rows[0]["away_team"], "W76")
 
 
 if __name__ == "__main__":

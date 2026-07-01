@@ -1,16 +1,21 @@
 <!doctype html>
-<html lang="de">
+<html lang="{{ locale }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title }}</title>
   <meta name="description" content="{{ description }}">
+  <link rel="canonical" href="{{ current_url }}">
+  {% for alternate in alternate_links %}
+  <link rel="alternate" hreflang="{{ alternate.locale }}" href="{{ alternate.href }}">
+  {% endfor %}
   <script>
     (function () {
       var match = document.cookie.match(/(?:^|; )helga_theme=(dark|light)/);
       var theme = match ? match[1] : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       document.documentElement.dataset.theme = theme;
       document.documentElement.style.colorScheme = theme;
+      document.cookie = "{{ language_cookie_name }}={{ locale }}; Path=/; Max-Age=31536000; SameSite=Lax";
     })();
   </script>
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">

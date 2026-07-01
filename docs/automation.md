@@ -81,9 +81,11 @@ Future rows can move until the relevant match locks. Past rows stay frozen as pu
 Generated files include:
 
 - `public/current/index.html`
-- `public/current/spiele/<match-slug>/index.html`
+- `public/current/de/index.html`
+- `public/current/en/index.html`
+- `public/current/de/spiele/<match-slug>/index.html`
+- `public/current/en/matches/<match-slug>/index.html`
 - `public/current/api/predictions`
-- `public/current/api/predictions.json`
 - `public/current/assets/site.<hash>.css`
 - `public/current/assets/theme.<hash>.js`
 - `public/current/assets/favicon.svg`
@@ -109,6 +111,10 @@ docker compose run --rm --service-ports predictions worldcup-predictions site-se
 ```
 
 Production can serve `public/current/` directly with the included [`../Caddyfile`](../Caddyfile). The generated site is server-rendered HTML plus JSON and hashed static assets, so it does not need an application backend.
+
+The front page is a lightweight language redirect. It sends visitors to `/de/` or `/en/` by checking the `helga_language` cookie first, then the browser language list, and falling back to English. Localized pages set that cookie when visited directly. The JSON feed remains shared at `/api/predictions`.
+
+Set `BASE_URL` to the public origin used for absolute URLs in the JSON feed, without a trailing slash. Local development can use `BASE_URL=http://127.0.0.1:8000`; live should use `BASE_URL=https://tippspiel.helga.ch`. The builder tolerates a trailing slash and normalizes it away.
 
 Recommended cache policy:
 
@@ -162,6 +168,7 @@ ODDS_API_KEY=
 FOOTBALL_DATA_API_KEY=
 KAGGLE_API_TOKEN=
 NEWS_API_KEY=
+BASE_URL=https://tippspiel.helga.ch
 GTM_CONTAINER_ID=
 ```
 

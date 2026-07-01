@@ -39,6 +39,7 @@ from worldcup_predictions.plugins.provider_optimizers import SrfChProviderOptimi
 from worldcup_predictions.plugins.public_analysis.plugin import public_analysis_rows_with_diagnostics
 from worldcup_predictions.plugins.structured_output import StructuredOutputPlugin
 from worldcup_predictions.site import build_site
+from worldcup_predictions.site.generator import normalized_base_url
 from worldcup_predictions.storage import DuckDBStorage
 from worldcup_predictions.tournament import FixtureRecord, TeamResolver
 
@@ -118,6 +119,10 @@ class ExtractionDiagnosticsTest(unittest.TestCase):
 
 @unittest.skipIf(duckdb is None, "duckdb dependency is not installed")
 class ExportAndBaselineTest(unittest.TestCase):
+    def test_site_base_url_normalization_accepts_trailing_slash(self) -> None:
+        self.assertEqual(normalized_base_url("http://127.0.0.1:8000/"), "http://127.0.0.1:8000")
+        self.assertEqual(normalized_base_url("https://tippspiel.helga.ch"), "https://tippspiel.helga.ch")
+
     def test_prediction_export_writes_one_file_with_score_matrix_and_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -452,9 +457,11 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertEqual(rows[0]["most_likely_score"], "1:0")
             self.assertEqual(rows[0]["score_matrix"][0]["probability"], 0.123456789012345)
 
-            result = build_site(project_root=root, storage=storage, gtm_container_id="")
+            result = build_site(project_root=root, storage=storage, gtm_container_id="", base_url="http://127.0.0.1:8000/")
             self.assertEqual(result.row_count, 1)
             self.assertTrue((result.output_dir / "index.html").exists())
+            self.assertTrue((result.output_dir / "de" / "index.html").exists())
+            self.assertTrue((result.output_dir / "en" / "index.html").exists())
             self.assertTrue((result.output_dir / "api" / "predictions").exists())
             self.assertEqual(len(list((result.output_dir / "assets").glob("site.*.css"))), 1)
             self.assertEqual(len(list((result.output_dir / "assets").glob("theme.*.js"))), 1)
@@ -462,12 +469,27 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertTrue((result.output_dir / "assets" / "fonts" / "Degular-Regular.woff2").exists())
             self.assertIn("assets/fonts/CadizWeb-Regular.woff2", result.asset_files)
             self.assertIn("assets/fonts/Degular-Regular.woff2", result.asset_files)
-            html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+            redirect_html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+            html = (result.output_dir / "de" / "index.html").read_text(encoding="utf-8")
+            en_html = (result.output_dir / "en" / "index.html").read_text(encoding="utf-8")
             css = next((result.output_dir / "assets").glob("site.*.css")).read_text(encoding="utf-8")
             js = next((result.output_dir / "assets").glob("theme.*.js")).read_text(encoding="utf-8")
-            detail = (result.output_dir / "spiele" / "2026-07-10-bra-jpn" / "index.html").read_text(encoding="utf-8")
+            detail = (result.output_dir / "de" / "spiele" / "2026-07-10-bra-jpn" / "index.html").read_text(encoding="utf-8")
+            en_detail = (result.output_dir / "en" / "matches" / "2026-07-10-bra-jpn" / "index.html").read_text(encoding="utf-8")
             payload = json.loads((result.output_dir / "api" / "predictions").read_text(encoding="utf-8"))
+            self.assertIn('meta http-equiv="refresh" content="0; url=/en/"', redirect_html)
+            self.assertIn('helga_language', redirect_html)
+            self.assertIn('navigator.languages', redirect_html)
+            self.assertIn('<html lang="de">', html)
+            self.assertIn('<html lang="en">', en_html)
+            self.assertIn('<link rel="canonical" href="/de/">', html)
+            self.assertIn('<link rel="alternate" hreflang="en" href="/en/">', html)
+            self.assertIn('<link rel="alternate" hreflang="x-default" href="/en/">', html)
+            self.assertIn("Helga Pool Predictions", en_html)
+            self.assertIn("Upcoming Matches", en_html)
+            self.assertIn("Submitted Tips", en_html)
             self.assertIn("helga_theme", html)
+            self.assertIn("helga_language=de", html)
             self.assertIn("data-theme-toggle", html)
             self.assertIn("Dark Mode", html)
             generated_at_zurich = dt.datetime.fromisoformat(result.generated_at_utc.replace("Z", "+00:00")).astimezone(
@@ -478,13 +500,13 @@ class ExportAndBaselineTest(unittest.TestCase):
                 html,
             )
             self.assertNotIn("<span>Tippspiel Prognosen</span>", html)
-            self.assertIn('<nav class="breadcrumb" aria-label="Breadcrumb">\n  <a href="/" aria-current="page">Prognosen</a>\n</nav>', html)
+            self.assertIn('<nav class="breadcrumb" aria-label="Breadcrumb">\n  <a href="/de/" aria-current="page">Prognosen</a>\n</nav>', html)
             self.assertIn('<header class="page-intro" aria-labelledby="page-title">', html)
             self.assertIn('Der gesamte Code ist öffentlich auf <a href="https://github.com/helga-agentur/worldcup-predictions">GitHub</a>.', html)
             self.assertIn('<section class="summary-dashboard" aria-labelledby="summary-title">', html)
             self.assertIn('<h2 id="summary-title" class="visually-hidden">Prognosen Übersicht</h2>', html)
             self.assertIn('<dl class="summary-metrics">', html)
-            self.assertIn('<dt class="summary-label">Getippte Tipps</dt>', html)
+            self.assertIn('<dt class="summary-label">Gesetzte Tipps</dt>', html)
             self.assertIn('<dt class="summary-label">Offene Tipps</dt>', html)
             self.assertIn('<dt class="summary-label">SRF Punkte</dt>', html)
             self.assertIn('<dd class="summary-value">6</dd>', html)
@@ -506,6 +528,8 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("Resultat", html)
             self.assertIn("SRF Tipp", html)
             self.assertIn("20min Tipp", html)
+            self.assertIn('<td class="numeric">🇧🇷 Brasilien</td>', html)
+            self.assertIn('<td class="numeric">🇧🇷 Brazil</td>', en_html)
             self.assertIn("Aktion", html)
             self.assertIn("Details", html)
             self.assertIn("Getippt", html)
@@ -513,7 +537,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn("Gespielt", html)
             self.assertNotIn("Tippabgabe geschlossen", html)
             self.assertNotIn("Diese Werte können sich beim nächsten stündlichen Lauf noch bewegen.", html)
-            self.assertIn("Diese Daten können sich bis zum jeweiligen Spielstart noch verändern.", html)
+            self.assertIn("Die Vorhersagen und Tipps können sich bis zum jeweiligen Spielstart noch verändern.", html)
             self.assertNotIn("Anpfiff", html)
             self.assertNotIn("Exakte Torerwartung", html)
             self.assertNotIn("H / U / A", html)
@@ -521,7 +545,16 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("JSON API", html)
             self.assertIn('href="/api/predictions"', html)
             self.assertNotIn('href="/">Prognosen</a>', html)
-            self.assertIn("Heimsieg / Unentschieden / Auswärtssieg", detail)
+            self.assertIn('href="/de/" lang="de" aria-current="true">DE</a>', html)
+            self.assertIn('href="/en/" lang="en">EN</a>', html)
+            self.assertIn('href="/de/spiele/2026-07-10-bra-jpn/"', html)
+            self.assertIn('href="/en/matches/2026-07-10-bra-jpn/"', en_html)
+            self.assertIn("Sieg Brasilien 🇧🇷 / Unentschieden / Sieg Japan 🇯🇵", detail)
+            self.assertIn("Brazil win 🇧🇷 / Draw / Japan win 🇯🇵", en_detail)
+            self.assertIn('<dt class="summary-label">Sieg Brasilien 🇧🇷</dt>', detail)
+            self.assertIn('<dt class="summary-label">Sieg Japan 🇯🇵</dt>', detail)
+            self.assertIn('<dt class="summary-label">Brazil win 🇧🇷</dt>', en_detail)
+            self.assertIn('<dt class="summary-label">Japan win 🇯🇵</dt>', en_detail)
             self.assertIn('<header class="page-intro" aria-labelledby="match-title">', detail)
             self.assertIn('<dl class="summary-metrics detail-metrics">', detail)
             self.assertIn('<dl class="summary-metrics detail-probabilities">', detail)
@@ -530,24 +563,32 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("Resultat", detail)
             self.assertIn("Vorhersage", detail)
             self.assertIn("Torerwartung", detail)
-            self.assertIn("SRF Tippspiel", detail)
-            self.assertIn("20min Tippspiel", detail)
+            self.assertIn("SRF Tipp", detail)
+            self.assertIn("20min Tipp", detail)
+            self.assertIn("🇧🇷 Brasilien", detail)
+            self.assertNotIn("SRF Tippspiel", detail)
+            self.assertNotIn("20min Tippspiel", detail)
+            self.assertIn("SRF tip", en_detail)
+            self.assertIn("20min tip", en_detail)
+            self.assertIn("🇧🇷 Brazil", en_detail)
+            self.assertNotIn("SRF pool", en_detail)
+            self.assertNotIn("20min pool", en_detail)
             self.assertIn("Sicherheit", detail)
             metric_order = [
                 detail.index("<dt class=\"summary-label\">Status</dt>"),
                 detail.index("<dt class=\"summary-label\">Start</dt>"),
-                detail.index("<dt class=\"summary-label\">20min Tippspiel</dt>"),
+                detail.index("<dt class=\"summary-label\">20min Tipp</dt>"),
                 detail.index("<dt class=\"summary-label\">Sicherheit</dt>"),
                 detail.index("<dt class=\"summary-label\">Torerwartung</dt>"),
                 detail.index("<dt class=\"summary-label\">Vorhersage</dt>"),
-                detail.index("<dt class=\"summary-label\">SRF Tippspiel</dt>"),
+                detail.index("<dt class=\"summary-label\">SRF Tipp</dt>"),
                 detail.index("<dt class=\"summary-label\">Resultat</dt>"),
             ]
             self.assertEqual(metric_order, sorted(metric_order))
             self.assertIn("Mittel (52.0%)", detail)
             self.assertIn('<span class="match-name match-name-title">', detail)
             h1_match_name = detail.split('<h1 id="match-title">', 1)[1].split("</h1>", 1)[0]
-            breadcrumb_match_name = detail.split('<a href="/spiele/2026-07-10-bra-jpn/" aria-current="page">', 1)[1].split("</a>", 1)[0]
+            breadcrumb_match_name = detail.split('<a href="/de/spiele/2026-07-10-bra-jpn/" aria-current="page">', 1)[1].split("</a>", 1)[0]
             self.assertIn('<span class="match-name-label">Brasilien</span>', h1_match_name)
             self.assertIn('<span class="match-name-label">Japan</span>', h1_match_name)
             self.assertNotIn("match-name-flag", h1_match_name)
@@ -560,8 +601,10 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn("Voller Wert", detail)
             self.assertIn("Wahrscheinlichste Resultate", detail)
             self.assertIn("Zurück zur Übersicht", detail)
-            self.assertIn('<a href="/">Prognosen</a>', detail)
-            self.assertIn('<a href="/spiele/2026-07-10-bra-jpn/" aria-current="page"><span class="match-name match-name-breadcrumb">', detail)
+            self.assertIn('<a href="/de/">Prognosen</a>', detail)
+            self.assertIn('<a href="/de/spiele/2026-07-10-bra-jpn/" aria-current="page"><span class="match-name match-name-breadcrumb">', detail)
+            self.assertIn('<link rel="canonical" href="/de/spiele/2026-07-10-bra-jpn/">', detail)
+            self.assertIn('<link rel="alternate" hreflang="en" href="/en/matches/2026-07-10-bra-jpn/">', detail)
             self.assertIn("--space-lg: 24px;", css)
             self.assertIn('html[data-theme="dark"]', css)
             self.assertIn("--helga-blue: #8fa2ff;", css)
@@ -598,7 +641,8 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn("\nnav a,\n.back-link", css)
             self.assertNotIn("\nnav a:hover,\n.back-link:hover", css)
             self.assertIn("margin: 0;\n  margin-top: var(--space-2);", css)
-            self.assertIn("margin-left: var(--space-md);", css)
+            self.assertIn(".language-switch", css)
+            self.assertIn('.language-switch a[aria-current="true"]', css)
             self.assertIn("margin-top: var(--space-lg);", css)
             self.assertIn(".detail-probabilities {\n  grid-template-columns: repeat(3, minmax(0, 1fr));\n  margin-top: var(--space-lg);", css)
             self.assertIn(".table-wrap-compact {\n  max-width: 560px;\n  margin-top: var(--space-lg);", css)
@@ -619,11 +663,52 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn("max-width: 9ch", css)
             self.assertNotIn("max-width: 680px", css)
             self.assertEqual(payload["predictions"][0]["home_team"], "Brazil")
+            self.assertEqual(payload["predictions"][0]["home_team_id"], "BRA")
+            self.assertEqual(payload["predictions"][0]["home_fifa_code"], "BRA")
             self.assertEqual(payload["predictions"][0]["predicted_home_goals"], 1.23456789012345)
+            self.assertEqual(payload["predictions"][0]["20min_tip"], "Brazil")
+            self.assertEqual(
+                payload["predictions"][0]["detail_urls"],
+                {
+                    "de": "http://127.0.0.1:8000/de/spiele/2026-07-10-bra-jpn/",
+                    "en": "http://127.0.0.1:8000/en/matches/2026-07-10-bra-jpn/",
+                },
+            )
+            self.assertNotIn('"twenty_min_', json.dumps(payload, sort_keys=True))
+            self.assertNotIn("metadata", payload["predictions"][0])
+            for presentation_key in (
+                "actual_score",
+                "actual_score_label",
+                "alternate_links",
+                "away_flag",
+                "away_team_label",
+                "confidence_text",
+                "current_url",
+                "detail_path",
+                "expected_score_display",
+                "expected_score_full",
+                "hda_title",
+                "hda_parts",
+                "home_flag",
+                "home_team_label",
+                "language_switch_links",
+                "match",
+                "match_display",
+                "most_likely_score",
+                "provider_tips",
+                "record_key",
+                "srf_account_display",
+                "srf_tip_label",
+                "status_label",
+                "top_score_matrix",
+                "twenty_min_account_display",
+                "twenty_min_tip_label",
+            ):
+                self.assertNotIn(presentation_key, payload["predictions"][0])
             self.assertEqual(payload["summary"]["srf_points"], 6.0)
-            self.assertEqual(payload["summary"]["twenty_min_points"], 5.0)
+            self.assertEqual(payload["summary"]["20min_points"], 5.0)
             self.assertEqual(payload["summary"]["srf_points_display"], "6")
-            self.assertEqual(payload["summary"]["twenty_min_points_display"], "5")
+            self.assertEqual(payload["summary"]["20min_points_display"], "5")
 
     def test_published_ledger_replaces_archived_rows_with_corrected_twenty_min_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -775,7 +860,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             )
 
             result = build_site(project_root=root, storage=storage, gtm_container_id="")
-            html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+            html = (result.output_dir / "de" / "index.html").read_text(encoding="utf-8")
             payload = json.loads((result.output_dir / "api" / "predictions").read_text(encoding="utf-8"))
             future_section = html.split('id="future-title"', 1)[1].split('id="past-title"', 1)[0]
             tipped_section = html.split('id="past-title"', 1)[1]
@@ -795,9 +880,22 @@ class ExportAndBaselineTest(unittest.TestCase):
                 tipped_section.index("🇩🇪 Deutschland - Paraguay 🇵🇾"),
                 tipped_section.index("🇲🇽 Mexiko - Südafrika 🇿🇦"),
             )
-            placeholder = next(row for row in payload["predictions"] if row["fixture_key"].endswith("Sieger Sechzehntelfinal 4"))
+            placeholder = next(row for row in payload["predictions"] if row["event_date"] == "2026-07-04T17:00:00Z")
             self.assertFalse(placeholder["prediction_available"])
-            self.assertTrue((result.output_dir / "spiele" / "2026-07-04-can-sieger-sechzehntelfinal-4" / "index.html").exists())
+            self.assertEqual(placeholder["fixture_key"], "2026-07-04T17:00:00Z|CAN|W76")
+            self.assertEqual(placeholder["away_team"], "W76")
+            self.assertEqual(placeholder["away_team_id"], "W76")
+            self.assertIsNone(placeholder["away_fifa_code"])
+            self.assertEqual(
+                placeholder["detail_urls"],
+                {
+                    "de": "https://tippspiel.helga.ch/de/spiele/2026-07-04-can-w76/",
+                    "en": "https://tippspiel.helga.ch/en/matches/2026-07-04-can-w76/",
+                },
+            )
+            self.assertNotIn("Sieger", json.dumps(payload, ensure_ascii=False))
+            self.assertTrue((result.output_dir / "de" / "spiele" / "2026-07-04-can-w76" / "index.html").exists())
+            self.assertTrue((result.output_dir / "en" / "matches" / "2026-07-04-can-w76" / "index.html").exists())
 
     def test_site_ignores_stale_fixture_placeholders_from_old_source_batches(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -854,13 +952,18 @@ class ExportAndBaselineTest(unittest.TestCase):
             )
 
             result = build_site(project_root=root, storage=storage, gtm_container_id="")
-            html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+            html = (result.output_dir / "de" / "index.html").read_text(encoding="utf-8")
             payload = json.loads((result.output_dir / "api" / "predictions").read_text(encoding="utf-8"))
 
             self.assertEqual(result.future_count, 1)
             self.assertEqual(payload["summary"]["future"], 1)
             self.assertIn("🇨🇦 Kanada - Sieger Sechzehntelfinal 4", html)
             self.assertNotIn("W75", html)
+            self.assertEqual(payload["predictions"][0]["fixture_key"], "2026-07-04T17:00:00Z|CAN|W76")
+            self.assertEqual(payload["predictions"][0]["away_team"], "W76")
+            self.assertEqual(payload["predictions"][0]["away_team_id"], "W76")
+            self.assertIsNone(payload["predictions"][0]["away_fifa_code"])
+            self.assertNotIn("Sieger", json.dumps(payload, ensure_ascii=False))
 
     def test_site_ignores_unpredicted_placeholder_when_prediction_covers_same_slot(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -918,13 +1021,16 @@ class ExportAndBaselineTest(unittest.TestCase):
             )
 
             result = build_site(project_root=root, storage=storage, gtm_container_id="")
-            html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+            html = (result.output_dir / "de" / "index.html").read_text(encoding="utf-8")
+            en_html = (result.output_dir / "en" / "index.html").read_text(encoding="utf-8")
             payload = json.loads((result.output_dir / "api" / "predictions").read_text(encoding="utf-8"))
 
             self.assertEqual(result.row_count, 2)
             self.assertEqual(result.future_count, 2)
             self.assertIn("🇨🇦 Kanada - Marokko 🇲🇦", html)
             self.assertIn("🇵🇾 Paraguay - Sieger Sechzehntelfinal 4", html)
+            self.assertIn("🇨🇦 Canada - Morocco 🇲🇦", en_html)
+            self.assertIn("🇵🇾 Paraguay - Winner Round of 32 match 4", en_html)
             self.assertNotIn("W75", html)
             self.assertEqual({row["fixture_key"] for row in payload["predictions"]}, {published_key, "2026-07-04T17:00:00Z|PAR|W76"})
 
@@ -932,6 +1038,7 @@ class ExportAndBaselineTest(unittest.TestCase):
         caddyfile = Path(__file__).resolve().parents[1].joinpath("Caddyfile").read_text(encoding="utf-8")
 
         self.assertIn("@json path /api/* /site-manifest.json", caddyfile)
+        self.assertIn("@html path / /index.html /de* /en*", caddyfile)
         self.assertIn('>Content-Type "application/json; charset=utf-8"', caddyfile)
         self.assertIn('Content-Disposition "inline"', caddyfile)
         self.assertIn('X-Content-Type-Options "nosniff"', caddyfile)

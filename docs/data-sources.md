@@ -198,6 +198,7 @@ Supported variables:
 - `FOOTBALL_DATA_API_KEY`
 - `KAGGLE_API_TOKEN`
 - `NEWS_API_KEY`
+- `BASE_URL`
 - `GTM_CONTAINER_ID`
 
 All source plugins continue to run without optional keys, but missing keys reduce available enrichment.
