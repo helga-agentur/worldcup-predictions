@@ -15,6 +15,6 @@
 		X-Content-Type-Options "nosniff"
 	}
 
-	@html path / /index.html /spiele/*
+	@html path / /index.html /de* /en*
 	header @html Cache-Control "public, max-age=300, stale-while-revalidate=3600"
 }

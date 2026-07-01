@@ -246,10 +246,14 @@ class TournamentState:
     result_checks: list[dict[str, Any]] = field(default_factory=list)
 
     def open_fixtures(self, *, now: dt.datetime | None = None, cutoff_minutes: int = 5) -> list[FixtureRecord]:
+        from worldcup_predictions.tournament.slots import has_defined_teams
+
         now = now or dt.datetime.now(dt.timezone.utc)
         cutoff = dt.timedelta(minutes=cutoff_minutes)
         open_rows = []
         for fixture in self.fixtures_without_results():
+            if not has_defined_teams(fixture):
+                continue
             kickoff = fixture.kickoff_at
             if kickoff is not None and kickoff - cutoff <= now:
                 continue

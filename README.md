@@ -58,7 +58,7 @@ For API keys, data sources, automation, generated files, and operational details
 | --- | --- |
 | Architecture, plugin runtime, and model boundaries | [`docs/architecture.md`](docs/architecture.md) |
 | APIs, datasets, scraping sources, and environment variables | [`docs/data-sources.md`](docs/data-sources.md) |
-| Cron jobs, generated files, static site publishing, and cache policy | [`docs/automation.md`](docs/automation.md) |
+| Cron jobs, deployment helpers, live data sync, static site publishing, and cache policy | [`docs/automation.md`](docs/automation.md) |
 | Diagnostics, calibration review, source health, and improvement workflow | [`docs/diagnostics-and-improvement.md`](docs/diagnostics-and-improvement.md) |
 | CLI reference and less common maintenance commands | [`docs/advanced-commands.md`](docs/advanced-commands.md) |
 | Generated built-in plugin catalog | [`docs/plugins.md`](docs/plugins.md) |

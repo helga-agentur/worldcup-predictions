@@ -1,18 +1,18 @@
-<section class="table-wrap" aria-label="Prognosentabelle">
+<section class="table-wrap" aria-label="{{ t('table.aria') }}">
   <table>
     <thead>
       <tr>
-        <th scope="col">Spiel</th>
-        <th scope="col">Start</th>
-        <th scope="col">{{ score_column_label|default("Vorhersage") }}</th>
-        <th scope="col">SRF Tipp</th>
-        <th scope="col">20min Tipp</th>
+        <th scope="col">{{ t("table.match") }}</th>
+        <th scope="col">{{ t("label.start") }}</th>
+        <th scope="col">{{ score_column_label|default(t("table.prediction")) }}</th>
+        <th scope="col">{{ t("table.srf_tip") }}</th>
+        <th scope="col">{{ t("table.twenty_min_tip") }}</th>
         {% if show_account_columns|default(false) %}
-        <th scope="col">SRF Konto</th>
-        <th scope="col">20min Konto</th>
+        <th scope="col">{{ t("table.srf_account") }}</th>
+        <th scope="col">{{ t("table.twenty_min_account") }}</th>
         {% endif %}
-        <th scope="col">Status</th>
-        <th scope="col">Aktion</th>
+        <th scope="col">{{ t("label.status") }}</th>
+        <th scope="col">{{ t("table.action") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -56,7 +56,7 @@
           <span class="status status-{{ row.status }}">{{ row.status_label }}</span>
         </td>
         <td>
-          <a class="details-link" href="{{ row.detail_path }}/">Details</a>
+          <a class="details-link" href="{{ row.detail_path }}/">{{ t("table.details") }}</a>
         </td>
       </tr>
       {% endfor %}

@@ -188,9 +188,9 @@ For local development, copy `.env.example` to `.env` and fill whichever keys you
 cp .env.example .env
 ```
 
-The project loads `.env` with `python-dotenv` and keeps values in `os.environ`. Existing process environment variables take precedence over `.env` values.
+The project loads `.env` with `python-dotenv` for local development and keeps values in `os.environ`. Existing process environment variables take precedence over `.env` values.
 
-Production should provide these as real process environment variables instead of mounting or relying on a repository-local `.env` file. The production Compose file passes the supported host environment variables into the container explicitly.
+Production does not read `/opt/worldcup-predictions/.env`. Live secrets belong in `/etc/worldcup-predictions/env`; `scripts/run-prod-compose.sh` sources that file before running `docker compose -f compose.prod.yaml`, and the production Compose file passes the supported host environment variables into the container explicitly. Cron jobs should call the wrapper so those variables are available.
 
 Supported variables:
 
@@ -198,6 +198,7 @@ Supported variables:
 - `FOOTBALL_DATA_API_KEY`
 - `KAGGLE_API_TOKEN`
 - `NEWS_API_KEY`
+- `BASE_URL`
 - `GTM_CONTAINER_ID`
 
 All source plugins continue to run without optional keys, but missing keys reduce available enrichment.

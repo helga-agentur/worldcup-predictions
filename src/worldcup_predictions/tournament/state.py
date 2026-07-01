@@ -18,6 +18,7 @@ from worldcup_predictions.tournament.contracts import (
     TeamRef,
     TournamentState,
 )
+from worldcup_predictions.tournament.slots import canonical_slot_code, is_slot_team
 
 
 def build_tournament_state(
@@ -27,8 +28,8 @@ def build_tournament_state(
     """Reconcile fixtures/results and compute current group standings."""
 
     all_result_rows = list(results)
-    fixture_rows = _latest_fixtures(fixtures)
     result_rows = _preferred_results(all_result_rows)
+    fixture_rows = _latest_fixtures(_canonicalize_fixtures(list(fixtures), result_rows))
     standings = _build_standings(fixture_rows, result_rows)
     return TournamentState(
         fixtures=fixture_rows,
@@ -99,8 +100,168 @@ def build_result_checks(results: list[ResultRecord]) -> list[dict]:
 def _latest_fixtures(fixtures: Iterable[FixtureRecord]) -> list[FixtureRecord]:
     by_key: dict[str, FixtureRecord] = {}
     for fixture in fixtures:
-        by_key[fixture.key] = fixture
-    return sorted(by_key.values(), key=lambda item: (item.event_date, item.home_team.name, item.away_team.name))
+        current = by_key.get(fixture.key)
+        if current is None or _fixture_rank(fixture) < _fixture_rank(current):
+            by_key[fixture.key] = fixture
+    return sorted(_dedupe_equivalent_fixture_slots(by_key.values()), key=lambda item: (item.event_date, item.home_team.name, item.away_team.name))
+
+
+def _dedupe_equivalent_fixture_slots(fixtures: Iterable[FixtureRecord]) -> list[FixtureRecord]:
+    selected: list[FixtureRecord] = []
+    for fixture in sorted(fixtures, key=lambda item: (item.event_date, -_fixture_resolution_score(item), _fixture_rank(item), item.key)):
+        replacement_index = None
+        for index, existing in enumerate(selected):
+            if _same_fixture_slot(existing, fixture):
+                replacement_index = index
+                break
+        if replacement_index is None:
+            selected.append(fixture)
+            continue
+        if _fixture_quality(fixture) > _fixture_quality(selected[replacement_index]):
+            selected[replacement_index] = fixture
+    return selected
+
+
+def _same_fixture_slot(left: FixtureRecord, right: FixtureRecord) -> bool:
+    if left.event_date != right.event_date:
+        return False
+    left_tokens = _fixture_identity_tokens(left)
+    right_tokens = _fixture_identity_tokens(right)
+    if left_tokens & right_tokens:
+        return True
+    left_slots = _fixture_slot_count(left)
+    right_slots = _fixture_slot_count(right)
+    # Knockout sources can disagree only by resolution level: W76-W78 versus
+    # Brazil-Norway. In that case the kickoff slot is the shared identity.
+    return (left_slots > 0 and right_slots == 0) or (right_slots > 0 and left_slots == 0)
+
+
+def _fixture_identity_tokens(fixture: FixtureRecord) -> set[str]:
+    tokens = set()
+    for team in (fixture.home_team, fixture.away_team):
+        if team.fifa_code:
+            tokens.add(f"team:{team.fifa_code}")
+        slot_code = _team_slot_code(team)
+        if slot_code:
+            tokens.add(f"slot:{slot_code}")
+    return tokens
+
+
+def _fixture_quality(fixture: FixtureRecord) -> tuple[int, int, int]:
+    return (_fixture_resolution_score(fixture), -_fixture_slot_count(fixture), -_fixture_rank(fixture))
+
+
+def _fixture_resolution_score(fixture: FixtureRecord) -> int:
+    return int(bool(fixture.home_team.fifa_code)) + int(bool(fixture.away_team.fifa_code))
+
+
+def _fixture_slot_count(fixture: FixtureRecord) -> int:
+    return int(bool(_team_slot_code(fixture.home_team))) + int(bool(_team_slot_code(fixture.away_team)))
+
+
+def _canonicalize_fixtures(fixtures: list[FixtureRecord], results: list[ResultRecord]) -> list[FixtureRecord]:
+    winner_by_slot = _winner_by_slot(fixtures, results)
+    slot_templates = _slot_templates_by_event(fixtures)
+    return [
+        _canonicalize_fixture(fixture, winner_by_slot=winner_by_slot, slot_template=slot_templates.get(fixture.event_date))
+        for fixture in fixtures
+    ]
+
+
+def _canonicalize_fixture(
+    fixture: FixtureRecord,
+    *,
+    winner_by_slot: dict[str, TeamRef],
+    slot_template: tuple[str, str] | None,
+) -> FixtureRecord:
+    home = _canonicalize_team(fixture.home_team, winner_by_slot=winner_by_slot, slot_code=slot_template[0] if slot_template else "")
+    away = _canonicalize_team(fixture.away_team, winner_by_slot=winner_by_slot, slot_code=slot_template[1] if slot_template else "")
+    if home == fixture.home_team and away == fixture.away_team:
+        return fixture
+    metadata = {
+        **fixture.metadata,
+        "canonicalized_fixture_key": FixtureRecord(
+            event_date=fixture.event_date,
+            home_team=home,
+            away_team=away,
+        ).key,
+        "source_fixture_key": fixture.key,
+    }
+    return replace(fixture, home_team=home, away_team=away, metadata=metadata)
+
+
+def _canonicalize_team(
+    team: TeamRef,
+    *,
+    winner_by_slot: dict[str, TeamRef],
+    slot_code: str,
+) -> TeamRef:
+    direct_slot = canonical_slot_code(team.fifa_code) or canonical_slot_code(team.key) or canonical_slot_code(team.name)
+    code = direct_slot or (slot_code if _needs_slot_identity(team) else "")
+    if not code:
+        return team
+    winner = winner_by_slot.get(code)
+    if winner is not None:
+        return winner
+    return TeamRef(code, None)
+
+
+def _needs_slot_identity(team: TeamRef) -> bool:
+    return team.fifa_code is None and not is_slot_team(team)
+
+
+def _winner_by_slot(fixtures: list[FixtureRecord], results: list[ResultRecord]) -> dict[str, TeamRef]:
+    match_number_by_fixture = {}
+    for fixture in fixtures:
+        match_number = _fixture_match_number(fixture)
+        if match_number:
+            match_number_by_fixture[fixture.key] = match_number
+
+    winners = {}
+    for result in results:
+        match_number = _result_match_number(result) or match_number_by_fixture.get(result.fixture_key)
+        if not match_number:
+            continue
+        if result.score.home > result.score.away:
+            winners[f"W{match_number}"] = result.home_team
+        elif result.score.away > result.score.home:
+            winners[f"W{match_number}"] = result.away_team
+    return winners
+
+
+def _slot_templates_by_event(fixtures: list[FixtureRecord]) -> dict[str, tuple[str, str]]:
+    templates: dict[str, tuple[str, str]] = {}
+    ranks: dict[str, tuple[int, int]] = {}
+    for fixture in fixtures:
+        home_slot = _team_slot_code(fixture.home_team)
+        away_slot = _team_slot_code(fixture.away_team)
+        if not home_slot and not away_slot:
+            continue
+        rank = (-int(bool(home_slot)) - int(bool(away_slot)), _fixture_rank(fixture))
+        current_rank = ranks.get(fixture.event_date)
+        if current_rank is None or rank < current_rank:
+            templates[fixture.event_date] = (home_slot, away_slot)
+            ranks[fixture.event_date] = rank
+    return templates
+
+
+def _team_slot_code(team: TeamRef) -> str:
+    return canonical_slot_code(team.fifa_code) or canonical_slot_code(team.key) or canonical_slot_code(team.name)
+
+
+def _fixture_match_number(fixture: FixtureRecord) -> str:
+    metadata_number = fixture.metadata.get("match_number")
+    value = str(metadata_number or fixture.source_id or "").strip()
+    return value if value.isdigit() else ""
+
+
+def _result_match_number(result: ResultRecord) -> str:
+    value = str(result.metadata.get("match_number") or "").strip()
+    return value if value.isdigit() else ""
+
+
+def _fixture_rank(fixture: FixtureRecord) -> int:
+    return _source_rank(str(fixture.metadata.get("source") or fixture.source_id or ""))
 
 
 def _preferred_results(results: Iterable[ResultRecord]) -> list[ResultRecord]:

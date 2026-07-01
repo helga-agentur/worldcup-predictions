@@ -1,15 +1,20 @@
 <header class="site-header">
-  <a class="brand" href="/" aria-label="Helga Tippspiel Prognosen">
+  <a class="brand" href="/{{ locale }}/" aria-label="{{ t('site.heading') }}">
     {% include "partials/logo.html" %}
   </a>
-  <nav aria-label="Hauptnavigation">
+  <nav aria-label="{{ t('nav.main') }}">
     <label class="theme-switch">
-      <span class="theme-switch-label">Dark Mode</span>
-      <input class="theme-switch-input" type="checkbox" data-theme-toggle aria-label="Dark Mode umschalten">
+      <span class="theme-switch-label">{{ t("theme.label") }}</span>
+      <input class="theme-switch-input" type="checkbox" data-theme-toggle aria-label="{{ t('theme.toggle') }}">
       <span class="theme-switch-track" aria-hidden="true">
         <span class="theme-switch-thumb"></span>
       </span>
     </label>
-    <a href="{{ json_feed_path }}">JSON API</a>
+    <a href="{{ json_feed_path }}">{{ t("nav.json_api") }}</a>
+    <div class="language-switch" aria-label="{{ t('nav.language') }}">
+      {% for item in language_switch_links %}
+      <a href="{{ item.href }}" lang="{{ item.locale }}"{% if item.current %} aria-current="true"{% endif %}>{{ item.label }}</a>
+      {% endfor %}
+    </div>
   </nav>
 </header>

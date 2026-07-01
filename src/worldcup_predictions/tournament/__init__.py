@@ -16,6 +16,13 @@ from worldcup_predictions.tournament.group_state import (
 from worldcup_predictions.tournament.openfootball import (
     parse_openfootball_text,
 )
+from worldcup_predictions.tournament.slots import (
+    canonical_slot_code,
+    has_defined_teams,
+    is_slot_team,
+    slot_display_name,
+    slot_team_ref,
+)
 from worldcup_predictions.tournament.state import (
     build_result_checks,
     build_tournament_state,
@@ -35,7 +42,12 @@ __all__ = [
     "build_result_checks",
     "build_tournament_state",
     "classify_group_motivation",
+    "canonical_slot_code",
     "fixture_key",
+    "has_defined_teams",
+    "is_slot_team",
     "parse_openfootball_text",
+    "slot_display_name",
+    "slot_team_ref",
     "standing_records",
 ]

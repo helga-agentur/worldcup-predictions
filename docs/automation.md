@@ -81,9 +81,11 @@ Future rows can move until the relevant match locks. Past rows stay frozen as pu
 Generated files include:
 
 - `public/current/index.html`
-- `public/current/spiele/<match-slug>/index.html`
+- `public/current/de/index.html`
+- `public/current/en/index.html`
+- `public/current/de/spiele/<match-slug>/index.html`
+- `public/current/en/matches/<match-slug>/index.html`
 - `public/current/api/predictions`
-- `public/current/api/predictions.json`
 - `public/current/assets/site.<hash>.css`
 - `public/current/assets/theme.<hash>.js`
 - `public/current/assets/favicon.svg`
@@ -110,6 +112,10 @@ docker compose run --rm --service-ports predictions worldcup-predictions site-se
 
 Production can serve `public/current/` directly with the included [`../Caddyfile`](../Caddyfile). The generated site is server-rendered HTML plus JSON and hashed static assets, so it does not need an application backend.
 
+The front page is a lightweight language redirect. It sends visitors to `/de/` or `/en/` by checking the `helga_language` cookie first, then the browser language list, and falling back to English. Localized pages set that cookie when visited directly. The JSON feed remains shared at `/api/predictions`.
+
+Set `BASE_URL` to the public origin used for absolute URLs in the JSON feed, without a trailing slash. Local development can use `BASE_URL=http://127.0.0.1:8000`; live should use `BASE_URL=https://tippspiel.helga.ch`. The builder tolerates a trailing slash and normalizes it away.
+
 Recommended cache policy:
 
 - HTML: 5 minutes
@@ -129,7 +135,11 @@ Example host cron shape:
 
 Use whatever process supervisor fits the deployment. The important part is the cadence: hourly prediction updates, daily simulation maintenance.
 
-`scripts/run-with-timing.sh` writes one `START` line and one `FINISH` line around the Docker command, including the exit status and wall-clock duration. The application still writes its own run manifest and prediction counts; the wrapper records the scheduler-level runtime, including Docker startup and teardown.
+## Helper Scripts
+
+- `scripts/run-with-timing.sh`: cron wrapper that writes one `START` line and one `FINISH` line around a command, including exit status and wall-clock duration. The application still writes its own run manifest and prediction counts; the wrapper records scheduler-level runtime, including Docker startup and teardown.
+- `scripts/run-prod-compose.sh`: production compose wrapper that loads `/etc/worldcup-predictions/env` into the host process environment before calling `docker compose -f compose.prod.yaml`.
+- `scripts/sync-live-data.sh`: local development helper that pulls ignored live runtime data from the production server into local `./data/`.
 
 ## Production Compose
 
@@ -140,7 +150,9 @@ Local development uses `compose.yaml`, which bind-mounts the full repository int
 - `reports/` for generated diagnostics reports
 - `logs/` for cron logs
 
-Set production secrets outside the repository, for example in `/etc/worldcup-predictions/env` owned by root and readable by the deploy user. `scripts/run-prod-compose.sh` loads this file into the host process environment before calling `docker compose -f compose.prod.yaml`.
+Live production does not read or depend on `/opt/worldcup-predictions/.env`. Do not create a production `.env` in the repository checkout.
+
+Set production secrets outside the repository in `/etc/worldcup-predictions/env`, owned by root and readable by the deploy user. `scripts/run-prod-compose.sh` loads this file into the host process environment before calling `docker compose -f compose.prod.yaml`, and the production Compose file then passes only the supported variables into the container.
 
 ```bash
 sudo install -m 0750 -o root -g deploy -d /etc/worldcup-predictions
@@ -156,8 +168,36 @@ ODDS_API_KEY=
 FOOTBALL_DATA_API_KEY=
 KAGGLE_API_TOKEN=
 NEWS_API_KEY=
+BASE_URL=https://tippspiel.helga.ch
 GTM_CONTAINER_ID=
 ```
+
+The live cron entries must call `./scripts/run-prod-compose.sh`, not `docker compose` directly, otherwise `/etc/worldcup-predictions/env` will not be loaded.
+
+## Sync Live Runtime Data
+
+Local development can copy the live ignored runtime data into `./data/`:
+
+```bash
+./scripts/sync-live-data.sh
+```
+
+The script reads local `.env` values for the SSH target:
+
+```bash
+DEPLOY_HOST=49.13.7.69
+DEPLOY_USER=deploy
+DEPLOY_PORT=22
+DEPLOY_PATH=/opt/worldcup-predictions
+```
+
+These `DEPLOY_*` values are local-only helper settings. They are not production runtime variables and should not be added to `/etc/worldcup-predictions/env`.
+
+Only `data/` is synced. Secrets, Docker credentials, server environment files, generated reports, logs, and the published site are not copied.
+
+The helper requires `rsync` locally and on the live server.
+
+The remote `rsync` runs under non-blocking shared `flock` locks for the scheduled-update and simulation lock files. If live automation is currently writing data, the helper aborts instead of waiting or copying partial structured Parquet/DuckDB state.
 
 ## GitHub Actions Deployment
 

@@ -4,7 +4,7 @@
 
 {% block content %}
 <nav class="breadcrumb" aria-label="Breadcrumb">
-  <a href="/">Prognosen</a>
+  <a href="/{{ locale }}/">{{ t("nav.predictions") }}</a>
   <span aria-hidden="true">/</span>
   <a href="{{ row.detail_path }}/" aria-current="page">{{ match_name(row, "match-name match-name-breadcrumb") }}</a>
 </nav>
@@ -12,25 +12,25 @@
 <article class="match-detail" aria-labelledby="match-title">
   {% set match_title %}{{ match_name(row, "match-name match-name-title", show_flags=false) }}{% endset %}
   {% set detail_lead -%}
-    Start: <time datetime="{{ row.event_date }}">{{ row.event_date|date_text }}</time>
+    {{ t("label.start") }}: <time datetime="{{ row.event_date }}">{{ row.event_date|date_text }}</time>
     · <span class="status status-{{ row.status }}">{{ row.status_label }}</span>
     {%- if row.actual_score %} · {{ row.actual_score_label }}: {{ row.actual_score }}{% endif -%}
   {%- endset %}
-  {{ page_intro("match-title", row.match_display, detail_lead, title_html=match_title) }}
+  {{ page_intro("match-title", row.match_display, detail_lead, t("site.kicker"), title_html=match_title) }}
 
   <section class="detail-section detail-section-primary" aria-labelledby="overview-title">
-    <h2 id="overview-title" class="visually-hidden">Spielübersicht</h2>
+    <h2 id="overview-title" class="visually-hidden">{{ t("detail.overview") }}</h2>
     <dl class="summary-metrics detail-metrics">
       <div class="summary-card">
-        <dt class="summary-label">Status</dt>
+        <dt class="summary-label">{{ t("label.status") }}</dt>
         <dd class="summary-value summary-value-text"><span class="status status-{{ row.status }}">{{ row.status_label }}</span></dd>
       </div>
       <div class="summary-card">
-        <dt class="summary-label">Start</dt>
+        <dt class="summary-label">{{ t("label.start") }}</dt>
         <dd class="summary-value summary-value-text"><time datetime="{{ row.event_date }}">{{ row.event_date|date_text }}</time></dd>
       </div>
       <div class="summary-card">
-        <dt class="summary-label">20min Tippspiel</dt>
+        <dt class="summary-label">{{ t("label.twenty_min_game") }}</dt>
         <dd class="summary-value summary-value-text">
           {{ row.twenty_min_tip_label or "-" }}
           {% if row.twenty_min_account_display %}
@@ -39,19 +39,19 @@
         </dd>
       </div>
       <div class="summary-card">
-        <dt class="summary-label">Sicherheit</dt>
+        <dt class="summary-label">{{ t("label.confidence") }}</dt>
         <dd class="summary-value summary-value-text">{{ row.confidence_text }}</dd>
       </div>
       <div class="summary-card">
-        <dt class="summary-label">Torerwartung</dt>
+        <dt class="summary-label">{{ t("label.expected_goals") }}</dt>
         <dd class="summary-value" title="{{ row.expected_score_full }}">{{ row.expected_score_display }}</dd>
       </div>
       <div class="summary-card">
-        <dt class="summary-label">Vorhersage</dt>
+        <dt class="summary-label">{{ t("table.prediction") }}</dt>
         <dd class="summary-value">{{ row.most_likely_home|score(row.most_likely_away) }}</dd>
       </div>
       <div class="summary-card">
-        <dt class="summary-label">SRF Tippspiel</dt>
+        <dt class="summary-label">{{ t("label.srf_game") }}</dt>
         <dd class="summary-value">
           {{ row.srf_tip_label or "-" }}
           {% if row.srf_account_display %}
@@ -60,14 +60,14 @@
         </dd>
       </div>
       <div class="summary-card">
-        <dt class="summary-label">Resultat</dt>
+        <dt class="summary-label">{{ t("label.result") }}</dt>
         <dd class="summary-value">{{ row.actual_score or "-" }}</dd>
       </div>
     </dl>
   </section>
 
   <section class="detail-section" aria-labelledby="hda-title">
-    <h2 id="hda-title">Heimsieg / Unentschieden / Auswärtssieg</h2>
+    <h2 id="hda-title">{{ row.hda_title }}</h2>
     <dl class="summary-metrics detail-probabilities">
       {% for item in row.hda_parts %}
       <div class="summary-card">
@@ -79,14 +79,14 @@
   </section>
 
   <section class="detail-section" aria-labelledby="matrix-title">
-    <h2 id="matrix-title">Wahrscheinlichste Resultate</h2>
+    <h2 id="matrix-title">{{ t("detail.matrix_title") }}</h2>
     {% if row.top_score_matrix %}
-    <section class="table-wrap table-wrap-compact" aria-label="Wahrscheinlichste Resultate">
+    <section class="table-wrap table-wrap-compact" aria-label="{{ t('detail.matrix_title') }}">
       <table>
         <thead>
           <tr>
-            <th scope="col">Resultat</th>
-            <th scope="col">Wahrscheinlichkeit</th>
+            <th scope="col">{{ t("label.result") }}</th>
+            <th scope="col">{{ t("label.probability") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -100,12 +100,12 @@
       </table>
     </section>
     {% else %}
-    <p class="empty">Keine Resultat-Matrix verfügbar.</p>
+    <p class="empty">{{ t("empty.matrix") }}</p>
     {% endif %}
   </section>
 
   <footer class="detail-actions">
-    <a class="back-link" href="/">Zurück zur Übersicht</a>
+    <a class="back-link" href="/{{ locale }}/">{{ t("detail.back") }}</a>
   </footer>
 </article>
 {% endblock %}

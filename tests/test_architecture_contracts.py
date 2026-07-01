@@ -63,6 +63,12 @@ class ArchitectureContractsTest(unittest.TestCase):
         self.assertEqual(catalog.translate("prediction.table.match"), "Partie")
         self.assertEqual(unknown_locale.translate("prediction.table.match"), "Match")
 
+    def test_translation_catalogs_expose_same_keys(self) -> None:
+        english = load_translation_catalog("en")
+        german = load_translation_catalog("de")
+
+        self.assertEqual(set(german.messages), set(english.messages))
+
     def test_project_config_loads_root_toml_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

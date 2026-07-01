@@ -124,10 +124,6 @@ main {
   justify-content: flex-end;
 }
 
-.site-header nav label + a {
-  margin-left: var(--space-md);
-}
-
 .site-header nav a {
   min-height: 40px;
   display: inline-flex;
@@ -143,6 +139,23 @@ main {
 .site-header nav a:hover {
   color: var(--paper);
   border-color: var(--helga-blue);
+  background: var(--helga-blue);
+}
+
+.language-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  border: 1px solid var(--line);
+}
+
+.language-switch a {
+  min-width: 42px;
+  border: 0;
+}
+
+.language-switch a[aria-current="true"] {
+  color: var(--paper);
   background: var(--helga-blue);
 }
 

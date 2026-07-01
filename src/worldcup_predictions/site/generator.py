@@ -17,15 +17,17 @@ from zoneinfo import ZoneInfo
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from worldcup_predictions.core.contracts import ScoreTip
-from worldcup_predictions.core.constants import ENV_GTM_CONTAINER_ID
+from worldcup_predictions.core.constants import ENV_BASE_URL, ENV_GTM_CONTAINER_ID
 from worldcup_predictions.core.datasets import PROVIDER_POINTS, PUBLISHED_PREDICTION_LEDGER
 from worldcup_predictions.core.env import env_value
+from worldcup_predictions.core.i18n import SUPPORTED_LOCALES, TranslationCatalog, load_translation_catalog
 from worldcup_predictions.entities.countries import CountryRegistry, load_country_registry
 from worldcup_predictions.entities.countries import normalize_entity_text
 from worldcup_predictions.evaluation.provider_points import points_for_row
 from worldcup_predictions.storage.ledger import normalize_datetime, utc_now
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamRef
-from worldcup_predictions.tournament.repository import load_active_fixture_rows
+from worldcup_predictions.tournament.repository import load_tournament_state
+from worldcup_predictions.tournament.slots import canonical_slot_code, slot_display_name
 
 
 HELGA_FONT_CADIZ_WOFF2 = "/assets/fonts/CadizWeb-Regular.woff2"
@@ -43,6 +45,43 @@ HTML_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=3600"
 JSON_CACHE_CONTROL = "public, max-age=60, stale-while-revalidate=300"
 ASSET_CACHE_CONTROL = "public, max-age=3600, immutable"
 JSON_FEED_PATH = "/api/predictions"
+SITE_BASE_URL = "https://tippspiel.helga.ch"
+DEFAULT_SITE_LOCALE = "en"
+LANGUAGE_COOKIE_NAME = "helga_language"
+SITE_LOCALES = tuple(locale for locale in SUPPORTED_LOCALES if locale in {"de", "en"})
+LOCALE_DETAIL_PREFIX = {
+    "de": "spiele",
+    "en": "matches",
+}
+API_PRESENTATION_KEYS = {
+    "actual_score",
+    "actual_score_label",
+    "alternate_links",
+    "away_flag",
+    "away_team_label",
+    "confidence_text",
+    "current_url",
+    "detail_path",
+    "expected_score_display",
+    "expected_score_full",
+    "hda_title",
+    "hda_parts",
+    "home_flag",
+    "home_team_label",
+    "language_switch_links",
+    "match",
+    "match_display",
+    "metadata",
+    "most_likely_score",
+    "provider_tips",
+    "record_key",
+    "srf_account_display",
+    "srf_tip_label",
+    "status_label",
+    "top_score_matrix",
+    "twenty_min_account_display",
+    "twenty_min_tip_label",
+}
 
 FIFA_FLAG_EMOJIS = {
     "ALG": "🇩🇿",
@@ -135,19 +174,23 @@ def build_site(
     storage,
     output_dir: Path | None = None,
     gtm_container_id: str | None = None,
+    base_url: str | None = None,
 ) -> SiteBuildResult:
     """Build the static website from the latest published prediction ledger."""
 
     project_root = Path(project_root)
     target_dir = output_dir or project_root / "public" / "current"
     generated_at = normalize_datetime(utc_now()) or ""
+    site_base_url = normalized_base_url(base_url or base_url_from_env(project_root))
     ledger_rows = [_strip_record(row) for row in storage.read_records(PUBLISHED_PREDICTION_LEDGER, latest_only=True)]
     ledger_rows.sort(key=lambda row: (str(row.get("event_date") or ""), str(row.get("fixture_key") or "")))
     country_registry = load_country_registry()
     placeholder_rows = _unpredicted_fixture_rows(storage, ledger_rows, country_registry=country_registry)
-    rows = [_prepare_html_row(row, country_registry=country_registry) for row in [*ledger_rows, *placeholder_rows]]
+    source_rows = [*ledger_rows, *placeholder_rows]
+    rows = [_prepare_html_row(row, country_registry=country_registry, locale="de") for row in source_rows]
     rows.sort(key=lambda row: (str(row.get("event_date") or ""), str(row.get("fixture_key") or "")))
     _apply_provider_point_accounts(rows, country_registry=country_registry)
+    _add_alternate_links("de", rows)
     future_rows = [row for row in rows if row.get("status") == "future"]
     locked_rows = [row for row in rows if row.get("status") == "locked"]
     final_rows = [row for row in rows if row.get("status") == "final"]
@@ -170,7 +213,7 @@ def build_site(
             "srf_points_display": _points_text(provider_points["srf.ch"]),
             "twenty_min_points_display": _points_text(provider_points["20min.ch"]),
         },
-        "predictions": rows,
+        "predictions": _api_rows(source_rows, country_registry=country_registry, base_url=site_base_url),
     }
 
     css_content = _render_css()
@@ -180,21 +223,18 @@ def build_site(
     asset_path = f"assets/site.{css_hash}.css"
     script_path = f"assets/theme.{js_hash}.js"
 
-    context = {
-        "title": "Helga Tippspiel Prognosen",
-        "description": "Öffentliche FIFA-WM-2026-Prognosen, provider-neutrale Scores und optimierte Tippspiel-Empfehlungen.",
-        "generated_at_utc": generated_at,
-        "generated_at_display": _date_time_text(generated_at),
-        "asset_css": f"/{asset_path}",
-        "asset_js": f"/{script_path}",
-        "gtm_container_id": (gtm_container_id or "").strip(),
-        "rows": rows,
-        "future_rows": future_rows,
-        "locked_rows": locked_rows,
-        "final_rows": final_rows,
-        "tipped_rows": tipped_rows,
-        "summary": data_payload["summary"],
-        "json_feed_path": JSON_FEED_PATH,
+    localized_contexts = {
+        locale: _site_context(
+            locale=locale,
+            generated_at=generated_at,
+            source_rows=source_rows,
+            asset_path=asset_path,
+            script_path=script_path,
+            gtm_container_id=gtm_container_id,
+            summary=data_payload["summary"],
+            country_registry=country_registry,
+        )
+        for locale in SITE_LOCALES
     }
 
     temp_dir = target_dir.with_name(f".{target_dir.name}.tmp")
@@ -202,12 +242,12 @@ def build_site(
         shutil.rmtree(temp_dir)
     _write_site_files(
         temp_dir,
-        context=context,
+        localized_contexts=localized_contexts,
         css_content=css_content,
         js_content=js_content,
         asset_path=asset_path,
         script_path=script_path,
-        data_payload=data_payload,
+        data_payload=_public_api_payload(data_payload),
     )
     if target_dir.exists():
         shutil.rmtree(target_dir)
@@ -216,7 +256,7 @@ def build_site(
     result = SiteBuildResult(
         output_dir=target_dir,
         generated_at_utc=generated_at,
-        html_files=tuple(["index.html", *[f"{str(row['detail_path']).lstrip('/')}/index.html" for row in rows]]),
+        html_files=tuple(_html_files(localized_contexts)),
         json_files=("api/predictions", "site-manifest.json"),
         asset_files=(asset_path, script_path, *STATIC_ASSET_FILES),
         row_count=len(rows),
@@ -250,10 +290,213 @@ def serve_site(*, directory: Path, host: str = "127.0.0.1", port: int = 8000) ->
         server.server_close()
 
 
+def _site_context(
+    *,
+    locale: str,
+    generated_at: str,
+    source_rows: list[dict[str, Any]],
+    asset_path: str,
+    script_path: str,
+    gtm_container_id: str | None,
+    summary: dict[str, Any],
+    country_registry: CountryRegistry,
+) -> dict[str, Any]:
+    catalog = load_translation_catalog(locale)
+    rows = [_prepare_html_row(row, country_registry=country_registry, locale=locale) for row in source_rows]
+    rows.sort(key=lambda row: (str(row.get("event_date") or ""), str(row.get("fixture_key") or "")))
+    _apply_provider_point_accounts(rows, country_registry=country_registry)
+    future_rows = [row for row in rows if row.get("status") == "future"]
+    locked_rows = [row for row in rows if row.get("status") == "locked"]
+    final_rows = [row for row in rows if row.get("status") == "final"]
+    tipped_rows = sorted(
+        [row for row in rows if row.get("status") in {"locked", "final"}],
+        key=lambda row: (str(row.get("event_date") or ""), str(row.get("fixture_key") or "")),
+        reverse=True,
+    )
+    _add_alternate_links(locale, rows)
+    return {
+        "locale": locale,
+        "title": catalog.translate("site.title"),
+        "description": catalog.translate("site.description"),
+        "generated_at_utc": generated_at,
+        "generated_at_display": _date_time_text(generated_at),
+        "asset_css": f"/{asset_path}",
+        "asset_js": f"/{script_path}",
+        "gtm_container_id": (gtm_container_id or "").strip(),
+        "rows": rows,
+        "future_rows": future_rows,
+        "locked_rows": locked_rows,
+        "final_rows": final_rows,
+        "tipped_rows": tipped_rows,
+        "summary": summary,
+        "json_feed_path": JSON_FEED_PATH,
+        "language_cookie_name": LANGUAGE_COOKIE_NAME,
+        "language_switch_links": _language_switch_links(locale, ""),
+        "current_url": f"/{locale}/",
+        "alternate_links": _alternate_links(""),
+        "t": catalog.translate,
+    }
+
+
+def _add_alternate_links(locale: str, rows: list[dict[str, Any]]) -> None:
+    for row in rows:
+        slug = _match_slug(row)
+        row["detail_path"] = _detail_path(locale, slug)
+        row["current_url"] = row["detail_path"] + "/"
+        row["alternate_links"] = _alternate_links(f"/{LOCALE_DETAIL_PREFIX[DEFAULT_SITE_LOCALE]}/{slug}", slug=slug)
+        row["language_switch_links"] = _language_switch_links(locale, slug)
+
+
+def _detail_path(locale: str, slug: str) -> str:
+    return f"/{locale}/{LOCALE_DETAIL_PREFIX[locale]}/{slug}"
+
+
+def _alternate_links(default_locale_path: str, *, slug: str | None = None) -> list[dict[str, str]]:
+    links = []
+    for locale in SITE_LOCALES:
+        href = f"/{locale}/" if slug is None else _detail_path(locale, slug) + "/"
+        links.append({"locale": locale, "href": href})
+    x_default = f"/{DEFAULT_SITE_LOCALE}{default_locale_path}/" if default_locale_path else f"/{DEFAULT_SITE_LOCALE}/"
+    links.append({"locale": "x-default", "href": x_default})
+    return links
+
+
+def _language_switch_links(current_locale: str, slug: str | None) -> list[dict[str, Any]]:
+    return [
+        {
+            "locale": locale,
+            "label": locale.upper(),
+            "href": f"/{locale}/" if slug in (None, "") else _detail_path(locale, slug) + "/",
+            "current": locale == current_locale,
+        }
+        for locale in SITE_LOCALES
+    ]
+
+
+def _html_files(localized_contexts: dict[str, dict[str, Any]]) -> list[str]:
+    html_files = ["index.html"]
+    for locale, context in localized_contexts.items():
+        html_files.append(f"{locale}/index.html")
+        html_files.extend(f"{str(row['detail_path']).lstrip('/')}/index.html" for row in context["rows"])
+    return html_files
+
+
+def _public_api_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "generated_at_utc": payload["generated_at_utc"],
+        "summary": _public_api_value(payload["summary"]),
+        "predictions": [_public_api_row(row) for row in payload["predictions"]],
+    }
+
+
+def _public_api_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        _public_api_key(key): _public_api_value(value)
+        for key, value in row.items()
+        if key not in API_PRESENTATION_KEYS
+    }
+
+
+def _public_api_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            _public_api_key(str(key)): _public_api_value(item)
+            for key, item in value.items()
+            if str(key) not in API_PRESENTATION_KEYS
+        }
+    if isinstance(value, list):
+        return [_public_api_value(item) for item in value]
+    return value
+
+
+def _public_api_key(key: str) -> str:
+    if key.startswith("twenty_min_"):
+        return "20min_" + key.removeprefix("twenty_min_")
+    return key
+
+
+def _api_rows(rows: list[dict[str, Any]], *, country_registry: CountryRegistry, base_url: str) -> list[dict[str, Any]]:
+    prepared = [_prepare_api_row(row, country_registry=country_registry, base_url=base_url) for row in rows]
+    prepared.sort(key=lambda row: (str(row.get("event_date") or ""), str(row.get("fixture_key") or "")))
+    return prepared
+
+
+def _prepare_api_row(row: dict[str, Any], *, country_registry: CountryRegistry, base_url: str) -> dict[str, Any]:
+    prepared = {key: value for key, value in _strip_record(row).items() if key != "_record"}
+    slug = _match_slug(prepared)
+    prepared["home_team"] = _api_team_value(prepared, side="home", country_registry=country_registry)
+    prepared["away_team"] = _api_team_value(prepared, side="away", country_registry=country_registry)
+    prepared["home_team_id"] = _api_team_identifier(prepared, side="home", country_registry=country_registry)
+    prepared["away_team_id"] = _api_team_identifier(prepared, side="away", country_registry=country_registry)
+    prepared["home_fifa_code"] = _api_fifa_code(prepared, side="home", country_registry=country_registry)
+    prepared["away_fifa_code"] = _api_fifa_code(prepared, side="away", country_registry=country_registry)
+    prepared["detail_urls"] = {
+        locale: _absolute_site_url(_detail_path(locale, slug) + "/", base_url=base_url)
+        for locale in SITE_LOCALES
+    }
+    return prepared
+
+
+def _api_team_value(row: dict[str, Any], *, side: str, country_registry: CountryRegistry) -> str:
+    fixture_key_part = _fixture_key_part(str(row.get("fixture_key") or ""), side=side)
+    slot_code = canonical_slot_code(fixture_key_part)
+    if slot_code:
+        return slot_code
+    if fixture_key_part and len(fixture_key_part) == 3:
+        country = country_registry.countries.get(fixture_key_part)
+        if country is not None:
+            return country.names.get("en") or fixture_key_part
+    source_name = str(row.get(f"{side}_team") or "")
+    source_slot_code = canonical_slot_code(source_name)
+    if source_slot_code:
+        return source_slot_code
+    resolved = country_registry.resolve(source_name, locale="en") or country_registry.resolve(source_name, locale="de")
+    if resolved and resolved.canonical_id:
+        country = country_registry.countries.get(resolved.canonical_id)
+        if country is not None:
+            return country.names.get("en") or resolved.canonical_id
+    return source_name
+
+
+def _api_team_identifier(row: dict[str, Any], *, side: str, country_registry: CountryRegistry) -> str:
+    fixture_key_part = _fixture_key_part(str(row.get("fixture_key") or ""), side=side)
+    if fixture_key_part:
+        return canonical_slot_code(fixture_key_part) or fixture_key_part
+    return _api_fifa_code(row, side=side, country_registry=country_registry) or str(row.get(f"{side}_team") or "")
+
+
+def _api_fifa_code(row: dict[str, Any], *, side: str, country_registry: CountryRegistry) -> str | None:
+    raw_code = str(row.get(f"{side}_fifa_code") or "").strip().upper()
+    if raw_code and raw_code in country_registry.countries:
+        return raw_code
+    fixture_key_part = _fixture_key_part(str(row.get("fixture_key") or ""), side=side)
+    if fixture_key_part and fixture_key_part in country_registry.countries:
+        return fixture_key_part
+    resolved = country_registry.resolve(str(row.get(f"{side}_team") or ""), locale="en") or country_registry.resolve(
+        str(row.get(f"{side}_team") or ""),
+        locale="de",
+    )
+    if resolved and resolved.canonical_id in country_registry.countries:
+        return resolved.canonical_id
+    return None
+
+
+def _absolute_site_url(path: str, *, base_url: str) -> str:
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    return f"{base_url}{normalized_path}"
+
+
+def normalized_base_url(value: str | None) -> str:
+    """Return the site origin without a trailing slash."""
+
+    text = str(value or "").strip() or SITE_BASE_URL
+    return text.rstrip("/")
+
+
 def _write_site_files(
     output_dir: Path,
     *,
-    context: dict[str, Any],
+    localized_contexts: dict[str, dict[str, Any]],
     css_content: str,
     js_content: str,
     asset_path: str,
@@ -265,13 +508,23 @@ def _write_site_files(
     (output_dir / "api").mkdir(parents=True, exist_ok=True)
 
     env = _template_environment()
-    html = env.get_template("pages/predictions.html").render(**context)
-    (output_dir / "index.html").write_text(html, encoding="utf-8")
+    (output_dir / "index.html").write_text(_language_redirect_html(), encoding="utf-8")
+    predictions_template = env.get_template("pages/predictions.html")
     detail_template = env.get_template("pages/match_detail.html")
-    for row in context["rows"]:
-        detail_dir = output_dir / str(row["detail_path"]).lstrip("/")
-        detail_dir.mkdir(parents=True, exist_ok=True)
-        detail_dir.joinpath("index.html").write_text(detail_template.render(**context, row=row), encoding="utf-8")
+    for locale, context in localized_contexts.items():
+        locale_dir = output_dir / locale
+        locale_dir.mkdir(parents=True, exist_ok=True)
+        locale_dir.joinpath("index.html").write_text(predictions_template.render(**context), encoding="utf-8")
+        for row in context["rows"]:
+            detail_dir = output_dir / str(row["detail_path"]).lstrip("/")
+            detail_dir.mkdir(parents=True, exist_ok=True)
+            detail_context = {
+                **context,
+                "current_url": row["current_url"],
+                "alternate_links": row["alternate_links"],
+                "language_switch_links": row["language_switch_links"],
+            }
+            detail_dir.joinpath("index.html").write_text(detail_template.render(**detail_context, row=row), encoding="utf-8")
     (output_dir / asset_path).write_text(css_content, encoding="utf-8")
     (output_dir / script_path).write_text(js_content, encoding="utf-8")
     _write_static_assets(output_dir)
@@ -280,7 +533,58 @@ def _write_site_files(
         encoding="utf-8",
     )
     (output_dir / "robots.txt").write_text("User-agent: *\nAllow: /\nSitemap: /sitemap.xml\n", encoding="utf-8")
-    (output_dir / "sitemap.xml").write_text(_sitemap_xml(context["generated_at_utc"], context["rows"]), encoding="utf-8")
+    (output_dir / "sitemap.xml").write_text(_sitemap_xml(localized_contexts), encoding="utf-8")
+
+
+def _language_redirect_html() -> str:
+    supported = json.dumps(list(SITE_LOCALES), ensure_ascii=True)
+    fallback = DEFAULT_SITE_LOCALE
+    cookie = LANGUAGE_COOKIE_NAME
+    catalog = load_translation_catalog(fallback)
+    return f"""<!doctype html>
+<html lang="{fallback}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{catalog.translate("site.title")}</title>
+  <meta name="robots" content="noindex">
+  <meta http-equiv="refresh" content="0; url=/{fallback}/">
+  <script>
+    (function () {{
+      var supported = {supported};
+      var fallback = "{fallback}";
+      var cookieName = "{cookie}";
+
+      function cookieLanguage() {{
+        var match = document.cookie.match(new RegExp("(?:^|; )" + cookieName + "=(de|en)"));
+        return match ? match[1] : "";
+      }}
+
+      function browserLanguage() {{
+        var languages = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+        for (var i = 0; i < languages.length; i += 1) {{
+          var value = String(languages[i] || "").split("-")[0].toLowerCase();
+          if (supported.indexOf(value) !== -1) {{
+            return value;
+          }}
+        }}
+        return fallback;
+      }}
+
+      var locale = cookieLanguage() || browserLanguage();
+      document.cookie = cookieName + "=" + locale + "; Path=/; Max-Age=31536000; SameSite=Lax";
+      window.location.replace("/" + locale + "/");
+    }})();
+  </script>
+  <link rel="alternate" hreflang="de" href="/de/">
+  <link rel="alternate" hreflang="en" href="/en/">
+  <link rel="alternate" hreflang="x-default" href="/en/">
+</head>
+<body>
+  <p><a href="/{fallback}/">{catalog.translate("redirect.continue")}</a></p>
+</body>
+</html>
+"""
 
 
 def _template_environment() -> Environment:
@@ -530,12 +834,14 @@ def _account_points_text(total: float, delta: float) -> str:
 
 def _unpredicted_fixture_rows(storage, ledger_rows: list[dict[str, Any]], *, country_registry: CountryRegistry) -> list[dict[str, Any]]:
     ledger_keys = {str(row.get("fixture_key") or "") for row in ledger_rows}
-    raw_fixtures = [_strip_record(row) for row in load_active_fixture_rows(storage)]
+    raw_fixtures = [fixture.to_record() for fixture in load_tournament_state(storage).fixtures]
+    covered_slots = _covered_fixture_slots(raw_fixtures, ledger_rows, ledger_keys, country_registry=country_registry)
     candidate_rows = [
         row
         for row in raw_fixtures
         if str(row.get("fixture_key") or "") not in ledger_keys
         and str(row.get("status") or "").casefold() in {"open", "scheduled"}
+        and not (_fixture_slot_keys(row, country_registry=country_registry) & covered_slots)
     ]
     preferred_sources_by_date = {
         str(row.get("event_date") or "")
@@ -556,6 +862,49 @@ def _unpredicted_fixture_rows(storage, ledger_rows: list[dict[str, Any]], *, cou
         seen_keys.add(key)
         rows.append(_fixture_placeholder_row(row, country_registry=country_registry))
     return rows
+
+
+def _covered_fixture_slots(
+    raw_fixtures: list[dict[str, Any]],
+    ledger_rows: list[dict[str, Any]],
+    ledger_keys: set[str],
+    *,
+    country_registry: CountryRegistry,
+) -> set[str]:
+    slots: set[str] = set()
+    for row in ledger_rows:
+        slots.update(_fixture_slot_keys(row, country_registry=country_registry))
+    for row in raw_fixtures:
+        if str(row.get("fixture_key") or "") in ledger_keys:
+            slots.update(_fixture_slot_keys(row, country_registry=country_registry))
+    return slots
+
+
+def _fixture_slot_keys(row: dict[str, Any], *, country_registry: CountryRegistry) -> set[str]:
+    event_date = str(row.get("event_date") or "")
+    if not event_date:
+        return set()
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    slots = set()
+    match_number = str(metadata.get("match_number") or "").strip()
+    if match_number:
+        slots.add(f"match-number:{match_number}")
+    for side in ("home", "away"):
+        team_key = _known_team_slot_key(row, side=side, country_registry=country_registry)
+        if team_key:
+            slots.add(f"event-team:{event_date}:{team_key}")
+    return slots
+
+
+def _known_team_slot_key(row: dict[str, Any], *, side: str, country_registry: CountryRegistry) -> str:
+    code = str(row.get(f"{side}_fifa_code") or "").strip().upper()
+    if code and code in country_registry.countries:
+        return code
+    source_name = str(row.get(f"{side}_team") or "")
+    resolved = country_registry.resolve(source_name, locale="en") or country_registry.resolve(source_name, locale="de")
+    if resolved and resolved.canonical_id in country_registry.countries:
+        return resolved.canonical_id
+    return ""
 
 
 def _fixture_placeholder_row(row: dict[str, Any], *, country_registry: CountryRegistry) -> dict[str, Any]:
@@ -592,10 +941,11 @@ def _fixture_source_priority(row: dict[str, Any]) -> int:
     return 0 if _fixture_source(row) == "srf_public" else 1
 
 
-def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry) -> dict[str, Any]:
+def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry, locale: str = "de") -> dict[str, Any]:
+    catalog = load_translation_catalog(locale)
     prepared = {key: value for key, value in row.items() if key != "_record"}
-    home_name = _country_display_name(prepared, side="home", country_registry=country_registry)
-    away_name = _country_display_name(prepared, side="away", country_registry=country_registry)
+    home_name = _country_display_name(prepared, side="home", country_registry=country_registry, locale=locale)
+    away_name = _country_display_name(prepared, side="away", country_registry=country_registry, locale=locale)
     home_code = _country_code_from_fixture_key(str(prepared.get("fixture_key") or ""), side="home")
     away_code = _country_code_from_fixture_key(str(prepared.get("fixture_key") or ""), side="away")
     home_flag = FIFA_FLAG_EMOJIS.get(home_code, "")
@@ -606,11 +956,15 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry)
     prepared["home_flag"] = home_flag
     prepared["away_flag"] = away_flag
     prepared["match_display"] = _match_display(home_name, home_code, away_name, away_code)
-    prepared["detail_path"] = f"/spiele/{_match_slug(prepared)}"
-    prepared["status_label"] = _status_label(prepared.get("status"))
-    prepared["actual_score_label"] = "Resultat" if prepared.get("actual_score") else ""
-    prepared["srf_tip_label"] = _tip_display_text(prepared.get("srf_tip"), country_registry=country_registry)
-    prepared["twenty_min_tip_label"] = _tip_display_text(prepared.get("twenty_min_tip"), country_registry=country_registry)
+    prepared["status_label"] = _status_label(prepared.get("status"), catalog=catalog)
+    prepared["actual_score_label"] = catalog.translate("label.result") if prepared.get("actual_score") else ""
+    prepared["srf_tip_label"] = _tip_display_text(prepared.get("srf_tip"), country_registry=country_registry, locale=locale)
+    prepared["twenty_min_tip_label"] = _tip_display_text(
+        prepared.get("twenty_min_tip"),
+        country_registry=country_registry,
+        locale=locale,
+        show_flag=True,
+    )
     prepared["expected_score_full"] = (
         f"{_float_text(prepared.get('predicted_home_goals'))}:{_float_text(prepared.get('predicted_away_goals'))}"
     )
@@ -618,8 +972,9 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry)
         f"{_float_text(prepared.get('predicted_home_goals'), precision=2)}:"
         f"{_float_text(prepared.get('predicted_away_goals'), precision=2)}"
     )
-    prepared["hda_parts"] = _hda_parts(prepared)
-    prepared["confidence_text"] = _confidence_text(prepared.get("confidence_label"), prepared.get("confidence_percent"))
+    prepared["hda_parts"] = _hda_parts(prepared, catalog=catalog)
+    prepared["hda_title"] = _hda_title(prepared, catalog=catalog)
+    prepared["confidence_text"] = _confidence_text(prepared.get("confidence_label"), prepared.get("confidence_percent"), catalog=catalog)
     prepared["top_score_matrix"] = _top_scores(prepared.get("score_matrix"), limit=10)
     return prepared
 
@@ -635,59 +990,102 @@ def _match_slug(row: dict[str, Any]) -> str:
     return normalize_entity_text(str(row.get("match") or row.get("record_key") or "match")).replace(" ", "-")
 
 
-def _status_label(status: Any) -> str:
+def _status_label(status: Any, *, catalog: TranslationCatalog) -> str:
     return {
-        "future": "Offen",
-        "locked": "Getippt",
-        "final": "Getippt",
+        "future": catalog.translate("status.future"),
+        "locked": catalog.translate("status.tipped"),
+        "final": catalog.translate("status.tipped"),
     }.get(str(status or ""), str(status or "-"))
 
 
-def _hda_parts(row: dict[str, Any]) -> list[dict[str, str]]:
+def _hda_parts(row: dict[str, Any], *, catalog: TranslationCatalog) -> list[dict[str, str]]:
     return [
-        {"label": "Heimsieg", "value": _percent_text(row.get("prob_home"))},
-        {"label": "Unentschieden", "value": _percent_text(row.get("prob_draw"))},
-        {"label": "Auswärtssieg", "value": _percent_text(row.get("prob_away"))},
+        {"label": _team_win_label(row, side="home", catalog=catalog), "value": _percent_text(row.get("prob_home"))},
+        {"label": catalog.translate("prob.draw"), "value": _percent_text(row.get("prob_draw"))},
+        {"label": _team_win_label(row, side="away", catalog=catalog), "value": _percent_text(row.get("prob_away"))},
     ]
 
 
-def _tip_display_text(value: Any, *, country_registry: CountryRegistry) -> str:
+def _hda_title(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
+    return " / ".join(
+        (
+            _team_win_label(row, side="home", catalog=catalog),
+            catalog.translate("prob.draw"),
+            _team_win_label(row, side="away", catalog=catalog),
+        )
+    )
+
+
+def _team_win_label(row: dict[str, Any], *, side: str, catalog: TranslationCatalog) -> str:
+    flag = str(row.get(f"{side}_flag") or "").strip()
+    team = str(row.get(f"{side}_team_label") or "").strip()
+    if flag and team:
+        return catalog.translate("prob.team_win", team=team, flag=flag).strip()
+    fallback_key = "prob.home" if side == "home" else "prob.away"
+    return catalog.translate(fallback_key)
+
+
+def _flagged_label(flag: Any, label: str) -> str:
+    text = str(label or "")
+    emoji = str(flag or "").strip()
+    return f"{emoji} {text}" if emoji else text
+
+
+def _tip_display_text(
+    value: Any,
+    *,
+    country_registry: CountryRegistry,
+    locale: str = "de",
+    show_flag: bool = False,
+) -> str:
     text = str(value or "")
     if not text:
         return ""
     if text.casefold() == "draw":
-        return "Unentschieden"
+        return load_translation_catalog(locale).translate("prob.draw")
     if ":" in text:
         return text
     resolved = country_registry.resolve(text, locale="en") or country_registry.resolve(text, locale="de")
     if resolved and resolved.canonical_id:
         country = country_registry.countries.get(resolved.canonical_id)
         if country is not None:
-            return country.names.get("de") or country.names.get("en") or text
+            label = country.names.get(locale) or country.names.get("en") or text
+            return _flagged_label(FIFA_FLAG_EMOJIS.get(resolved.canonical_id, "") if show_flag else "", label)
     return text
 
 
-def _country_display_name(row: dict[str, Any], *, side: str, country_registry: CountryRegistry) -> str:
-    code = _country_code_from_fixture_key(str(row.get("fixture_key") or ""), side=side)
+def _country_display_name(row: dict[str, Any], *, side: str, country_registry: CountryRegistry, locale: str = "de") -> str:
+    fixture_key_part = _fixture_key_part(str(row.get("fixture_key") or ""), side=side)
+    slot_label = slot_display_name(fixture_key_part, locale=locale)
+    if slot_label:
+        return slot_label
+    code = fixture_key_part if len(fixture_key_part) == 3 else ""
     if code:
         country = country_registry.countries.get(code)
         if country is not None:
-            return country.names.get("de") or country.names.get("en") or code
+            return country.names.get(locale) or country.names.get("en") or code
     source_name = str(row.get(f"{side}_team") or "")
+    slot_label = slot_display_name(source_name, locale=locale)
+    if slot_label:
+        return slot_label
     resolved = country_registry.resolve(source_name, locale="en") or country_registry.resolve(source_name, locale="de")
     if resolved and resolved.canonical_id:
         country = country_registry.countries.get(resolved.canonical_id)
         if country is not None:
-            return country.names.get("de") or country.names.get("en") or source_name
+            return country.names.get(locale) or country.names.get("en") or source_name
     return source_name
 
 
-def _country_code_from_fixture_key(fixture_key: str, *, side: str) -> str:
+def _fixture_key_part(fixture_key: str, *, side: str) -> str:
     parts = fixture_key.split("|")
     if len(parts) != 3:
         return ""
     index = 1 if side == "home" else 2
-    value = parts[index].upper()
+    return parts[index].upper()
+
+
+def _country_code_from_fixture_key(fixture_key: str, *, side: str) -> str:
+    value = _fixture_key_part(fixture_key, side=side)
     return value if len(value) == 3 else ""
 
 
@@ -743,7 +1141,7 @@ def _float_value(value: Any) -> float:
         return 0.0
 
 
-def _confidence_text(label: Any, percent: Any) -> str:
+def _confidence_text(label: Any, percent: Any, *, catalog: TranslationCatalog) -> str:
     try:
         value = float(percent)
     except (TypeError, ValueError):
@@ -751,29 +1149,29 @@ def _confidence_text(label: Any, percent: Any) -> str:
     fallback_label = "-"
     if value is not None:
         if value >= 0.70:
-            fallback_label = "Hoch"
+            fallback_label = catalog.translate("confidence.high")
         elif value >= 0.60:
-            fallback_label = "Eher hoch"
+            fallback_label = catalog.translate("confidence.medium_high")
         elif value >= 0.52:
-            fallback_label = "Mittel"
+            fallback_label = catalog.translate("confidence.medium")
         else:
-            fallback_label = "Tief"
-    resolved_label = _confidence_label_de(label) or fallback_label
+            fallback_label = catalog.translate("confidence.low")
+    resolved_label = _confidence_label(label, catalog=catalog) or fallback_label
     if value is None:
         return resolved_label
     return f"{resolved_label} ({value * 100:.1f}%)"
 
 
-def _confidence_label_de(label: Any) -> str:
+def _confidence_label(label: Any, *, catalog: TranslationCatalog) -> str:
     normalized = str(label or "").strip().casefold()
     return {
-        "high": "Hoch",
-        "medium-high": "Eher hoch",
-        "medium high": "Eher hoch",
-        "medium": "Mittel",
-        "medium-low": "Eher tief",
-        "medium low": "Eher tief",
-        "low": "Tief",
+        "high": catalog.translate("confidence.high"),
+        "medium-high": catalog.translate("confidence.medium_high"),
+        "medium high": catalog.translate("confidence.medium_high"),
+        "medium": catalog.translate("confidence.medium"),
+        "medium-low": catalog.translate("confidence.medium_low"),
+        "medium low": catalog.translate("confidence.medium_low"),
+        "low": catalog.translate("confidence.low"),
     }.get(normalized, str(label or ""))
 
 
@@ -803,8 +1201,12 @@ def _date_time_text(value: Any) -> str:
     return zurich.strftime("%d.%m.%Y, %H:%M:%S")
 
 
-def _sitemap_xml(generated_at_utc: str, rows: list[dict[str, Any]]) -> str:
-    urls = [("/", generated_at_utc), *[(str(row["detail_path"]) + "/", generated_at_utc) for row in rows]]
+def _sitemap_xml(localized_contexts: dict[str, dict[str, Any]]) -> str:
+    urls = []
+    for locale, context in localized_contexts.items():
+        generated_at_utc = str(context["generated_at_utc"])
+        urls.append((f"/{locale}/", generated_at_utc))
+        urls.extend((str(row["detail_path"]) + "/", generated_at_utc) for row in context["rows"])
     url_nodes = "\n".join(
         f"""  <url>
     <loc>{loc}</loc>
@@ -858,6 +1260,12 @@ def gtm_container_id_from_env(project_root: Path) -> str:
     """Read the optional GTM container id from process env or project `.env`."""
 
     return env_value(Path(project_root), ENV_GTM_CONTAINER_ID) or ""
+
+
+def base_url_from_env(project_root: Path) -> str:
+    """Read the public site base URL from process env or project `.env`."""
+
+    return env_value(Path(project_root), ENV_BASE_URL) or SITE_BASE_URL
 
 
 def _strip_record(row: dict[str, Any]) -> dict[str, Any]:
