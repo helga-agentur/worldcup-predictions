@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "partials/page_intro.html" import page_intro %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/{{ locale }}/">{{ t("nav.predictions") }}</a>
+  <span aria-hidden="true">/</span>
+  <a href="{{ current_url }}" aria-current="page">{{ page_title }}</a>
+</nav>
+
+<section class="intro intro-compact" aria-labelledby="page-title">
+  {{ page_intro(
+    "page-title",
+    page_title,
+    page_description,
+    t("site.kicker")
+  ) }}
+</section>
+
+<section class="table-section table-section-primary" aria-label="{{ page_title }}">
+  {% if rows_to_show %}
+    {% include "partials/prediction_table.html" %}
+  {% else %}
+    <p class="empty">{{ empty_text }}</p>
+  {% endif %}
+</section>
+{% endblock %}

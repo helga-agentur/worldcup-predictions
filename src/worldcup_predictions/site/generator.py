@@ -53,6 +53,17 @@ LOCALE_DETAIL_PREFIX = {
     "de": "spiele",
     "en": "matches",
 }
+LOCALE_MATCH_LIST_PATHS = {
+    "de": {
+        "future": "/de/spiele/kommende",
+        "past": "/de/spiele/vergangene",
+    },
+    "en": {
+        "future": "/en/matches/future",
+        "past": "/en/matches/past",
+    },
+}
+HOMEPAGE_MATCH_PREVIEW_LIMIT = 10
 API_PRESENTATION_KEYS = {
     "actual_score",
     "actual_score_label",
@@ -314,6 +325,8 @@ def _site_context(
         reverse=True,
     )
     _add_alternate_links(locale, rows)
+    future_list_path = LOCALE_MATCH_LIST_PATHS[locale]["future"]
+    past_list_path = LOCALE_MATCH_LIST_PATHS[locale]["past"]
     return {
         "locale": locale,
         "title": catalog.translate("site.title"),
@@ -325,9 +338,14 @@ def _site_context(
         "gtm_container_id": (gtm_container_id or "").strip(),
         "rows": rows,
         "future_rows": future_rows,
+        "future_preview_rows": future_rows[:HOMEPAGE_MATCH_PREVIEW_LIMIT],
         "locked_rows": locked_rows,
         "final_rows": final_rows,
         "tipped_rows": tipped_rows,
+        "tipped_preview_rows": tipped_rows[:HOMEPAGE_MATCH_PREVIEW_LIMIT],
+        "preview_limit": HOMEPAGE_MATCH_PREVIEW_LIMIT,
+        "future_list_path": future_list_path,
+        "past_list_path": past_list_path,
         "summary": summary,
         "json_feed_path": JSON_FEED_PATH,
         "language_cookie_name": LANGUAGE_COOKIE_NAME,
@@ -361,6 +379,12 @@ def _alternate_links(default_locale_path: str, *, slug: str | None = None) -> li
     return links
 
 
+def _match_list_alternate_links(kind: str) -> list[dict[str, str]]:
+    links = [{"locale": locale, "href": LOCALE_MATCH_LIST_PATHS[locale][kind]} for locale in SITE_LOCALES]
+    links.append({"locale": "x-default", "href": LOCALE_MATCH_LIST_PATHS[DEFAULT_SITE_LOCALE][kind]})
+    return links
+
+
 def _language_switch_links(current_locale: str, slug: str | None) -> list[dict[str, Any]]:
     return [
         {
@@ -373,10 +397,23 @@ def _language_switch_links(current_locale: str, slug: str | None) -> list[dict[s
     ]
 
 
+def _match_list_language_switch_links(current_locale: str, kind: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "locale": locale,
+            "label": locale.upper(),
+            "href": LOCALE_MATCH_LIST_PATHS[locale][kind],
+            "current": locale == current_locale,
+        }
+        for locale in SITE_LOCALES
+    ]
+
+
 def _html_files(localized_contexts: dict[str, dict[str, Any]]) -> list[str]:
     html_files = ["index.html"]
     for locale, context in localized_contexts.items():
         html_files.append(f"{locale}/index.html")
+        html_files.extend(f"{LOCALE_MATCH_LIST_PATHS[locale][kind].lstrip('/')}/index.html" for kind in ("future", "past"))
         html_files.extend(f"{str(row['detail_path']).lstrip('/')}/index.html" for row in context["rows"])
     return html_files
 
@@ -510,11 +547,38 @@ def _write_site_files(
     env = _template_environment()
     (output_dir / "index.html").write_text(_language_redirect_html(), encoding="utf-8")
     predictions_template = env.get_template("pages/predictions.html")
+    match_list_template = env.get_template("pages/match_list.html")
     detail_template = env.get_template("pages/match_detail.html")
     for locale, context in localized_contexts.items():
         locale_dir = output_dir / locale
         locale_dir.mkdir(parents=True, exist_ok=True)
         locale_dir.joinpath("index.html").write_text(predictions_template.render(**context), encoding="utf-8")
+        _write_match_list_page(
+            output_dir,
+            template=match_list_template,
+            context=context,
+            kind="future",
+            rows=context["future_rows"],
+            title_key="section.future.title",
+            description_key="section.future.description",
+            score_column_label=context["t"]("table.prediction"),
+            score_column_source="prediction",
+            show_account_columns=False,
+            empty_key="empty.future",
+        )
+        _write_match_list_page(
+            output_dir,
+            template=match_list_template,
+            context=context,
+            kind="past",
+            rows=context["tipped_rows"],
+            title_key="section.tipped.title",
+            description_key="section.tipped.description",
+            score_column_label=context["t"]("label.result"),
+            score_column_source="actual",
+            show_account_columns=True,
+            empty_key="empty.tipped",
+        )
         for row in context["rows"]:
             detail_dir = output_dir / str(row["detail_path"]).lstrip("/")
             detail_dir.mkdir(parents=True, exist_ok=True)
@@ -534,6 +598,40 @@ def _write_site_files(
     )
     (output_dir / "robots.txt").write_text("User-agent: *\nAllow: /\nSitemap: /sitemap.xml\n", encoding="utf-8")
     (output_dir / "sitemap.xml").write_text(_sitemap_xml(localized_contexts), encoding="utf-8")
+
+
+def _write_match_list_page(
+    output_dir: Path,
+    *,
+    template,
+    context: dict[str, Any],
+    kind: str,
+    rows: list[dict[str, Any]],
+    title_key: str,
+    description_key: str,
+    score_column_label: str,
+    score_column_source: str,
+    show_account_columns: bool,
+    empty_key: str,
+) -> None:
+    locale = str(context["locale"])
+    page_path = LOCALE_MATCH_LIST_PATHS[locale][kind]
+    page_dir = output_dir / page_path.lstrip("/")
+    page_dir.mkdir(parents=True, exist_ok=True)
+    page_context = {
+        **context,
+        "current_url": page_path,
+        "alternate_links": _match_list_alternate_links(kind),
+        "language_switch_links": _match_list_language_switch_links(locale, kind),
+        "rows_to_show": rows,
+        "page_title": context["t"](title_key),
+        "page_description": context["t"](description_key),
+        "score_column_label": score_column_label,
+        "score_column_source": score_column_source,
+        "show_account_columns": show_account_columns,
+        "empty_text": context["t"](empty_key),
+    }
+    page_dir.joinpath("index.html").write_text(template.render(**page_context), encoding="utf-8")
 
 
 def _language_redirect_html() -> str:
@@ -1206,6 +1304,7 @@ def _sitemap_xml(localized_contexts: dict[str, dict[str, Any]]) -> str:
     for locale, context in localized_contexts.items():
         generated_at_utc = str(context["generated_at_utc"])
         urls.append((f"/{locale}/", generated_at_utc))
+        urls.extend((LOCALE_MATCH_LIST_PATHS[locale][kind], generated_at_utc) for kind in ("future", "past"))
         urls.extend((str(row["detail_path"]) + "/", generated_at_utc) for row in context["rows"])
     url_nodes = "\n".join(
         f"""  <url>

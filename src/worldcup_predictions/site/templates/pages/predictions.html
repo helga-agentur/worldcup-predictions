@@ -13,6 +13,11 @@
     t("site.lead"),
     t("site.kicker")
   ) }}
+  <nav class="resource-links" aria-label="{{ t('resources.aria') }}">
+    <a href="https://github.com/helga-agentur/worldcup-predictions">{{ t("resources.github") }}</a>
+    <span aria-hidden="true">·</span>
+    <a href="{{ json_feed_path }}" target="_blank" rel="noopener" data-analytics-event="helga_api_click">{{ t("resources.json_api") }}</a>
+  </nav>
   <section class="summary-dashboard" aria-labelledby="summary-title">
     <h2 id="summary-title" class="visually-hidden">{{ t("summary.title") }}</h2>
     <dl class="summary-metrics">
@@ -43,8 +48,8 @@
       <p>{{ t("section.future.description") }}</p>
     </section>
   </header>
-  {% if future_rows %}
-    {% set rows_to_show = future_rows %}
+  {% if future_preview_rows %}
+    {% set rows_to_show = future_preview_rows %}
     {% set show_account_columns = false %}
     {% set score_column_label = t("table.prediction") %}
     {% set score_column_source = "prediction" %}
@@ -52,6 +57,9 @@
   {% else %}
     <p class="empty">{{ t("empty.future") }}</p>
   {% endif %}
+  <p class="section-actions">
+    <a class="content-link" href="{{ future_list_path }}">{{ t("section.future.all") }}</a>
+  </p>
 </section>
 
 <section class="table-section" aria-labelledby="past-title">
@@ -61,8 +69,8 @@
       <p>{{ t("section.tipped.description") }}</p>
     </section>
   </header>
-  {% if tipped_rows %}
-    {% set rows_to_show = tipped_rows %}
+  {% if tipped_preview_rows %}
+    {% set rows_to_show = tipped_preview_rows %}
     {% set show_account_columns = true %}
     {% set score_column_label = t("label.result") %}
     {% set score_column_source = "actual" %}
@@ -70,5 +78,8 @@
   {% else %}
     <p class="empty">{{ t("empty.tipped") }}</p>
   {% endif %}
+  <p class="section-actions">
+    <a class="content-link" href="{{ past_list_path }}">{{ t("section.tipped.all") }}</a>
+  </p>
 </section>
 {% endblock %}

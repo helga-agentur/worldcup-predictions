@@ -10,7 +10,6 @@
         <span class="theme-switch-thumb"></span>
       </span>
     </label>
-    <a href="{{ json_feed_path }}" data-analytics-event="helga_api_click">{{ t("nav.json_api") }}</a>
     <div class="language-switch" aria-label="{{ t('nav.language') }}">
       {% for item in language_switch_links %}
       <a href="{{ item.href }}" lang="{{ item.locale }}" data-analytics-event="helga_language_switch" data-analytics-language="{{ item.locale }}"{% if item.current %} aria-current="true"{% endif %}>{{ item.label }}</a>

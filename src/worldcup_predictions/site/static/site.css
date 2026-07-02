@@ -214,7 +214,7 @@ main {
 .theme-switch-input:focus-visible + .theme-switch-track,
 .site-header nav a:focus-visible,
 .breadcrumb a:focus-visible,
-.back-link:focus-visible,
+.content-link:focus-visible,
 .details-link:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
@@ -226,6 +226,14 @@ main {
 
 .page-intro {
   padding: 36px 0;
+}
+
+.intro-compact {
+  padding-bottom: var(--space-md);
+}
+
+.intro-compact .page-intro {
+  padding-bottom: 0;
 }
 
 .kicker {
@@ -265,6 +273,26 @@ h2 {
   margin-top: var(--space-lg);
   color: var(--muted);
   font-size: clamp(1rem, 2vw, 1.25rem);
+}
+
+.resource-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -18px 0 var(--space-lg);
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.resource-links a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.resource-links a:hover {
+  color: var(--ink);
+  text-decoration: none;
 }
 
 .summary-dashboard {
@@ -333,6 +361,25 @@ h2 {
 
 .section-heading + .table-wrap {
   margin-top: var(--space-md);
+}
+
+.section-actions {
+  margin: var(--space-md) 0 0;
+}
+
+.content-link {
+  color: var(--helga-blue);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.content-link:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.table-section-primary {
+  padding-top: 0;
 }
 
 .table-wrap {
@@ -523,17 +570,6 @@ tbody tr:hover {
 
 .breadcrumb a:hover {
   color: var(--ink);
-}
-
-.back-link {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 0.16em;
-}
-
-.back-link:hover {
-  color: var(--ink);
-  text-decoration: none;
 }
 
 .detail-section {
