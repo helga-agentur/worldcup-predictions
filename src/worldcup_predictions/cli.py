@@ -57,7 +57,7 @@ from worldcup_predictions.model.baseline import compute_elo
 from worldcup_predictions.plugins import builtin_plugins
 from worldcup_predictions.plugins.provider_optimizers.ch_srf import best_srf_bonus_answers, evaluate_srf_bonus_questions
 from worldcup_predictions.plugins.provider_optimizers.ch_20min import best_twenty_min_bonus_answers, evaluate_twenty_min_bonus_questions
-from worldcup_predictions.simulations import SimulationInputs, TournamentSimulator
+from worldcup_predictions.simulations import SimulationInputs, TournamentSimulator, pair_key
 from worldcup_predictions.site import build_site, serve_site
 from worldcup_predictions.site.generator import gtm_container_id_from_env
 from worldcup_predictions.tournament.repository import (
@@ -666,7 +666,7 @@ def _simulation_inputs_from_state(
     known_results: dict[str, ScoreTip],
     include_current_results_in_ratings: bool,
 ) -> SimulationInputs:
-    matrices = {prediction.fixture.key: prediction.score_matrix for prediction in run.predictions}
+    matrices = _simulation_score_matrices(run.predictions)
     team_strengths = _team_strengths_from_outrights(workflow.context.storage.read_records(MARKET_OUTRIGHTS, latest_only=True))
     team_ratings = _team_ratings_for_simulation(
         workflow.context.storage,
@@ -675,11 +675,46 @@ def _simulation_inputs_from_state(
     )
     return SimulationInputs(
         fixtures=[fixture.to_fixture() for fixture in state.fixtures],
-        known_results=known_results,
+        known_results=_simulation_known_results(state, known_results),
         score_matrices=matrices,
         team_strengths=team_strengths,
         team_ratings=team_ratings,
     )
+
+
+def _simulation_score_matrices(predictions) -> dict:
+    """Score matrices keyed for simulator lookups.
+
+    Group fixtures are looked up by fixture key. Knockout matches are simulated
+    from bracket slots (M73..M104), so the simulator can only find their model
+    matrices through "home|away" team-name pair keys.
+    """
+
+    matrices = {}
+    for prediction in predictions:
+        fixture = prediction.fixture
+        matrices[fixture.key] = prediction.score_matrix
+        if prediction.score_matrix and not fixture.group:
+            matrices.setdefault(pair_key(fixture.home_team, fixture.away_team), prediction.score_matrix)
+    return matrices
+
+
+def _simulation_known_results(state, known_results: dict[str, ScoreTip]) -> dict[str, ScoreTip]:
+    """Known results keyed for simulator lookups.
+
+    Adds "home|away" pair keys for finished knockout matches so simulated
+    bracket matches keep already-played results fixed instead of re-sampling
+    them each iteration.
+    """
+
+    known = dict(known_results)
+    group_fixture_keys = {fixture.key for fixture in state.fixtures if fixture.group}
+    for result in state.results:
+        score = known_results.get(result.fixture_key)
+        if score is None or result.fixture_key in group_fixture_keys:
+            continue
+        known.setdefault(pair_key(result.home_team.name, result.away_team.name), score)
+    return known
 
 
 def command_postmatch_learning(args: argparse.Namespace) -> int:
