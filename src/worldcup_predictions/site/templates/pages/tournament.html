@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "partials/page_intro.html" import page_intro %}
+{% from "partials/champion_odds.html" import champion_bars %}
 
 {% block content %}
 <nav class="breadcrumb" aria-label="Breadcrumb">
@@ -18,14 +19,15 @@
 </section>
 
 <section class="table-section table-section-primary" aria-label="{{ page_title }}">
-  {% if rows_to_show %}
-    {% if list_kind == "future" %}
-      {% include "partials/match_cards.html" %}
-    {% else %}
-      {% include "partials/match_rows.html" %}
-    {% endif %}
+  {% if champion %}
+  {{ champion_bars(champion.entries) }}
+  <p class="odds-source">{{ champion.source_text }}</p>
   {% else %}
-    <p class="empty">{{ empty_text }}</p>
+  <p class="empty">{{ t("tournament.empty") }}</p>
   {% endif %}
 </section>
+
+<footer class="detail-actions">
+  <a class="content-link" href="/{{ locale }}/">{{ t("detail.back") }}</a>
+</footer>
 {% endblock %}

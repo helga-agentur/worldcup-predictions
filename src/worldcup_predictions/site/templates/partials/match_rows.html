@@ -1,0 +1,23 @@
+{% from "partials/match_name.html" import match_name %}
+<div class="match-rows">
+  {% for row in rows_to_show %}
+  <a class="match-row" href="{{ row.detail_path }}/" data-analytics-event="helga_match_open">
+    <time class="row-date numeric" datetime="{{ row.event_date }}">{{ row.kickoff_display }}</time>
+    <span class="row-match">{{ match_name(row) }}</span>
+    <span class="row-result numeric">
+      {% if row.srf_tip_label %}{{ t("table.srf_tip") }} {{ row.srf_tip_label }}{% endif %}
+      {% if row.actual_score %} <span class="row-arrow" aria-hidden="true">→</span> <strong>{{ row.actual_score }}</strong>{% endif %}
+    </span>
+    <span class="row-points numeric">
+      {% if row.status == "final" and row.srf_account_display %}
+      SRF +{{ row.srf_match_points|float_text(precision=0) }} · 20min +{{ row.twenty_min_match_points|float_text(precision=0) }}
+      {% endif %}
+    </span>
+    {% if row.hit_label %}
+    <span class="hit-chip hit-{{ row.hit_result }}">{{ row.hit_label }}</span>
+    {% else %}
+    <span class="status status-{{ row.status }}">{{ row.status_label }}</span>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "partials/page_intro.html" import page_intro %}
+{% from "partials/champion_odds.html" import champion_bars %}
 
 {% block content %}
 <nav class="breadcrumb" aria-label="Breadcrumb">
@@ -14,6 +15,8 @@
     t("site.kicker")
   ) }}
   <nav class="resource-links" aria-label="{{ t('resources.aria') }}">
+    <a href="{{ tournament_path }}">{{ t("nav.tournament") }}</a>
+    <span aria-hidden="true">·</span>
     <a href="https://github.com/helga-agentur/worldcup-predictions">{{ t("resources.github") }}</a>
     <span aria-hidden="true">·</span>
     <a href="{{ json_feed_path }}" target="_blank" rel="noopener" data-analytics-event="helga_api_click">{{ t("resources.json_api") }}</a>
@@ -22,20 +25,30 @@
     <h2 id="summary-title" class="visually-hidden">{{ t("summary.title") }}</h2>
     <dl class="summary-metrics">
       <div class="summary-card">
-        <dt class="summary-label">{{ t("summary.tipped") }}</dt>
-        <dd class="summary-value">{{ summary.tipped }}</dd>
-      </div>
-      <div class="summary-card">
-        <dt class="summary-label">{{ t("summary.open") }}</dt>
-        <dd class="summary-value">{{ summary.future }}</dd>
-      </div>
-      <div class="summary-card">
         <dt class="summary-label">{{ t("summary.srf_points") }}</dt>
         <dd class="summary-value">{{ summary.srf_points_display }}</dd>
+        {% if summary_extras.srf_avg_text %}<dd class="summary-sub numeric">{{ summary_extras.srf_avg_text }}</dd>{% endif %}
       </div>
       <div class="summary-card">
         <dt class="summary-label">{{ t("summary.twenty_min_points") }}</dt>
         <dd class="summary-value">{{ summary.twenty_min_points_display }}</dd>
+        {% if summary_extras.twenty_min_avg_text %}<dd class="summary-sub numeric">{{ summary_extras.twenty_min_avg_text }}</dd>{% endif %}
+      </div>
+      <div class="summary-card">
+        <dt class="summary-label">{{ t("summary.hit_rate") }}</dt>
+        <dd class="summary-value">{{ summary_extras.hit_rate_text }}</dd>
+        {% if summary_extras.has_hits %}
+        <dd class="summary-sub numeric">{{ summary_extras.hit_breakdown_text }}</dd>
+        <dd class="summary-hitbar" aria-hidden="true">
+          <span class="hitbar-exact" style="width: {{ summary_extras.hit_widths.exact }}%"></span>
+          <span class="hitbar-trend" style="width: {{ summary_extras.hit_widths.trend }}%"></span>
+        </dd>
+        {% endif %}
+      </div>
+      <div class="summary-card">
+        <dt class="summary-label">{{ t("summary.open") }}</dt>
+        <dd class="summary-value">{{ summary.future }}</dd>
+        {% if summary_extras.next_kickoff %}<dd class="summary-sub numeric">{{ t("summary.next_kickoff") }}: {{ summary_extras.next_kickoff }}</dd>{% endif %}
       </div>
     </dl>
   </section>
@@ -50,10 +63,7 @@
   </header>
   {% if future_preview_rows %}
     {% set rows_to_show = future_preview_rows %}
-    {% set show_account_columns = false %}
-    {% set score_column_label = t("table.prediction") %}
-    {% set score_column_source = "prediction" %}
-    {% include "partials/prediction_table.html" %}
+    {% include "partials/match_cards.html" %}
   {% else %}
     <p class="empty">{{ t("empty.future") }}</p>
   {% endif %}
@@ -71,10 +81,7 @@
   </header>
   {% if tipped_preview_rows %}
     {% set rows_to_show = tipped_preview_rows %}
-    {% set show_account_columns = true %}
-    {% set score_column_label = t("label.result") %}
-    {% set score_column_source = "actual" %}
-    {% include "partials/prediction_table.html" %}
+    {% include "partials/match_rows.html" %}
   {% else %}
     <p class="empty">{{ t("empty.tipped") }}</p>
   {% endif %}
@@ -82,4 +89,19 @@
     <a class="content-link" href="{{ past_list_path }}">{{ t("section.tipped.all") }}</a>
   </p>
 </section>
+
+{% if champion %}
+<section class="table-section" aria-labelledby="champion-title">
+  <header class="section-heading">
+    <section class="section-heading-copy">
+      <h2 id="champion-title">{{ t("tournament.title") }}</h2>
+      <p>{{ champion.source_text }}</p>
+    </section>
+  </header>
+  {{ champion_bars(champion.preview_entries) }}
+  <p class="section-actions">
+    <a class="content-link" href="{{ tournament_path }}">{{ t("tournament.all") }}</a>
+  </p>
+</section>
+{% endif %}
 {% endblock %}

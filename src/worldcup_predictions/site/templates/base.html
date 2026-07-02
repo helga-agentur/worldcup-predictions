@@ -5,10 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title }}</title>
   <meta name="description" content="{{ description }}">
-  <link rel="canonical" href="{{ current_url }}">
+  <link rel="canonical" href="{{ base_url }}{{ current_url }}">
   {% for alternate in alternate_links %}
-  <link rel="alternate" hreflang="{{ alternate.locale }}" href="{{ alternate.href }}">
+  <link rel="alternate" hreflang="{{ alternate.locale }}" href="{{ base_url }}{{ alternate.href }}">
   {% endfor %}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ site_name }}">
+  <meta property="og:title" content="{{ title }}">
+  <meta property="og:description" content="{{ description }}">
+  <meta property="og:url" content="{{ base_url }}{{ current_url }}">
+  <meta property="og:locale" content="{{ og_locale }}">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{{ title }}">
+  <meta name="twitter:description" content="{{ description }}">
+  {% block head_extra %}{% endblock %}
   {% if gtm_container_id %}
   <script>
     (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':

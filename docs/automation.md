@@ -78,15 +78,21 @@ The daily simulation starts from the current confirmed tournament state. For ana
 
 ## Static Site
 
-The static site reads from `published_prediction_ledger`.
+The static site reads from `published_prediction_ledger`. The tournament page additionally reads the latest `simulation_summary` champion distribution, falling back to `market_outrights` no-vig probabilities (with a source note) when no usable simulation data exists.
 
 Future rows can move until the relevant match locks. Past rows stay frozen as public historical predictions, while final score fields and provider point totals can be added afterward.
+
+Upcoming matches render as link cards with a 1-X-2 probability bar, the most likely score, and both provider tips with expected points. Tipped matches render as compact rows with the SRF tip, the final score, per-match provider points, and a hit-quality chip (exact score / correct trend / miss). Match detail pages lead with the SRF tip and expected points, a one-sentence explanation of how the tip relates to the most likely result, knockout advancement probabilities where available, and a shaded score-matrix heatmap. Every page carries OpenGraph/Twitter metadata; match pages add `SportsEvent` JSON-LD.
 
 Generated files include:
 
 - `public/current/index.html`
 - `public/current/de/index.html`
 - `public/current/en/index.html`
+- `public/current/de/spiele/kommende/index.html` and `.../vergangene/index.html`
+- `public/current/en/matches/future/index.html` and `.../past/index.html`
+- `public/current/de/turnier/index.html`
+- `public/current/en/tournament/index.html`
 - `public/current/de/spiele/<match-slug>/index.html`
 - `public/current/en/matches/<match-slug>/index.html`
 - `public/current/api/predictions`
