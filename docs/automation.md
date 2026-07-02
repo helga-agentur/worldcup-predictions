@@ -133,11 +133,11 @@ Google Tag Manager is rendered only when `GTM_CONTAINER_ID` is set. Leave it emp
 Example host cron shape:
 
 ```cron
-30 * * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-scheduled.lock ./scripts/run-with-timing.sh scheduled-update ./scripts/run-prod-compose.sh run --rm predictions worldcup-predictions scheduled-update >> logs/scheduled-update.log 2>&1
+0,30 * * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-scheduled.lock ./scripts/run-with-timing.sh scheduled-update ./scripts/run-prod-compose.sh run --rm predictions worldcup-predictions scheduled-update >> logs/scheduled-update.log 2>&1
 15 7 * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-simulate.lock ./scripts/run-with-timing.sh simulate-tournament ./scripts/run-prod-compose.sh run --rm predictions worldcup-predictions simulate-tournament >> logs/simulate-tournament.log 2>&1
 ```
 
-Use whatever process supervisor fits the deployment. The important part is the cadence: hourly prediction updates, daily simulation maintenance.
+Use whatever process supervisor fits the deployment. The important part is the cadence: prediction updates twice per hour, daily simulation maintenance. The `0,30` schedule is intentional because a 10-15 minute update run should finish roughly 15 minutes before common `:00` and `:30` kickoff times.
 
 ## Helper Scripts
 
