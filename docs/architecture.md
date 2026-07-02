@@ -210,6 +210,8 @@ All source failures become diagnostics. They should not block unrelated plugins.
 
 Source plugins should use shared plumbing from `worldcup_predictions.plugins.source_runtime` and shared source constants from `worldcup_predictions.core.constants`. Plugin folders should contain extraction/classification logic and source-specific rules, not repeated storage, HTTP, env-var, or source-ledger boilerplate.
 
+The source ledger is also the HTTP cache-validator ledger. Every request is keyed by source, endpoint, purpose, normalized params, and optional fixture key. Successful source-runtime fetches store response headers in ledger metadata, with cookie headers redacted, and keep `ETag` / `Last-Modified` values as `cache_validators`. Later eligible fetches send `If-None-Match` and `If-Modified-Since` for the same request key. A `304 Not Modified` response is recorded as `not_modified` and means no new source facts should be written for that request. Raw response bodies are still not stored.
+
 Provider-specific tips are emitted separately as `OptimizedTip` records. Optimizer plugins subscribe to `provider_optimization_requested`, read the neutral prediction, apply one ruleset, and return a new typed artifact. They must not change the prediction probabilities or score matrix.
 
 An optimized tip is not always an exact score. Providers may ask for different selections:

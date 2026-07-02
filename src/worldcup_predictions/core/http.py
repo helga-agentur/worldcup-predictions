@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ class HttpResponse:
 
     body: str
     headers: dict[str, str]
+    status_code: int = 200
 
     def json(self) -> Any:
         return json.loads(self.body)
@@ -50,10 +52,18 @@ class HttpClient:
                 **(headers or {}),
             },
         )
-        with urllib.request.urlopen(request, timeout=timeout_seconds or self.timeout_seconds) as response:  # noqa: S310
-            body = response.read().decode("utf-8", errors="replace")
-            response_headers = dict(response.headers.items())
-        return HttpResponse(body=body, headers=response_headers)
+        try:
+            with urllib.request.urlopen(request, timeout=timeout_seconds or self.timeout_seconds) as response:  # noqa: S310
+                body = response.read().decode("utf-8", errors="replace")
+                response_headers = dict(response.headers.items())
+                status_code = int(getattr(response, "status", 200) or 200)
+        except urllib.error.HTTPError as exc:
+            if exc.code != 304:
+                raise
+            body = ""
+            response_headers = dict(exc.headers.items()) if exc.headers is not None else {}
+            status_code = 304
+        return HttpResponse(body=body, headers=response_headers, status_code=status_code)
 
     def get_json(
         self,

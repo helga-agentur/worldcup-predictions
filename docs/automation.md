@@ -52,6 +52,10 @@ Important outputs:
 - `reports/*.md`
 - `public/current/`
 
+Each scheduled run stores a source-ledger summary in `prediction_run_summaries`. The summary includes per-source status counts, total request decisions, quota cost, item counts reported by source metadata, cache skips from fresh-enough decisions, and HTTP `304 Not Modified` cache hits. The Markdown source report also includes a source-volume table so it is visible when a source suddenly stops returning rows or starts being queried too often.
+
+For HTTP sources using the shared source runtime, response headers are stored in source-ledger metadata with `Set-Cookie` redacted. `ETag` and `Last-Modified` headers are reused as conditional request validators on the next eligible request for the same source request key. A `not_modified` ledger row means the upstream source explicitly said the content has not changed, so the run intentionally writes no new structured source facts for that request.
+
 ## Daily Job
 
 Command:

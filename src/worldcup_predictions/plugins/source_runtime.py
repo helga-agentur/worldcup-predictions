@@ -66,10 +66,25 @@ class SourceRuntime:
         )
 
     def fetch_json(self, endpoint: str, params: dict[str, Any] | None = None, *, headers: dict[str, str] | None = None):
-        return self.http_client().get_json(endpoint, params, headers=headers)
+        request = self._matching_request(endpoint, params)
+        response = self.http_client().get_text(
+            endpoint,
+            params,
+            headers={"Accept": "application/json", **self._conditional_headers(request), **(headers or {})},
+        )
+        self._remember_response(request, response.headers, status_code=response.status_code)
+        if response.status_code == 304:
+            return {}, response.headers
+        return response.json(), response.headers
 
     def fetch_text(self, endpoint: str, params: dict[str, Any] | None = None, *, headers: dict[str, str] | None = None):
-        response = self.http_client().get_text(endpoint, params, headers=headers)
+        request = self._matching_request(endpoint, params)
+        response = self.http_client().get_text(
+            endpoint,
+            params,
+            headers={**self._conditional_headers(request), **(headers or {})},
+        )
+        self._remember_response(request, response.headers, status_code=response.status_code)
         return response.body, response.headers
 
     def result(
@@ -140,6 +155,7 @@ class SourceRuntime:
 
     def should_fetch(self, request: SourceRequest):
         decision = self.storage.should_fetch(request)
+        self.context.state["_source_runtime_last_request"] = request
         if not decision.should_fetch:
             self.storage.record_fetch(
                 SourceLedgerRecord(
@@ -165,14 +181,24 @@ class SourceRuntime:
         metadata: Mapping[str, Any] | None = None,
         quota_remaining: int | None = None,
     ) -> None:
+        response_info = self._response_info(request)
+        not_modified = bool(response_info.get("not_modified"))
+        response_headers = response_info.get("response_headers") if isinstance(response_info.get("response_headers"), dict) else {}
+        cache_validators = _cache_validators_from_headers(response_headers)
+        status = "not_modified" if not_modified else "success"
         self.storage.record_fetch(
             SourceLedgerRecord(
                 request=request,
-                status="success",
+                status=status,
                 run_id=self.context.run_id,
                 quota_remaining=quota_remaining,
-                message=message,
-                metadata=dict(metadata or {}),
+                message=message or ("Not modified." if not_modified else None),
+                metadata={
+                    **dict(metadata or {}),
+                    "not_modified": not_modified,
+                    "response_headers": response_headers,
+                    "cache_validators": cache_validators,
+                },
             )
         )
 
@@ -186,6 +212,7 @@ class SourceRuntime:
     ) -> None:
         status = _error_status(error)
         next_safe_fetch_at = _retry_after_next_safe_fetch_at(error) if status == "rate_limited" else None
+        response_headers = _sanitize_response_headers(getattr(error, "headers", None))
         self.storage.record_fetch(
             SourceLedgerRecord(
                 request=request,
@@ -198,9 +225,53 @@ class SourceRuntime:
                     **dict(metadata or {}),
                     "error_status": status,
                     "http_status": _optional_int(getattr(error, "code", None)),
+                    "response_headers": response_headers,
+                    "cache_validators": _cache_validators_from_headers(response_headers),
                 },
             )
         )
+
+    def _matching_request(self, endpoint: str, params: Mapping[str, Any] | None) -> SourceRequest | None:
+        request = self.context.state.get("_source_runtime_last_request")
+        if not isinstance(request, SourceRequest):
+            return None
+        if request.endpoint != endpoint:
+            return None
+        request_params = {key: value for key, value in dict(request.params).items() if value is not None}
+        fetch_params = {key: value for key, value in dict(params or {}).items() if value is not None}
+        if not _params_match(request_params, fetch_params):
+            return None
+        return request
+
+    def _conditional_headers(self, request: SourceRequest | None) -> dict[str, str]:
+        if request is None:
+            return {}
+        reader = getattr(self.storage, "cache_validators", None)
+        validators = reader(request) if callable(reader) else {}
+        headers = {}
+        etag = str(validators.get("etag") or "").strip() if isinstance(validators, dict) else ""
+        last_modified = str(validators.get("last_modified") or "").strip() if isinstance(validators, dict) else ""
+        if etag:
+            headers["If-None-Match"] = etag
+        if last_modified:
+            headers["If-Modified-Since"] = last_modified
+        return headers
+
+    def _remember_response(self, request: SourceRequest | None, headers: Mapping[str, Any], *, status_code: int) -> None:
+        if request is None:
+            return
+        responses = self.context.state.setdefault("_source_runtime_responses", {})
+        responses[request.request_key] = {
+            "not_modified": status_code == 304,
+            "response_headers": _sanitize_response_headers(headers),
+        }
+
+    def _response_info(self, request: SourceRequest) -> dict[str, Any]:
+        responses = self.context.state.get("_source_runtime_responses")
+        if not isinstance(responses, dict):
+            return {}
+        response = responses.pop(request.request_key, {})
+        return response if isinstance(response, dict) else {}
 
 
 def _optional_int(value: Any) -> int | None:
@@ -227,3 +298,33 @@ def _retry_after_next_safe_fetch_at(error: Exception | str) -> str | None:
     if retry_after is None:
         return None
     return normalize_datetime(utc_now() + dt.timedelta(seconds=max(0, retry_after)))
+
+
+def _params_match(request_params: Mapping[str, Any], fetch_params: Mapping[str, Any]) -> bool:
+    for key, value in request_params.items():
+        if key not in fetch_params or str(fetch_params[key]) != str(value):
+            return False
+    return True
+
+
+def _sanitize_response_headers(headers: Mapping[str, Any] | None) -> dict[str, str]:
+    sanitized = {}
+    for key, value in dict(headers or {}).items():
+        header = str(key)
+        if header.casefold() == "set-cookie":
+            sanitized[header] = "[redacted]"
+        else:
+            sanitized[header] = str(value)
+    return sanitized
+
+
+def _cache_validators_from_headers(headers: Mapping[str, Any]) -> dict[str, str]:
+    normalized = {str(key).casefold(): str(value) for key, value in dict(headers or {}).items()}
+    validators = {}
+    etag = normalized.get("etag", "").strip()
+    last_modified = normalized.get("last-modified", "").strip()
+    if etag:
+        validators["etag"] = etag
+    if last_modified:
+        validators["last_modified"] = last_modified
+    return validators

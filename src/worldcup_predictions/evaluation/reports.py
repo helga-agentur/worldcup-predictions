@@ -303,19 +303,28 @@ def _source_ledger_markdown(rows: list[dict[str, Any]]) -> str:
     status_counts: dict[str, int] = {}
     source_status_counts: dict[tuple[str, str], int] = {}
     quota_cost_by_status: dict[str, int] = {}
+    item_count_by_source: dict[str, int] = {}
+    cache_skipped_by_source: dict[str, int] = {}
     calls_made = 0
     calls_avoided = 0
     for row in rows:
         source = str(row.get("source") or "unknown")
         status = str(row.get("status") or "unknown")
         quota_cost = int(row.get("quota_cost") or 0)
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
         status_counts[status] = status_counts.get(status, 0) + 1
         source_status_counts[(source, status)] = source_status_counts.get((source, status), 0) + 1
         quota_cost_by_status[status] = quota_cost_by_status.get(status, 0) + quota_cost
+        item_count_by_source[source] = item_count_by_source.get(source, 0) + _source_metadata_item_count(metadata)
         if status == "skipped":
             calls_avoided += 1
+            decision_reason = str(metadata.get("decision_reason") or "")
+            if decision_reason in {"fresh_enough", "next_safe_fetch_at_not_reached"}:
+                cache_skipped_by_source[source] = cache_skipped_by_source.get(source, 0) + 1
         else:
             calls_made += 1
+        if status == "not_modified":
+            cache_skipped_by_source[source] = cache_skipped_by_source.get(source, 0) + 1
     lines = [
         "## Summary",
         "",
@@ -340,7 +349,18 @@ def _source_ledger_markdown(rows: list[dict[str, Any]]) -> str:
     )
     for (source, status), count in sorted(source_status_counts.items()):
         lines.append(f"| {_escape(source)} | {_escape(status)} | {count} |")
-    notable = [row for row in rows if row.get("status") in {"skipped", "rate_limited", "error"}]
+    lines.extend(
+        [
+            "",
+            "## Source Volume",
+            "",
+            "| Source | Items recorded | Cache skips / not modified |",
+            "| --- | ---: | ---: |",
+        ]
+    )
+    for source in sorted(set(item_count_by_source) | set(cache_skipped_by_source)):
+        lines.append(f"| {_escape(source)} | {item_count_by_source.get(source, 0)} | {cache_skipped_by_source.get(source, 0)} |")
+    notable = [row for row in rows if row.get("status") in {"skipped", "not_modified", "rate_limited", "error"}]
     if notable:
         lines.extend(
             [
@@ -362,6 +382,17 @@ def _source_ledger_markdown(rows: list[dict[str, Any]]) -> str:
                 )
             )
     return "\n".join(lines)
+
+
+def _source_metadata_item_count(metadata: dict[str, Any]) -> int:
+    count = 0
+    for key in ("rows", "rows_written", "fixtures", "results", "details", "matches", "events", "articles", "signals", "teams", "players", "sports"):
+        value = metadata.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int | float):
+            count += int(value)
+    return count
 
 
 def _read_source_ledger(storage, *, run_id: str | None) -> list[dict[str, Any]]:

@@ -143,7 +143,16 @@ class MarketOddsPlugin(BasePlugin):
             return runtime.skipped_fetch_result("Market odds", decision.reason, metadata=decision.metadata)
 
         try:
-            response = fetch_odds_api(http_client=runtime.http_client())
+            payload, headers = runtime.fetch_json(
+                ENDPOINT_THE_ODDS_API_WORLD_CUP_ODDS,
+                {
+                    "apiKey": api_key,
+                    "regions": THE_ODDS_API_REGIONS,
+                    "markets": THE_ODDS_API_MARKETS,
+                    "oddsFormat": "decimal",
+                    "dateFormat": "iso",
+                },
+            )
         except urllib.error.HTTPError as exc:
             message = exc.read().decode("utf-8", errors="replace")[:500]
             runtime.record_error(
@@ -172,15 +181,16 @@ class MarketOddsPlugin(BasePlugin):
                 ],
             )
 
-        rows = odds_api_rows(response.payload, open_fixtures)
-        event_result = self._maybe_fetch_event_markets(runtime, open_fixtures, response.payload)
+        odds_payload = payload if isinstance(payload, list) else []
+        rows = odds_api_rows(odds_payload, open_fixtures)
+        event_result = self._maybe_fetch_event_markets(runtime, open_fixtures, odds_payload)
         diagnostics = list(event_result.diagnostics)
         rows.extend(event_result.metadata.get("rows") or [])
         runtime.record_success(
             request,
-            quota_remaining=response.quota_remaining,
-            message=response.message,
-            metadata={"requests_used": response.requests_used, "events": len(response.payload), "rows": len(rows)},
+            quota_remaining=_optional_int(headers.get("x-requests-remaining")),
+            message="Fetched odds from The Odds API.",
+            metadata={"requests_used": _optional_int(headers.get("x-requests-used")), "events": len(odds_payload), "rows": len(rows)},
         )
         count = runtime.write_records(MARKET_ODDS_DATASET, rows)
         return runtime.result(diagnostics=diagnostics, metadata={"written_rows": count})

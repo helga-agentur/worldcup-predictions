@@ -156,6 +156,39 @@ class DuckDBStorage:
 
         return FetchDecision(True, "stale_or_retry_allowed", request.request_key)
 
+    def cache_validators(self, request: SourceRequest) -> dict[str, str]:
+        """Return the latest HTTP cache validators stored for this request."""
+
+        con = self._connect()
+        try:
+            rows = con.execute(
+                """
+                SELECT metadata_json
+                FROM source_ledger
+                WHERE request_key = ? AND status IN ('success', 'not_modified')
+                ORDER BY fetched_at_utc DESC
+                LIMIT 10
+                """,
+                [request.request_key],
+            ).fetchall()
+        finally:
+            con.close()
+        for (metadata_json,) in rows:
+            metadata = self._loads_json(metadata_json)
+            validators = metadata.get("cache_validators") if isinstance(metadata, dict) else None
+            if not isinstance(validators, dict):
+                continue
+            etag = str(validators.get("etag") or "").strip()
+            last_modified = str(validators.get("last_modified") or "").strip()
+            result = {}
+            if etag:
+                result["etag"] = etag
+            if last_modified:
+                result["last_modified"] = last_modified
+            if result:
+                return result
+        return {}
+
     def record_fetch(self, record: SourceLedgerRecord) -> None:
         """Persist fetch metadata without storing the raw response body."""
 

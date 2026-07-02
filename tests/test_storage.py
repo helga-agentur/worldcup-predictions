@@ -292,6 +292,41 @@ class StorageTest(unittest.TestCase):
             self.assertFalse(decision.should_fetch)
             self.assertEqual(decision.reason, "fresh_enough")
 
+    def test_source_runtime_records_cache_validators_and_not_modified(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            context = WorkflowContext(project_root=Path(tmp), data_root=Path(tmp) / "data", storage=storage, run_id="run-cache")
+            runtime = SourceRuntime(plugin=DebugReportPlugin(), event=EventName.FIXTURES_REQUESTED.value, context=context)
+            request = SourceRequest(
+                source="cache_source",
+                endpoint="https://example.test/feed.json",
+                purpose="cache_test",
+                min_refresh_interval=dt.timedelta(minutes=30),
+            )
+
+            runtime._remember_response(
+                request,
+                {
+                    "ETag": '"abc123"',
+                    "Last-Modified": "Wed, 01 Jul 2026 10:00:00 GMT",
+                    "Set-Cookie": "session=secret",
+                },
+                status_code=304,
+            )
+            runtime.record_success(request, metadata={"rows": 0})
+
+            rows = storage.read_source_ledger(run_id="run-cache")
+            summary = summarize_source_ledger_rows(rows)
+
+            self.assertEqual(rows[0]["status"], "not_modified")
+            self.assertEqual(rows[0]["metadata"]["cache_validators"]["etag"], '"abc123"')
+            self.assertEqual(rows[0]["metadata"]["cache_validators"]["last_modified"], "Wed, 01 Jul 2026 10:00:00 GMT")
+            self.assertEqual(rows[0]["metadata"]["response_headers"]["Set-Cookie"], "[redacted]")
+            self.assertEqual(storage.cache_validators(request)["etag"], '"abc123"')
+            self.assertEqual(summary["cache_hits"], 1)
+            self.assertEqual(summary["cache_skips"], 1)
+            self.assertEqual(summary["cache_skipped_by_source"], {"cache_source": 1})
+
     def test_source_ledger_respects_next_safe_fetch_time(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             storage = DuckDBStorage.at_data_root(Path(tmp) / "data")

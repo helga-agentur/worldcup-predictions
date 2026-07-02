@@ -109,20 +109,24 @@ def summarize_source_ledger_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     source_status_counts = Counter()
     quota_cost_by_status = Counter()
     quota_cost_by_source_status = Counter()
+    item_count_by_source = Counter()
+    cache_skipped_by_source = Counter()
     failures = []
     zero_row_successes = []
     skipped = []
     rate_limited = []
+    not_modified = []
     for row in rows:
         source = str(row.get("source") or "unknown")
         status = str(row.get("status") or "unknown")
         quota_cost = int(row.get("quota_cost") or 0)
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        item_count_by_source[source] += _metadata_item_count(metadata)
         status_counts[status] += 1
         source_counts[source] += 1
         source_status_counts[f"{source}:{status}"] += 1
         quota_cost_by_status[status] += quota_cost
         quota_cost_by_source_status[f"{source}:{status}"] += quota_cost
-        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
         diagnostic_row = {
             "source": source,
             "endpoint": row.get("endpoint"),
@@ -135,8 +139,14 @@ def summarize_source_ledger_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "quota_remaining": row.get("quota_remaining"),
             "next_safe_fetch_at": row.get("next_safe_fetch_at"),
         }
+        decision_reason = str(metadata.get("decision_reason") or metadata.get("decision_metadata", {}).get("reason") or "")
         if status == "skipped":
             skipped.append(diagnostic_row)
+            if decision_reason in {"fresh_enough", "next_safe_fetch_at_not_reached"}:
+                cache_skipped_by_source[source] += 1
+        elif status == "not_modified":
+            not_modified.append(diagnostic_row)
+            cache_skipped_by_source[source] += 1
         elif status == "rate_limited":
             rate_limited.append(diagnostic_row)
             failures.append(diagnostic_row)
@@ -156,15 +166,31 @@ def summarize_source_ledger_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "requests": len(rows),
         "calls_made": sum(count for status, count in status_counts.items() if status != "skipped"),
         "calls_avoided": status_counts.get("skipped", 0),
+        "cache_hits": status_counts.get("not_modified", 0),
+        "cache_skips": sum(cache_skipped_by_source.values()),
         "quota_cost_made": sum(cost for status, cost in quota_cost_by_status.items() if status != "skipped"),
         "quota_cost_avoided": quota_cost_by_status.get("skipped", 0),
         "status_counts": dict(sorted(status_counts.items())),
         "source_counts": dict(sorted(source_counts.items())),
         "source_status_counts": dict(sorted(source_status_counts.items())),
+        "items_by_source": dict(sorted(item_count_by_source.items())),
+        "cache_skipped_by_source": dict(sorted(cache_skipped_by_source.items())),
         "quota_cost_by_status": dict(sorted(quota_cost_by_status.items())),
         "quota_cost_by_source_status": dict(sorted(quota_cost_by_source_status.items())),
         "failures": failures,
         "skipped": skipped,
+        "not_modified": not_modified,
         "rate_limited": rate_limited,
         "zero_row_successes": zero_row_successes,
     }
+
+
+def _metadata_item_count(metadata: dict[str, Any]) -> int:
+    count = 0
+    for key in ("rows", "rows_written", "fixtures", "results", "details", "matches", "events", "articles", "signals", "teams", "players", "sports"):
+        value = metadata.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int | float):
+            count += int(value)
+    return count
