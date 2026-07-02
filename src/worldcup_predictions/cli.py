@@ -61,6 +61,7 @@ from worldcup_predictions.simulations import SimulationInputs, TournamentSimulat
 from worldcup_predictions.site import build_site, serve_site
 from worldcup_predictions.site.generator import gtm_container_id_from_env
 from worldcup_predictions.tournament.repository import (
+    load_results,
     load_tournament_state,
 )
 
@@ -676,6 +677,7 @@ def _simulation_inputs_from_state(
     return SimulationInputs(
         fixtures=[fixture.to_fixture() for fixture in state.fixtures],
         known_results=_simulation_known_results(state, known_results),
+        known_winners=_simulation_known_winners(state, load_results(workflow.context.storage), known_results),
         score_matrices=matrices,
         team_strengths=team_strengths,
         team_ratings=team_ratings,
@@ -715,6 +717,55 @@ def _simulation_known_results(state, known_results: dict[str, ScoreTip]) -> dict
             continue
         known.setdefault(pair_key(result.home_team.name, result.away_team.name), score)
     return known
+
+
+def _simulation_known_winners(state, results, known_results: dict[str, ScoreTip]) -> dict[str, str]:
+    """Advancing team for finished knockout matches that ended level.
+
+    A fixed knockout draw only pins the full-time score; without the real
+    winner the simulator would re-sample the shootout each iteration. Winner
+    evidence is side-based (penalty scores or an explicit home/away winner
+    flag from source result rows) and only used when every source that
+    reports a side agrees.
+    """
+
+    fixtures_by_key = {fixture.key: fixture for fixture in state.fixtures}
+    sides_by_fixture: dict[str, set[str]] = {}
+    for result in results:
+        side = _result_winner_side(result)
+        if side:
+            sides_by_fixture.setdefault(result.fixture_key, set()).add(side)
+    winners: dict[str, str] = {}
+    for fixture_key, sides in sides_by_fixture.items():
+        score = known_results.get(fixture_key)
+        fixture = fixtures_by_key.get(fixture_key)
+        if score is None or fixture is None or fixture.group:
+            continue
+        if score.home != score.away or len(sides) != 1:
+            continue
+        winner = fixture.home_team.name if "home" in sides else fixture.away_team.name
+        winners[fixture_key] = winner
+        winners.setdefault(pair_key(fixture.home_team.name, fixture.away_team.name), winner)
+    return winners
+
+
+def _result_winner_side(result) -> str | None:
+    """Advancement side ("home"/"away") implied by one source result row."""
+
+    metadata = result.metadata or {}
+    try:
+        home_penalties = int(metadata["home_penalty_score"])
+        away_penalties = int(metadata["away_penalty_score"])
+    except (KeyError, TypeError, ValueError):
+        home_penalties = away_penalties = None
+    if home_penalties is not None and home_penalties != away_penalties:
+        return "home" if home_penalties > away_penalties else "away"
+    winner = str(metadata.get("winner") or "")
+    if winner == "HOME_TEAM":
+        return "home"
+    if winner == "AWAY_TEAM":
+        return "away"
+    return None
 
 
 def command_postmatch_learning(args: argparse.Namespace) -> int:

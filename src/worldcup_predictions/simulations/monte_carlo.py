@@ -51,6 +51,7 @@ class SimulationInputs:
 
     fixtures: list[Fixture]
     known_results: dict[str, ScoreTip] = field(default_factory=dict)
+    known_winners: dict[str, str] = field(default_factory=dict)
     score_matrices: dict[str, list[ScoreMatrixEntry]] = field(default_factory=dict)
     team_strengths: dict[str, float] = field(default_factory=dict)
     team_ratings: dict[str, float] = field(default_factory=dict)
@@ -131,6 +132,7 @@ class TournamentSimulator:
         metadata = {
             "fixtures": len(self.inputs.fixtures),
             "known_results": len(self.inputs.known_results),
+            "known_winners": len(self.inputs.known_winners),
             "score_matrices": len(self.inputs.score_matrices),
             "sample_results": [result.to_dict() for result in sample_results],
         }
@@ -381,7 +383,11 @@ class TournamentSimulator:
                 team_stage[winner] = self._next_stage(stage)
             return winner
         score, source = self._score_for_fixture(match_id, home, away, rng)
-        winner = self._winner_from_score(home, away, score, allow_draw=False, rng=rng)
+        winner: str | None = None
+        if source == "fixed" and score.home == score.away:
+            winner = self._known_winner(match_id, home, away)
+        if winner is None:
+            winner = self._winner_from_score(home, away, score, allow_draw=False, rng=rng)
         team_stage.setdefault(home, STAGE_GROUP)
         team_stage.setdefault(away, STAGE_GROUP)
         team_stage[winner] = self._next_stage(stage)
@@ -427,6 +433,24 @@ class TournamentSimulator:
         reverse_score = self.inputs.known_results.get(pair_key(away, home))
         if reverse_score is not None:
             return ScoreTip(reverse_score.away, reverse_score.home)
+        return None
+
+    def _known_winner(self, fixture_key: str, home: str, away: str) -> str | None:
+        """Real advancing team for a fixed knockout tie, when recorded.
+
+        The winner is a team name, so home/away orientation does not matter;
+        values that name neither side are ignored.
+        """
+
+        candidates = [
+            fixture_key,
+            pair_key(home, away),
+            pair_key(away, home),
+        ]
+        for candidate in candidates:
+            winner = self.inputs.known_winners.get(candidate)
+            if winner in (home, away):
+                return winner
         return None
 
     def _score_matrix(self, fixture_key: str, home: str, away: str) -> list[ScoreMatrixEntry]:

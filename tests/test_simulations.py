@@ -4,7 +4,12 @@ import itertools
 import math
 import unittest
 
-from worldcup_predictions.cli import _simulation_known_results, _simulation_score_matrices, build_parser
+from worldcup_predictions.cli import (
+    _simulation_known_results,
+    _simulation_known_winners,
+    _simulation_score_matrices,
+    build_parser,
+)
 from worldcup_predictions.core.contracts import (
     Fixture,
     OutcomeProbabilities,
@@ -87,6 +92,66 @@ class TournamentSimulationTest(unittest.TestCase):
         self.assertTrue(args.from_day_one)
 
 
+def _mid_tournament_inputs(
+    *,
+    knockout_results: dict[str, ScoreTip] | None = None,
+    known_winners: dict[str, str] | None = None,
+) -> SimulationInputs:
+    """Two finished groups plus unresolved knockout fixtures.
+
+    The group stage arrives as stage-only rows (no group labels) and its scores
+    build distinct points/goal-difference ladders, so group placements are
+    fully deterministic: 2A is South Africa and 2B is Qatar, which meet in
+    bracket match M73.
+    """
+
+    group_scores = {
+        ("Mexico", "South Africa", "South Korea", "Czech Republic"): (ScoreTip(1, 0), ScoreTip(2, 0), ScoreTip(3, 0), ScoreTip(1, 0), ScoreTip(2, 0), ScoreTip(1, 0)),
+        ("Canada", "Qatar", "Switzerland", "Bosnia and Herzegovina"): (ScoreTip(2, 0), ScoreTip(3, 0), ScoreTip(5, 0), ScoreTip(2, 0), ScoreTip(3, 0), ScoreTip(2, 0)),
+    }
+    fixtures: list[Fixture] = []
+    known_results: dict[str, ScoreTip] = {}
+    day = 10
+    for teams, scores in group_scores.items():
+        for (home, away), score in zip(itertools.combinations(teams, 2), scores):
+            day += 1
+            fixture = Fixture(
+                event_date=f"2026-06-{day:02d}T18:00:00Z",
+                home_team=home,
+                away_team=away,
+                stage="group",
+            )
+            fixtures.append(fixture)
+            known_results[fixture.key] = score
+
+    # Unresolved knockout fixtures with non-degenerate score matrices, keyed
+    # by fixture key and team pair the way the CLI provides them.
+    matrix = [
+        ScoreMatrixEntry(1, 0, 0.30),
+        ScoreMatrixEntry(0, 1, 0.25),
+        ScoreMatrixEntry(1, 1, 0.20),
+        ScoreMatrixEntry(2, 1, 0.15),
+        ScoreMatrixEntry(0, 2, 0.10),
+    ]
+    score_matrices: dict[str, list[ScoreMatrixEntry]] = {}
+    for home, away in (("South Africa", "Qatar"), ("Mexico", "Canada")):
+        fixture = Fixture(
+            event_date="2026-06-28T18:00:00Z",
+            home_team=home,
+            away_team=away,
+            stage="knockout",
+        )
+        fixtures.append(fixture)
+        score_matrices[fixture.key] = matrix
+        score_matrices[pair_key(home, away)] = matrix
+    return SimulationInputs(
+        fixtures=fixtures,
+        known_results={**known_results, **(knockout_results or {})},
+        known_winners=known_winners or {},
+        score_matrices=score_matrices,
+    )
+
+
 class TournamentSimulationSamplingRegressionTest(unittest.TestCase):
     """Regression for the degenerate 2026-06-30 simulation summary.
 
@@ -95,60 +160,8 @@ class TournamentSimulationSamplingRegressionTest(unittest.TestCase):
     iterations returned the identical fallback champion.
     """
 
-    GROUP_A = ("Mexico", "South Africa", "South Korea", "Czech Republic")
-    GROUP_B = ("Canada", "Qatar", "Switzerland", "Bosnia and Herzegovina")
-
-    def _mid_tournament_inputs(self) -> SimulationInputs:
-        # Finished group stage delivered as stage-only rows (no group labels).
-        # Scores build distinct points/goal-difference ladders, so the collapsed
-        # pre-fix pseudo-group would rank fully deterministically.
-        group_scores = {
-            self.GROUP_A: (ScoreTip(1, 0), ScoreTip(2, 0), ScoreTip(3, 0), ScoreTip(1, 0), ScoreTip(2, 0), ScoreTip(1, 0)),
-            self.GROUP_B: (ScoreTip(2, 0), ScoreTip(3, 0), ScoreTip(5, 0), ScoreTip(2, 0), ScoreTip(3, 0), ScoreTip(2, 0)),
-        }
-        fixtures: list[Fixture] = []
-        known_results: dict[str, ScoreTip] = {}
-        day = 10
-        for teams, scores in group_scores.items():
-            for (home, away), score in zip(itertools.combinations(teams, 2), scores):
-                day += 1
-                fixture = Fixture(
-                    event_date=f"2026-06-{day:02d}T18:00:00Z",
-                    home_team=home,
-                    away_team=away,
-                    stage="group",
-                )
-                fixtures.append(fixture)
-                known_results[fixture.key] = score
-
-        # Unresolved knockout fixtures with non-degenerate score matrices, keyed
-        # by fixture key and team pair the way the CLI provides them.
-        matrix = [
-            ScoreMatrixEntry(1, 0, 0.30),
-            ScoreMatrixEntry(0, 1, 0.25),
-            ScoreMatrixEntry(1, 1, 0.20),
-            ScoreMatrixEntry(2, 1, 0.15),
-            ScoreMatrixEntry(0, 2, 0.10),
-        ]
-        score_matrices: dict[str, list[ScoreMatrixEntry]] = {}
-        for home, away in (("South Africa", "Qatar"), ("Mexico", "Canada")):
-            fixture = Fixture(
-                event_date="2026-06-28T18:00:00Z",
-                home_team=home,
-                away_team=away,
-                stage="knockout",
-            )
-            fixtures.append(fixture)
-            score_matrices[fixture.key] = matrix
-            score_matrices[pair_key(home, away)] = matrix
-        return SimulationInputs(
-            fixtures=fixtures,
-            known_results=known_results,
-            score_matrices=score_matrices,
-        )
-
     def test_stage_only_group_rows_still_sample_the_knockout(self) -> None:
-        summary = TournamentSimulator(self._mid_tournament_inputs(), iterations=300, seed=20260611).run()
+        summary = TournamentSimulator(_mid_tournament_inputs(), iterations=300, seed=20260611).run()
 
         champion = summary.distributions["champion"]
         probabilities = [row["probability"] for row in champion]
@@ -163,6 +176,33 @@ class TournamentSimulationSamplingRegressionTest(unittest.TestCase):
         self.assertIn("fixed", sources)
         self.assertIn("simulated", sources)
         self.assertIn("Final", stages)
+
+
+class KnockoutShootoutResolutionTest(unittest.TestCase):
+    """Fixed knockout ties must advance the real winner when it is known."""
+
+    TIE = {pair_key("South Africa", "Qatar"): ScoreTip(1, 1)}
+
+    def test_decided_knockout_tie_always_advances_the_known_winner(self) -> None:
+        inputs = _mid_tournament_inputs(
+            knockout_results=self.TIE,
+            known_winners={pair_key("South Africa", "Qatar"): "Qatar"},
+        )
+        summary = TournamentSimulator(inputs, iterations=200, seed=20260611).run()
+
+        south_africa = summary.distributions["team_stage"]["South Africa"]
+        self.assertEqual([(row["answer"], row["probability"]) for row in south_africa], [("Round of 32", 1.0)])
+        qatar_stages = {row["answer"] for row in summary.distributions["team_stage"]["Qatar"]}
+        self.assertNotIn("Group stage", qatar_stages)
+        self.assertNotIn("Round of 32", qatar_stages)
+
+    def test_undecided_knockout_tie_still_samples_the_shootout(self) -> None:
+        inputs = _mid_tournament_inputs(knockout_results=self.TIE)
+        summary = TournamentSimulator(inputs, iterations=200, seed=20260611).run()
+
+        answers = {row["answer"] for row in summary.distributions["team_stage"]["South Africa"]}
+        self.assertIn("Round of 32", answers)
+        self.assertGreater(len(answers), 1)
 
 
 class SimulationInputWiringTest(unittest.TestCase):
@@ -221,6 +261,54 @@ class SimulationInputWiringTest(unittest.TestCase):
         self.assertEqual(matrices[state.fixtures[1].to_fixture().key], matrix)
         self.assertEqual(matrices[pair_key("France", "Sweden")], matrix)
         self.assertNotIn(pair_key("Mexico", "South Africa"), matrices)
+
+    def test_known_winners_require_a_level_score_and_source_consensus(self) -> None:
+        group_fixture = FixtureRecord(
+            event_date="2026-06-27T19:00:00Z",
+            home_team=TeamRef("Algeria", "ALG"),
+            away_team=TeamRef("Austria", "AUT"),
+            stage="First Stage",
+            group="Group I",
+        )
+        knockout_fixture = FixtureRecord(
+            event_date="2026-06-29T20:30:00Z",
+            home_team=TeamRef("Germany", "GER"),
+            away_team=TeamRef("Paraguay", "PAR"),
+            stage="Round of 32",
+        )
+        state = TournamentState(fixtures=[group_fixture, knockout_fixture], results=[], standings={})
+        known = {group_fixture.key: ScoreTip(3, 3), knockout_fixture.key: ScoreTip(1, 1)}
+
+        def result(fixture: FixtureRecord, score: ScoreTip, metadata: dict) -> ResultRecord:
+            return ResultRecord(
+                event_date=fixture.event_date,
+                home_team=fixture.home_team,
+                away_team=fixture.away_team,
+                score=score,
+                metadata=metadata,
+            )
+
+        penalty_result = result(knockout_fixture, ScoreTip(1, 1), {"home_penalty_score": 3, "away_penalty_score": 4})
+        flag_result = result(knockout_fixture, ScoreTip(4, 5), {"winner": "AWAY_TEAM"})
+        group_result = result(group_fixture, ScoreTip(3, 3), {"winner": "DRAW"})
+
+        winners = _simulation_known_winners(state, [penalty_result, flag_result, group_result], known)
+        self.assertEqual(winners[knockout_fixture.key], "Paraguay")
+        self.assertEqual(winners[pair_key("Germany", "Paraguay")], "Paraguay")
+        self.assertNotIn(group_fixture.key, winners)
+
+        # A single explicit winner flag is enough when no source disagrees.
+        self.assertEqual(
+            _simulation_known_winners(state, [flag_result], known)[knockout_fixture.key],
+            "Paraguay",
+        )
+        # Conflicting sides are dropped, as are winners for non-level scores
+        # and day-one runs without known results.
+        conflicting = result(knockout_fixture, ScoreTip(1, 1), {"winner": "HOME_TEAM"})
+        self.assertEqual(_simulation_known_winners(state, [penalty_result, conflicting], known), {})
+        decided_score = {group_fixture.key: ScoreTip(3, 3), knockout_fixture.key: ScoreTip(2, 1)}
+        self.assertEqual(_simulation_known_winners(state, [penalty_result], decided_score), {})
+        self.assertEqual(_simulation_known_winners(state, [penalty_result], {}), {})
 
 
 if __name__ == "__main__":
