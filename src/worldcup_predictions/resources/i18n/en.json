@@ -12,6 +12,7 @@
   "empty.matrix": "No score matrix available.",
   "empty.tipped": "No played matches yet.",
   "footer.last_update": "Last update",
+  "footer.privacy": "Privacy Policy",
   "footer.tagline": "Built with data, doubt, and a cron job that is more punctual than stoppage time.",
   "label.confidence": "Confidence",
   "label.expected_goals": "Expected goals",
