@@ -29,7 +29,7 @@ def build_tournament_state(
 
     all_result_rows = list(results)
     result_rows = _preferred_results(all_result_rows)
-    fixture_rows = _latest_fixtures(_canonicalize_fixtures(list(fixtures), result_rows))
+    fixture_rows = _latest_fixtures(_canonicalize_fixtures([fixture for fixture in fixtures if _valid_fixture(fixture)], result_rows))
     standings = _build_standings(fixture_rows, result_rows)
     return TournamentState(
         fixtures=fixture_rows,
@@ -100,6 +100,8 @@ def build_result_checks(results: list[ResultRecord]) -> list[dict]:
 def _latest_fixtures(fixtures: Iterable[FixtureRecord]) -> list[FixtureRecord]:
     by_key: dict[str, FixtureRecord] = {}
     for fixture in fixtures:
+        if not _valid_fixture(fixture):
+            continue
         current = by_key.get(fixture.key)
         if current is None or _fixture_rank(fixture) < _fixture_rank(current):
             by_key[fixture.key] = fixture
@@ -145,6 +147,14 @@ def _fixture_identity_tokens(fixture: FixtureRecord) -> set[str]:
         if slot_code:
             tokens.add(f"slot:{slot_code}")
     return tokens
+
+
+def _valid_fixture(fixture: FixtureRecord) -> bool:
+    return _team_identity(fixture.home_team) != _team_identity(fixture.away_team)
+
+
+def _team_identity(team: TeamRef) -> str:
+    return canonical_slot_code(team.fifa_code) or canonical_slot_code(team.key) or canonical_slot_code(team.name) or team.fifa_code or team.key or team.name
 
 
 def _fixture_quality(fixture: FixtureRecord) -> tuple[int, int, int]:

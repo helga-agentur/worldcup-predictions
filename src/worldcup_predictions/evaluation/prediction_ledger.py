@@ -17,6 +17,7 @@ from worldcup_predictions.core.datasets import (
 from worldcup_predictions.evaluation.published_seed import load_published_prediction_seed_rows
 from worldcup_predictions.model.score_matrix import build_score_matrix, outcome_probabilities
 from worldcup_predictions.storage.ledger import parse_datetime
+from worldcup_predictions.tournament.repository import load_tournament_state
 
 
 DEFINED_TEAM_KEY_RE = re.compile(r"^[A-Z]{3}$")
@@ -30,6 +31,7 @@ def build_prediction_ledger_rows(storage) -> list[dict[str, Any]]:
     optimized_tips = storage.read_records(OPTIMIZED_TIPS, latest_only=True)
     frozen_snapshots = _frozen_snapshot_rows(storage)
     seed_rows = _published_seed_rows(storage)
+    active_fixture_keys = _active_fixture_keys(storage)
 
     tips_by_fixture: dict[str, list[dict[str, Any]]] = {}
     for tip in optimized_tips:
@@ -39,7 +41,7 @@ def build_prediction_ledger_rows(storage) -> list[dict[str, Any]]:
     past_fixture_keys = set()
     for row in sorted(backtest_rows, key=lambda item: str(item.get("event_date") or "")):
         fixture_key = str(row.get("fixture_key") or "")
-        if not fixture_key or not _has_defined_teams(fixture_key):
+        if not fixture_key or not _valid_defined_fixture_key(fixture_key):
             continue
         past_fixture_keys.add(fixture_key)
         frozen_snapshot = frozen_snapshots.get(fixture_key)
@@ -53,7 +55,9 @@ def build_prediction_ledger_rows(storage) -> list[dict[str, Any]]:
 
     for row in sorted(prediction_rows, key=lambda item: str(item.get("event_date") or "")):
         fixture_key = str(row.get("fixture_key") or "")
-        if not fixture_key or fixture_key in past_fixture_keys or not _has_defined_teams(fixture_key):
+        if not fixture_key or fixture_key in past_fixture_keys or not _valid_defined_fixture_key(fixture_key):
+            continue
+        if active_fixture_keys and fixture_key not in active_fixture_keys:
             continue
         rows.append(_future_row(row, tips_by_fixture.get(fixture_key, [])))
 
@@ -383,11 +387,20 @@ def _provider_tip_map(tips: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     }
 
 
-def _has_defined_teams(fixture_key: str) -> bool:
+def _valid_defined_fixture_key(fixture_key: str) -> bool:
     parts = fixture_key.split("|")
     if len(parts) != 3:
         return False
-    return bool(DEFINED_TEAM_KEY_RE.match(parts[1]) and DEFINED_TEAM_KEY_RE.match(parts[2]))
+    home = parts[1].strip().upper()
+    away = parts[2].strip().upper()
+    return bool(home != away and DEFINED_TEAM_KEY_RE.fullmatch(home) and DEFINED_TEAM_KEY_RE.fullmatch(away))
+
+
+def _active_fixture_keys(storage) -> set[str]:
+    try:
+        return {fixture.key for fixture in load_tournament_state(storage).fixtures}
+    except Exception:
+        return set()
 
 
 def _split_score(value: Any) -> tuple[int | None, int | None]:

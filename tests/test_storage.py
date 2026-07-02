@@ -167,20 +167,35 @@ class StorageTest(unittest.TestCase):
                 ],
                 source="test",
             )
+            storage.write_records(
+                "custom_prediction_dataset",
+                [
+                    {
+                        "record_key": "2026-07-07T00:00:00Z|BEL|BEL",
+                        "fixture_key": "2026-07-07T00:00:00Z|BEL|BEL",
+                        "home_team": "Belgium",
+                        "away_team": "Belgium",
+                    }
+                ],
+                source="test",
+            )
 
             first = run_data_update_hooks(storage, run_id="test_run")
             rows = storage.read_records("custom_runtime_dataset", latest_only=True)
+            duplicate_rows = storage.read_records("custom_prediction_dataset", latest_only=True)
             second = run_data_update_hooks(storage, run_id="test_run_2")
             hook_rows = storage.read_records(DATA_UPDATE_HOOKS, latest_only=True)
 
-            self.assertEqual(first[0]["status"], "success")
+            self.assertEqual([row["status"] for row in first], ["success", "success"])
             self.assertEqual(first[0]["rows_changed"], 1)
+            self.assertEqual(first[1]["rows_changed"], 1)
             self.assertEqual(rows[0]["record_key"], "2026-07-18T21:00:00Z|RU101|RU102")
             self.assertEqual(rows[0]["fixture_key"], "2026-07-18T21:00:00Z|RU101|RU102")
             self.assertEqual(rows[0]["home_team"], "RU101")
             self.assertEqual(rows[0]["nested"]["slot"], "RU101")
-            self.assertEqual(second[0]["status"], "skipped")
-            self.assertEqual(len(hook_rows), 1)
+            self.assertEqual(duplicate_rows, [])
+            self.assertEqual([row["status"] for row in second], ["skipped", "skipped"])
+            self.assertEqual(len(hook_rows), 2)
 
     def test_provider_points_fall_back_to_backtest_tips_for_finished_matches(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

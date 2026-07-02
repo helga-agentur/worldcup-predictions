@@ -191,6 +191,63 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertEqual(rows[0]["fixture_key"], corrected_key)
             self.assertEqual(rows[0]["status"], "final")
 
+    def test_published_ledger_ignores_future_rows_outside_active_fixtures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            canonical_key = "2026-07-07T00:00:00Z|USA|BEL"
+            fake_key = "2026-07-07T00:00:00Z|BEL|BEL"
+            storage.write_records(
+                TOURNAMENT_FIXTURES,
+                [
+                    {
+                        "record_key": canonical_key,
+                        "fixture_key": canonical_key,
+                        "event_date": "2026-07-07T00:00:00Z",
+                        "home_team": "United States",
+                        "away_team": "Belgium",
+                        "home_fifa_code": "USA",
+                        "away_fifa_code": "BEL",
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre"},
+                    }
+                ],
+                source="fifa_match_centre",
+            )
+            storage.write_records(
+                PREDICTION_LEDGER,
+                [
+                    {
+                        "record_key": fake_key,
+                        "fixture_key": fake_key,
+                        "event_date": "2026-07-07T00:00:00Z",
+                        "home_team": "Belgium",
+                        "away_team": "Belgium",
+                        "status": "future",
+                        "prediction_context": "latest_live_prediction",
+                    },
+                    {
+                        "record_key": canonical_key,
+                        "fixture_key": canonical_key,
+                        "event_date": "2026-07-07T00:00:00Z",
+                        "home_team": "United States",
+                        "away_team": "Belgium",
+                        "status": "future",
+                        "prediction_context": "latest_live_prediction",
+                    },
+                ],
+                source="test",
+            )
+
+            write_published_prediction_ledger(
+                storage,
+                run_id="test",
+                now=dt.datetime(2026, 7, 2, 12, tzinfo=dt.timezone.utc),
+            )
+
+            rows = storage.read_records(PUBLISHED_PREDICTION_LEDGER, latest_only=True)
+            self.assertEqual([row["fixture_key"] for row in rows], [canonical_key])
+
     def test_prediction_export_writes_one_file_with_score_matrix_and_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

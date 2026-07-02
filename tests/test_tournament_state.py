@@ -271,6 +271,27 @@ class TournamentStateTest(unittest.TestCase):
 
         self.assertEqual([fixture.key for fixture in state.fixtures], ["2026-07-06T19:00:00Z|W83|W84"])
 
+    def test_tournament_state_rejects_impossible_duplicate_side_fixtures(self) -> None:
+        resolver = TeamResolver.default()
+        fake_fixture = FixtureRecord(
+            event_date="2026-07-07T00:00:00Z",
+            home_team=resolver.resolve("Belgium"),
+            away_team=resolver.resolve("Belgium"),
+            stage="Round of 16",
+            metadata={"source": "football_data"},
+        )
+        official_fixture = FixtureRecord(
+            event_date="2026-07-07T00:00:00Z",
+            home_team=resolver.resolve("W81"),
+            away_team=resolver.resolve("W82"),
+            stage="Round of 16",
+            metadata={"source": "fifa_match_centre", "match_number": "94"},
+        )
+
+        state = build_tournament_state([fake_fixture, official_fixture], [])
+
+        self.assertEqual([fixture.key for fixture in state.fixtures], ["2026-07-07T00:00:00Z|W81|W82"])
+
     def test_conflicting_unconfirmed_sources_do_not_enter_state(self) -> None:
         resolver = TeamResolver.default()
         fixture = FixtureRecord(

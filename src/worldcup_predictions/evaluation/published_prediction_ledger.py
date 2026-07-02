@@ -8,6 +8,7 @@ from typing import Any
 from worldcup_predictions.core.constants import PUBLISHED_PREDICTION_LOCK_BUFFER_MINUTES
 from worldcup_predictions.core.datasets import PREDICTION_LEDGER, PUBLISHED_PREDICTION_LEDGER
 from worldcup_predictions.storage.ledger import normalize_datetime, parse_datetime, utc_now
+from worldcup_predictions.tournament.repository import load_tournament_state
 
 
 FROZEN_STATUSES = {"locked", "final"}
@@ -61,6 +62,7 @@ def build_published_prediction_ledger_rows(storage, *, now: dt.datetime | None =
     now_iso = normalize_datetime(now) or ""
     current_rows = storage.read_records(PREDICTION_LEDGER, latest_only=True)
     existing_rows = storage.read_records(PUBLISHED_PREDICTION_LEDGER, latest_only=True)
+    active_fixture_keys = _active_fixture_keys(storage)
     existing_by_fixture = {
         str(row.get("fixture_key")): _strip_record(row)
         for row in existing_rows
@@ -73,6 +75,8 @@ def build_published_prediction_ledger_rows(storage, *, now: dt.datetime | None =
         if not fixture_key:
             continue
         current = _as_published_row(_strip_record(row), now=now, now_iso=now_iso)
+        if current.get("status") != "final" and active_fixture_keys and fixture_key not in active_fixture_keys:
+            continue
         existing = existing_by_fixture.get(fixture_key)
         if existing is None:
             published_rows.append(current)
@@ -259,6 +263,13 @@ def _published_row_rank(row: dict[str, Any]) -> tuple[int, str, str]:
         str(row.get("published_at_utc") or row.get("first_published_at_utc") or ""),
         str(row.get("event_date") or ""),
     )
+
+
+def _active_fixture_keys(storage) -> set[str]:
+    try:
+        return {fixture.key for fixture in load_tournament_state(storage).fixtures}
+    except Exception:
+        return set()
 
 
 def _mapping(value: Any) -> dict[str, Any]:

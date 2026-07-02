@@ -11,6 +11,7 @@ from worldcup_predictions.storage.ledger import canonical_json, normalize_dateti
 
 
 HOOK_V1 = "hook_v1_normalize_fifa_slot_codes"
+HOOK_V2 = "hook_v2_remove_duplicate_side_fixtures"
 LEGACY_SLOT_REPLACEMENTS = {
     "L101": "RU101",
     "L102": "RU102",
@@ -26,19 +27,23 @@ def run_data_update_hooks(storage: Any, *, run_id: str | None = None) -> list[di
         if row.get("status") == "success" and row.get("hook_id")
     }
     results: list[dict[str, Any]] = []
-    if HOOK_V1 not in applied:
-        rows_changed = normalize_legacy_fifa_slot_codes(storage)
+    for hook_id, hook_func in (
+        (HOOK_V1, normalize_legacy_fifa_slot_codes),
+        (HOOK_V2, remove_duplicate_side_fixture_rows),
+    ):
+        if hook_id in applied:
+            results.append({"hook_id": hook_id, "status": "skipped", "reason": "already_applied"})
+            continue
+        rows_changed = hook_func(storage)
         result = {
-            "record_key": HOOK_V1,
-            "hook_id": HOOK_V1,
+            "record_key": hook_id,
+            "hook_id": hook_id,
             "status": "success",
             "rows_changed": rows_changed,
             "ran_at_utc": normalize_datetime(utc_now()),
         }
         storage.write_records(DATA_UPDATE_HOOKS, [result], source="data_update_hooks", run_id=run_id)
         results.append(result)
-    else:
-        results.append({"hook_id": HOOK_V1, "status": "skipped", "reason": "already_applied"})
     return results
 
 
@@ -97,6 +102,58 @@ def normalize_legacy_fifa_slot_codes(storage: Any) -> int:
         con.close()
 
 
+def remove_duplicate_side_fixture_rows(storage: Any) -> int:
+    """Remove impossible persisted rows such as BEL-BEL."""
+
+    connect = getattr(storage, "_connect", None)
+    export_dataset = getattr(storage, "_export_dataset", None)
+    if connect is None or export_dataset is None:
+        raise RuntimeError("data update hooks require DuckDBStorage")
+
+    con = connect()
+    try:
+        rows = con.execute(
+            """
+            SELECT dataset, record_key, source, fixture_key, run_id, observed_at_utc, payload_json, metadata_json
+            FROM structured_records
+            ORDER BY observed_at_utc, source, record_key
+            """
+        ).fetchall()
+        kept = []
+        affected_datasets: set[str] = set()
+        removed = 0
+        for row in rows:
+            dataset, record_key, _source, fixture_key, _run_id, _observed_at, payload_json, _metadata_json = row
+            payload = _loads_json(payload_json)
+            fixture_candidates = (
+                fixture_key,
+                payload.get("fixture_key") if isinstance(payload, dict) else "",
+                record_key,
+            )
+            if dataset != DATA_UPDATE_HOOKS and any(_has_duplicate_sides(value) for value in fixture_candidates):
+                removed += 1
+                affected_datasets.add(dataset)
+                continue
+            kept.append(row)
+
+        if not removed:
+            return 0
+
+        con.execute("BEGIN TRANSACTION")
+        try:
+            con.execute("DELETE FROM structured_records")
+            con.executemany("INSERT INTO structured_records VALUES (?, ?, ?, ?, ?, ?, ?, ?)", kept)
+            for dataset in sorted(affected_datasets):
+                export_dataset(con, dataset)
+            con.execute("COMMIT")
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
+        return removed
+    finally:
+        con.close()
+
+
 def _replace_legacy_slots(value: Any) -> Any:
     if isinstance(value, str):
         return _replace_legacy_slot_text(value)
@@ -122,3 +179,12 @@ def _loads_json(value: str | None) -> Any:
     if not value:
         return {}
     return json.loads(value)
+
+
+def _has_duplicate_sides(value: object) -> bool:
+    parts = str(value or "").split("|")
+    if len(parts) != 3:
+        return False
+    home = parts[1].strip().upper()
+    away = parts[2].strip().upper()
+    return bool(home and away and home == away)
