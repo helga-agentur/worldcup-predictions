@@ -20,9 +20,11 @@
   --paper: #ffffff;
   --mist: #f3f5f8;
   --line: #d7dce5;
-  --accent: #18a86b;
+  --accent: #399918;
+  --accent-soft: #b4e50d;
   --warning: #ffd02f;
-  --danger: #d64045;
+  --danger: #fb4141;
+  --danger-soft: #ff9b2f;
   --muted: #5b6070;
   --hover-row: #eef0ff;
   --focus-ring: #00c7ff;
@@ -48,9 +50,11 @@ html[data-theme="dark"] {
   --paper: #080818;
   --mist: #151528;
   --line: #34364b;
-  --accent: #38d996;
+  --accent: #399918;
+  --accent-soft: #b4e50d;
   --warning: #ffe066;
-  --danger: #ff6b6b;
+  --danger: #fb4141;
+  --danger-soft: #ff9b2f;
   --muted: #b0b5c8;
   --hover-row: #19194a;
   --focus-ring: #8fd7ff;
@@ -365,7 +369,11 @@ h2 {
 }
 
 .summary__hitbar-fill[data-result="trend"] {
-  background: var(--warning);
+  background: var(--accent-soft);
+}
+
+.summary__hitbar-fill[data-result="miss"] {
+  background: var(--danger);
 }
 
 .section__heading {
@@ -719,13 +727,13 @@ h2 {
 }
 
 .hit-chip[data-result="trend"] {
-  color: #453a00;
-  background: var(--warning);
+  color: var(--ink);
+  background: var(--accent-soft);
 }
 
 .hit-chip[data-result="miss"] {
-  color: var(--muted);
-  border: 1px solid var(--line);
+  color: var(--paper);
+  background: var(--danger);
 }
 
 .breadcrumb {

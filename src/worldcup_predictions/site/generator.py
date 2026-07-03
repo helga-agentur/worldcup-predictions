@@ -458,6 +458,7 @@ def _summary_extras(
         "hit_widths": {
             "exact": f"{100 * exact / scored:.2f}" if scored else "0",
             "trend": f"{100 * trend / scored:.2f}" if scored else "0",
+            "miss": f"{100 * miss / scored:.2f}" if scored else "0",
         },
         "has_hits": scored > 0,
         "next_kickoff": next_kickoff,
