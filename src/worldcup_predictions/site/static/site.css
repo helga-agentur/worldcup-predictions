@@ -35,9 +35,9 @@
   --space-md: 18px;
   --space-lg: 24px;
   --space-xl: 42px;
-  --text-xs: 0.8rem;
-  --text-sm: 0.875rem;
-  --text-md: 0.95rem;
+  --text-xs: 0.875rem;
+  --text-sm: 0.9375rem;
+  --text-md: 1rem;
 }
 
 html[data-theme="dark"] {
@@ -283,7 +283,7 @@ h2 {
   gap: 8px;
   margin: -18px 0 var(--space-lg);
   color: var(--muted);
-  font-size: 0.94rem;
+  font-size: var(--text-md);
 }
 
 .resource-links a {
@@ -347,7 +347,7 @@ h2 {
   margin: 0;
   margin-top: var(--space-xs);
   color: var(--muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
 }
 
 .summary-hitbar {
@@ -748,7 +748,7 @@ h2 {
   gap: 8px;
   padding: 24px 0 0;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
   justify-content: flex-start;
   text-align: left;
 }
@@ -918,7 +918,7 @@ h2 {
 }
 
 .heatmap-corner {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 .heatmap-cell {
@@ -1044,7 +1044,7 @@ h2 {
   padding: 28px 0 40px;
   color: var(--muted);
   border-top: 1px solid var(--line);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .site-footer p {
