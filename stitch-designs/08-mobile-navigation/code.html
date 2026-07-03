@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Helga World Cup Pool - Navigation Menu</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;700&amp;family=Hanken+Grotesk:wght@700;800&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "background": "#fcf8ff",
+                        "on-secondary-fixed": "#042100",
+                        "surface-container-highest": "#e1e0ff",
+                        "on-error": "#ffffff",
+                        "on-secondary-container": "#1f7200",
+                        "inverse-on-surface": "#f2efff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "inverse-primary": "#bec2ff",
+                        "inverse-surface": "#2c2d50",
+                        "on-tertiary-fixed": "#161f00",
+                        "secondary-fixed": "#96fa71",
+                        "error": "#ba1a1a",
+                        "primary-container": "#0000ff",
+                        "error-container": "#ffdad6",
+                        "secondary": "#1e6d00",
+                        "surface-container-low": "#f5f2ff",
+                        "tertiary": "#2c3b00",
+                        "primary": "#0001bb",
+                        "surface-container-high": "#e8e6ff",
+                        "on-surface": "#17183a",
+                        "on-primary": "#ffffff",
+                        "on-secondary-fixed-variant": "#145200",
+                        "secondary-fixed-dim": "#7bdd58",
+                        "on-background": "#17183a",
+                        "on-secondary": "#ffffff",
+                        "secondary-container": "#93f86e",
+                        "surface-tint": "#343dff",
+                        "on-tertiary-fixed-variant": "#3b4d00",
+                        "on-primary-container": "#b3b7ff",
+                        "primary-fixed": "#e0e0ff",
+                        "surface-variant": "#e1e0ff",
+                        "on-surface-variant": "#454558",
+                        "tertiary-fixed-dim": "#a8d700",
+                        "outline-variant": "#c5c4db",
+                        "surface-bright": "#fcf8ff",
+                        "tertiary-container": "#3f5300",
+                        "on-primary-fixed": "#00006e",
+                        "on-tertiary-container": "#a0cc00",
+                        "tertiary-fixed": "#c2f427",
+                        "outline": "#757589",
+                        "on-error-container": "#93000a",
+                        "on-primary-fixed-variant": "#0000ef",
+                        "surface-container": "#eeecff",
+                        "surface-dim": "#d7d6ff",
+                        "primary-fixed-dim": "#bec2ff",
+                        "surface": "#fcf8ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "table-row-height": "40px",
+                        "margin-desktop": "32px",
+                        "margin-mobile": "16px",
+                        "max-width": "1140px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "body-sm": ["Chivo"],
+                        "data-num": ["Chivo"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "headline-sm": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "body-md": ["Chivo"],
+                        "label-caps": ["JetBrains Mono"],
+                        "status-badge": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "body-sm": ["13px", { "lineHeight": "1.4", "fontWeight": "400" }],
+                        "data-num": ["16px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "headline-sm": ["18px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "body-md": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "label-caps": ["11px", { "lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "status-badge": ["11px", { "lineHeight": "1", "fontWeight": "800" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface antialiased min-h-screen flex flex-col selection:bg-primary selection:text-on-primary relative">
+<!-- Mobile Navigation Overlay (Full Screen) -->
+<div class="fixed inset-0 z-50 bg-surface flex flex-col w-full h-full">
+<!-- Header Section -->
+<header class="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-4 border-b border-outline-variant bg-surface">
+<a aria-label="Home" class="font-headline-md text-headline-md font-bold text-primary tracking-tight" href="#">
+                Helga World Cup Pool
+            </a>
+<button aria-label="Close menu" class="flex items-center justify-center p-2 text-on-surface hover:text-primary transition-colors outline-none focus:ring-2 focus:ring-primary">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</header>
+<!-- Main Navigation Links -->
+<nav class="flex-1 flex flex-col px-margin-mobile pt-12 pb-8 gap-8 overflow-y-auto">
+<!-- Active State -->
+<a class="group flex items-center gap-4 border-b border-outline-variant pb-4 w-full text-primary hover:opacity-80 transition-opacity" href="#">
+<span class="material-symbols-outlined text-[32px] font-bold" data-icon="arrow_forward">arrow_forward</span>
+<span class="font-display-lg text-display-lg">Upcoming</span>
+</a>
+<!-- Inactive States -->
+<a class="group flex items-center gap-4 border-b border-outline-variant pb-4 w-full text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[32px] opacity-0 group-hover:opacity-100 transition-opacity text-primary" data-icon="arrow_forward">arrow_forward</span>
+<span class="font-display-lg text-display-lg">Past</span>
+</a>
+<a class="group flex items-center gap-4 border-b border-outline-variant pb-4 w-full text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[32px] opacity-0 group-hover:opacity-100 transition-opacity text-primary" data-icon="arrow_forward">arrow_forward</span>
+<span class="font-display-lg text-display-lg">Tournament</span>
+</a>
+<a class="group flex items-center gap-4 border-b border-outline-variant pb-4 w-full text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[32px] opacity-0 group-hover:opacity-100 transition-opacity text-primary" data-icon="arrow_forward">arrow_forward</span>
+<span class="font-display-lg text-display-lg">JSON API</span>
+</a>
+</nav>
+<!-- Bottom Actions (Settings) -->
+<div class="mt-auto border-t border-outline-variant bg-surface-container-low px-margin-mobile py-6 flex flex-col gap-6">
+<div class="flex items-center justify-between w-full">
+<!-- Language Switcher -->
+<div class="flex flex-col gap-2">
+<span class="font-label-caps text-label-caps text-on-surface-variant">LANGUAGE</span>
+<div class="flex bg-surface-container-high border border-outline p-[2px]">
+<button aria-pressed="true" class="font-label-caps text-label-caps bg-primary text-on-primary px-4 py-2 flex-1 text-center">EN</button>
+<button aria-pressed="false" class="font-label-caps text-label-caps bg-transparent text-on-surface px-4 py-2 flex-1 text-center hover:bg-surface-variant transition-colors">DE</button>
+</div>
+</div>
+<!-- Dark Mode Toggle -->
+<div class="flex flex-col gap-2 items-end">
+<span class="font-label-caps text-label-caps text-on-surface-variant">THEME</span>
+<button class="flex items-center gap-2 border border-outline bg-surface px-4 py-2 hover:bg-surface-variant transition-colors group">
+<span class="material-symbols-outlined text-[18px] text-on-surface group-hover:text-primary transition-colors" data-icon="dark_mode">dark_mode</span>
+<span class="font-label-caps text-label-caps text-on-surface group-hover:text-primary transition-colors">DARK</span>
+</button>
+</div>
+</div>
+<!-- Footer / System Status Line -->
+<div class="w-full flex justify-between items-center pt-4 border-t border-outline-variant">
+<span class="font-label-caps text-label-caps text-on-surface-variant">v2.4.0 (STABLE)</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">SYSTEM: ONLINE</span>
+</div>
+</div>
+</div>
+</body></html>

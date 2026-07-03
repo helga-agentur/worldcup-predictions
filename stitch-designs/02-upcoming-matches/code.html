@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Helga World Cup Pool - Upcoming Matches</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,100..900;1,100..900&amp;family=Hanken+Grotesk:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "background": "#fcf8ff",
+                        "on-secondary-fixed": "#042100",
+                        "surface-container-highest": "#e1e0ff",
+                        "on-error": "#ffffff",
+                        "on-secondary-container": "#1f7200",
+                        "inverse-on-surface": "#f2efff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "inverse-primary": "#bec2ff",
+                        "inverse-surface": "#2c2d50",
+                        "on-tertiary-fixed": "#161f00",
+                        "secondary-fixed": "#96fa71",
+                        "error": "#ba1a1a",
+                        "primary-container": "#0000ff",
+                        "error-container": "#ffdad6",
+                        "secondary": "#1e6d00",
+                        "surface-container-low": "#f5f2ff",
+                        "tertiary": "#2c3b00",
+                        "primary": "#0001bb",
+                        "surface-container-high": "#e8e6ff",
+                        "on-surface": "#17183a",
+                        "on-primary": "#ffffff",
+                        "on-secondary-fixed-variant": "#145200",
+                        "secondary-fixed-dim": "#7bdd58",
+                        "on-background": "#17183a",
+                        "on-secondary": "#ffffff",
+                        "secondary-container": "#93f86e",
+                        "surface-tint": "#343dff",
+                        "on-tertiary-fixed-variant": "#3b4d00",
+                        "on-primary-container": "#b3b7ff",
+                        "primary-fixed": "#e0e0ff",
+                        "surface-variant": "#e1e0ff",
+                        "on-surface-variant": "#454558",
+                        "tertiary-fixed-dim": "#a8d700",
+                        "outline-variant": "#c5c4db",
+                        "surface-bright": "#fcf8ff",
+                        "tertiary-container": "#3f5300",
+                        "on-primary-fixed": "#00006e",
+                        "on-tertiary-container": "#a0cc00",
+                        "tertiary-fixed": "#c2f427",
+                        "outline": "#757589",
+                        "on-error-container": "#93000a",
+                        "on-primary-fixed-variant": "#0000ef",
+                        "surface-container": "#eeecff",
+                        "surface-dim": "#d7d6ff",
+                        "primary-fixed-dim": "#bec2ff",
+                        "surface": "#fcf8ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "table-row-height": "40px",
+                        "margin-desktop": "32px",
+                        "margin-mobile": "16px",
+                        "max-width": "1140px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "body-sm": ["Chivo"],
+                        "data-num": ["Chivo"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "headline-sm": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "body-md": ["Chivo"],
+                        "label-caps": ["JetBrains Mono"],
+                        "status-badge": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "body-sm": ["13px", {"lineHeight": "1.4", "fontWeight": "400"}],
+                        "data-num": ["16px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "headline-sm": ["18px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                        "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "body-md": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "label-caps": ["11px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "status-badge": ["11px", {"lineHeight": "1", "fontWeight": "800"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom scrollbar for data tables to match Swiss minimal aesthetic */
+        ::-webkit-scrollbar { height: 6px; width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background-color: #c5c4db; border-radius: 0px; }
+        ::-webkit-scrollbar-thumb:hover { background-color: #757589; }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-sm antialiased selection:bg-primary-fixed selection:text-on-primary-fixed min-h-screen flex flex-col">
+<!-- TopNavBar Component -->
+<header class="bg-surface border-b border-outline-variant w-full z-50 sticky top-0">
+<div class="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop max-w-max-width mx-auto h-16">
+<!-- Brand -->
+<div class="font-headline-md text-headline-md font-bold text-primary flex items-center gap-2">
+                Helga World Cup Pool
+            </div>
+<!-- Navigation Links (Desktop) -->
+<nav class="hidden md:flex items-center gap-8 h-full">
+<a class="h-full flex items-center text-primary font-bold border-b-2 border-primary pt-[2px]" href="#">
+<span class="font-label-caps text-label-caps uppercase">Upcoming</span>
+</a>
+<a class="h-full flex items-center text-on-surface-variant font-medium border-b-2 border-transparent hover:text-primary transition-colors pt-[2px]" href="#">
+<span class="font-label-caps text-label-caps uppercase">Past</span>
+</a>
+<a class="h-full flex items-center text-on-surface-variant font-medium border-b-2 border-transparent hover:text-primary transition-colors pt-[2px]" href="#">
+<span class="font-label-caps text-label-caps uppercase">Tournament</span>
+</a>
+</nav>
+<!-- Trailing Actions -->
+<div class="flex items-center gap-4 text-on-surface-variant">
+<button class="hover:text-primary transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">code</span>
+</button>
+<button class="hover:text-primary transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">language</span>
+</button>
+<button class="hover:text-primary transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">dark_mode</span>
+</button>
+<!-- Mobile Menu Toggle -->
+<button class="md:hidden hover:text-primary transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-[24px]">menu</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow w-full max-w-max-width mx-auto px-margin-mobile md:px-margin-desktop pt-12 pb-24">
+<!-- Page Header -->
+<header class="mb-10">
+<h1 class="font-display-lg text-display-lg text-on-surface tracking-tight">Upcoming Matches</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-2 max-w-2xl">
+                Predictions and tips can still change until each match starts. Real-time probability models are driven by live tournament data.
+            </p>
+</header>
+<!-- Data Table Container -->
+<div class="w-full overflow-x-auto border border-outline-variant bg-surface">
+<table class="w-full text-left border-collapse min-w-[900px]">
+<thead class="bg-surface-container-low sticky top-0 z-10 border-b border-outline-variant shadow-[0_1px_0_0_#c5c4db]">
+<tr>
+<th class="font-label-caps text-label-caps text-on-surface-variant uppercase px-2 py-3 w-32">Kickoff</th>
+<th class="font-label-caps text-label-caps text-on-surface-variant uppercase px-2 py-3 w-24">Stage</th>
+<th class="font-label-caps text-label-caps text-on-surface-variant uppercase px-2 py-3">Match</th>
+<th class="font-label-caps text-label-caps text-on-surface-variant uppercase px-2 py-3 w-40 text-center">Probabilities <span class="text-outline mx-1">|</span> H-D-A</th>
+<th class="font-label-caps text-label-caps text-on-surface-variant uppercase px-2 py-3 w-20 text-right">xG</th>
+<th class="font-label-caps text-label-caps text-primary uppercase px-2 py-3 w-24 text-right">Most Likely</th>
+<th class="font-label-caps text-label-caps text-on-surface-variant uppercase px-2 py-3 w-20 text-center">SRF</th>
+<th class="font-label-caps text-label-caps text-on-surface-variant uppercase px-2 py-3 w-20 text-center">20min</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container transition-colors duration-150 h-table-row-height group cursor-default">
+<td class="px-2 py-1 align-middle whitespace-nowrap">
+<span class="font-data-num text-data-num text-on-surface">15 Jun 21:00</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap">
+<span class="font-label-caps text-label-caps text-outline bg-surface-container px-1.5 py-0.5 rounded-sm">GRP A</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap">
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 w-[72px]">
+<img class="w-4 h-3 object-cover border border-outline-variant/30" data-alt="A minimalist, geometric representation of the German national flag inside a crisp 16x12 pixel rectangular frame. The color palette features intense, solid bands of jet black, vivid crimson red, and bright golden yellow. The aesthetic is flat, vector-style, and strictly functional, avoiding any realistic fabric textures." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD-fxpMk0R25oyF0R0HwhbqtyybfzoNS671cpUgmUQxci1cCqicYZxdrO3bDSsGaYWGytE9Nw7ItiJPVWgIayYf5Bg-PJ28KLrDsppCaOQO8MiJMgRlqXAqJ5C7zNIdU458O8sgpDXXFb7wGH9XGFoJbY2K7kY9dCclcM8if5hJPCKlTDd_kKZoTHo_J6zadgYb7c6k-PxHGWo1mavCMyEmvSiost4e8Kq4iyJs8DanDy6x6T6swoUoJMn6-9qQxRFRnf2WWExRN3o"/>
+<span class="font-data-num text-data-num text-on-surface">GER</span>
+</div>
+<span class="text-outline font-label-caps text-[10px]">-</span>
+<div class="flex items-center gap-1.5 w-[72px]">
+<span class="font-data-num text-data-num text-on-surface">SCO</span>
+<img class="w-4 h-3 object-cover border border-outline-variant/30" data-alt="A precise, geometric representation of the Scottish national flag (St Andrew's Cross) inside a crisp 16x12 pixel rectangular frame. The graphic features a stark white diagonal cross against a deep, vibrant royal blue background. The style is strictly vector-based, flat, and objective." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBkYvqPQcPHLkx_FCEQsBVMpGruHgGGy4_kkREOxV_scsvdp1pBDlidhufxG4jJEpjEnbWGZTaN6jIE9hYXrswauM_QT_W66YAoyLALBOKUhTs2iJg-I4HfX7jLNzVQtKQJF2YqMCqV4i1m5CONKfOcLqBoT_zpPNITZgxRmIxLmO2yLjZTJunWgij5kqV2XU9mkDQwpXo1E1NxO8WZcFGaGagFOG7kNStzf2klVszIb5oOahYpS6zDShH2oGwJ5Bi2tc42T4uFV_o"/>
+</div>
+</div>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-center">
+<div class="flex flex-col gap-1 items-center justify-center">
+<div class="w-24 h-1.5 flex bg-surface-container-high rounded-sm overflow-hidden">
+<div class="bg-primary h-full" style="width: 72%;"></div>
+<div class="bg-outline-variant h-full" style="width: 18%;"></div>
+<div class="bg-on-surface h-full" style="width: 10%;"></div>
+</div>
+<div class="font-label-caps text-[9px] text-on-surface-variant flex gap-2">
+<span class="text-primary font-bold">72</span>
+<span class="text-outline">18</span>
+<span class="text-on-surface font-bold">10</span>
+</div>
+</div>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-right">
+<span class="font-data-num text-data-num text-on-surface">2.4<span class="text-outline mx-1 text-[12px]">-</span>0.6</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-right">
+<span class="font-data-num text-data-num text-primary bg-primary/10 px-2 py-0.5 rounded-sm">2 - 0</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-center">
+<span class="font-data-num text-data-num text-on-surface-variant">2 - 0</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-center">
+<span class="font-data-num text-data-num text-on-surface-variant">3 - 1</span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container transition-colors duration-150 h-table-row-height group cursor-default">
+<td class="px-2 py-1 align-middle whitespace-nowrap">
+<span class="font-data-num text-data-num text-on-surface">16 Jun 15:00</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap">
+<span class="font-label-caps text-label-caps text-outline bg-surface-container px-1.5 py-0.5 rounded-sm">GRP A</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap">
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 w-[72px]">
+<img class="w-4 h-3 object-cover border border-outline-variant/30" data-alt="A highly simplified, flat vector illustration of the Hungarian national flag in a 16x12 pixel dimension. It features three horizontal bands: bold red on top, pristine white in the middle, and deep green on the bottom. The presentation is devoid of shadow or texture, focusing purely on graphic utility." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBh_KxSQxMP282x-uBpap2HwUGnWFMKe8cApe6X3P1bCP5mouhK0E-5_xHeyarmzwNoLJrhbmHgVDlAPm9SZfuVuufoyRU4MIlKWj71g_yb7WxEWk_4kolURgR_FDhRA7rjCSemKONABtUuczgfQB7WIl_VweeUFxKp0FaFLIUZOblE_wKW5LKKVPBerzzC9wfoA4tVXxCK3neisFxFGkEzXOiqezwDrwOOgNuKBJz-M_GtmgBPi6V0U8XKqbIwJETBLkOmt-QVQJg"/>
+<span class="font-data-num text-data-num text-on-surface">HUN</span>
+</div>
+<span class="text-outline font-label-caps text-[10px]">-</span>
+<div class="flex items-center gap-1.5 w-[72px]">
+<span class="font-data-num text-data-num text-on-surface">SUI</span>
+<img class="w-4 h-3 object-cover border border-outline-variant/30" data-alt="A crisp, functional vector rendering of the Swiss national flag adapted into a rectangular 16x12 pixel format. A stark white symmetrical cross is centered accurately on a solid, vibrant red background. The image is flat, maintaining a high-contrast, data-centric aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB1h9a20NAyLsjdmoGJi5S-DacxEhzh6NxNTEvOOizgtKdGidjHlRSA0iq5X6w2AOMuMSROM7o-aUYrNAUkc1pny7-yK4-p4D81M4V8edQwnR4yzCWBmZPeOXBSv5ZH0TkdCARHsvkwZaWWiOUYCVp6LNiEmC8wBB1Cn-59XB6kqoVWFS89DMZU88kUClr-B8n_s0U1PvPs6SuRdurRWjq3Y6Yv03Y-77G3_94Z5RI25uabHZhQCj-3QCDXBmKEahmPb3dm0MH5exw"/>
+</div>
+</div>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-center">
+<div class="flex flex-col gap-1 items-center justify-center">
+<div class="w-24 h-1.5 flex bg-surface-container-high rounded-sm overflow-hidden">
+<div class="bg-primary h-full" style="width: 31%;"></div>
+<div class="bg-outline-variant h-full" style="width: 28%;"></div>
+<div class="bg-on-surface h-full" style="width: 41%;"></div>
+</div>
+<div class="font-label-caps text-[9px] text-on-surface-variant flex gap-2">
+<span class="text-primary font-bold">31</span>
+<span class="text-outline">28</span>
+<span class="text-on-surface font-bold">41</span>
+</div>
+</div>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-right">
+<span class="font-data-num text-data-num text-on-surface">1.1<span class="text-outline mx-1 text-[12px]">-</span>1.3</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-right">
+<span class="font-data-num text-data-num text-primary bg-primary/10 px-2 py-0.5 rounded-sm">1 - 1</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-center">
+<span class="font-data-num text-data-num text-on-surface-variant">1 - 2</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-center">
+<span class="font-data-num text-data-num text-on-surface-variant">0 - 1</span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container transition-colors duration-150 h-table-row-height group cursor-default">
+<td class="px-2 py-1 align-middle whitespace-nowrap">
+<span class="font-data-num text-data-num text-on-surface">16 Jun 18:00</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap">
+<span class="font-label-caps text-label-caps text-outline bg-surface-container px-1.5 py-0.5 rounded-sm">GRP B</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap">
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 w-[72px]">
+<img class="w-4 h-3 object-cover border border-outline-variant/30" data-alt="A minimalist graphic representation of the Spanish national flag, scaled to 16x12 pixels. It displays horizontal bands of red, a wider band of golden yellow in the middle, and red at the bottom. A simplified geometric mark represents the crest off-center. Purely functional design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJu9-6MQGcCI30q3VUM72WD6bgCOrdlYLrqOUie2XEB5CNsgNt7-KJZ3vNHvqX2tU279F5rDy0rALSb0s8-V33t_SFThdZYuJwe8sBG9qeFd7gYCETr-8yq1pER4_rVntFlxQgEBx8p419DClnAn9UpFN4XmrS79-YXc9Y7T-zNY901RyTnfqkBg6VjsF64e_zX8cLDH_0YKYEZu9nDLum-VCll-GDOJblw8EPvVgpHJU-W2NapRkzWAhSX8nvccaZnQv_BKiaqaw"/>
+<span class="font-data-num text-data-num text-on-surface">ESP</span>
+</div>
+<span class="text-outline font-label-caps text-[10px]">-</span>
+<div class="flex items-center gap-1.5 w-[72px]">
+<span class="font-data-num text-data-num text-on-surface">CRO</span>
+<img class="w-4 h-3 object-cover border border-outline-variant/30" data-alt="A clean, flat-design interpretation of the Croatian national flag at 16x12 pixels. Horizontal stripes of red, white, and blue form the background, overlaid with a tiny, stylized red and white checkerboard shield in the center. The visual relies on sharp, mathematical execution." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDKod3Up6bpL4skO1DVbxXSn10K_ryg1ZWzl5R34sYWeLcKxoats1CmJ4wl6ix7QQKVNtHD4DYPMXVZxxvOyMzJLL7FmZTf7lmCqE9uv-9oiYt0mo-7dYaNWaDax2_MTIxwNRYPK29kcVhi2gs4GD1q_nPH96AGdK5JuNI7IhyZAHScaBMrT_w3LcL8RDRTJajm-AbfYwxk_5NoYpN7-UX0YhyJLB-ZBa0OBHPdc-YGUz96NZI7_XCNZtowzwYJfnwh4ORqaFYtz7o"/>
+</div>
+</div>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-center">
+<div class="flex flex-col gap-1 items-center justify-center">
+<div class="w-24 h-1.5 flex bg-surface-container-high rounded-sm overflow-hidden">
+<div class="bg-primary h-full" style="width: 52%;"></div>
+<div class="bg-outline-variant h-full" style="width: 25%;"></div>
+<div class="bg-on-surface h-full" style="width: 23%;"></div>
+</div>
+<div class="font-label-caps text-[9px] text-on-surface-variant flex gap-2">
+<span class="text-primary font-bold">52</span>
+<span class="text-outline">25</span>
+<span class="text-on-surface font-bold">23</span>
+</div>
+</div>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-right">
+<span class="font-data-num text-data-num text-on-surface">1.6<span class="text-outline mx-1 text-[12px]">-</span>0.9</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-right">
+<span class="font-data-num text-data-num text-primary bg-primary/10 px-2 py-0.5 rounded-sm">1 - 0</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-center">
+<span class="font-data-num text-data-num text-on-surface-variant">2 - 1</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-center">
+<span class="font-data-num text-data-num text-on-surface-variant">1 - 1</span>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container transition-colors duration-150 h-table-row-height group cursor-default">
+<td class="px-2 py-1 align-middle whitespace-nowrap">
+<span class="font-data-num text-data-num text-on-surface">16 Jun 21:00</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap">
+<span class="font-label-caps text-label-caps text-outline bg-surface-container px-1.5 py-0.5 rounded-sm">GRP B</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap">
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 w-[72px]">
+<img class="w-4 h-3 object-cover border border-outline-variant/30" data-alt="A precise, flat-color representation of the Italian national flag fitted to a 16x12 pixel container. Three equal vertical bands of bright emerald green, solid white, and vibrant red are displayed without any shadowing or gradient effects. The style is strictly informational." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQp0aJYqdBe3_6UIsu-xK1ugq1Y3zmul3ob5KAK_N292LCmaxsvROa8fvGLQaT82W9yDigsVtkEFOy12Vmga2hR1zTDMMX3zyDsXDZd5e-aPue1Vi3BDOqf61EBHmTzlOJLHvOqPrgXxpPMK0puMCUCJsO3qiHq7aBlILQDOojhmtrqXHfPX5eerJRZ-5DH-MKBZrEzqHXHXik0rgiuFzeu2mt5K7cEox9Scpuxz42vR2QvIC5K_JaSXCbJktVzUDvvndKB_aIKiA"/>
+<span class="font-data-num text-data-num text-on-surface">ITA</span>
+</div>
+<span class="text-outline font-label-caps text-[10px]">-</span>
+<div class="flex items-center gap-1.5 w-[72px]">
+<span class="font-data-num text-data-num text-on-surface">ALB</span>
+<img class="w-4 h-3 object-cover border border-outline-variant/30" data-alt="A highly stylized, geometric icon representing the Albanian national flag in a 16x12 pixel space. A solid deep red background is intersected by a tiny, abstracted black shape meant to imply a double-headed eagle. The rendering is objective and suitable for a dense data table." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAeabzECZC5v7QkurXkIdiTLFrU_RoaRIHW8EBQdihNF5wboMsyBoGpY8qYSD0Onvn5RibtcK3kHeqHaEXdkPdk0W35FdAXXo_exBjea5gAlksxTJqQyEw6LXTFsWl-VxG8N0077clr9Me4ktBAks_pLe2menEHYpUB-HtuA0RwXPlie9O0QZS08fzc-WPNC6jnSPHdQOogUL7vinUfQS_7yy8n-crWNmL9pCWJM1EivW36h2iBvioeybDfRZ4-fPWru3LmBu8QtvU"/>
+</div>
+</div>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-center">
+<div class="flex flex-col gap-1 items-center justify-center">
+<div class="w-24 h-1.5 flex bg-surface-container-high rounded-sm overflow-hidden">
+<div class="bg-primary h-full" style="width: 68%;"></div>
+<div class="bg-outline-variant h-full" style="width: 22%;"></div>
+<div class="bg-on-surface h-full" style="width: 10%;"></div>
+</div>
+<div class="font-label-caps text-[9px] text-on-surface-variant flex gap-2">
+<span class="text-primary font-bold">68</span>
+<span class="text-outline">22</span>
+<span class="text-on-surface font-bold">10</span>
+</div>
+</div>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-right">
+<span class="font-data-num text-data-num text-on-surface">2.1<span class="text-outline mx-1 text-[12px]">-</span>0.4</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-right">
+<span class="font-data-num text-data-num text-primary bg-primary/10 px-2 py-0.5 rounded-sm">2 - 0</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-center">
+<span class="font-data-num text-data-num text-on-surface-variant">3 - 0</span>
+</td>
+<td class="px-2 py-1 align-middle whitespace-nowrap text-center">
+<span class="font-data-num text-data-num text-on-surface-variant">2 - 0</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</main>
+<!-- Footer Component -->
+<footer class="bg-surface-container-low border-t border-outline-variant w-full mt-auto">
+<div class="flex flex-col md:flex-row justify-between items-center w-full py-6 px-margin-mobile md:px-margin-desktop max-w-max-width mx-auto gap-4">
+<div class="text-body-md font-bold text-on-surface text-center md:text-left">
+                Helga World Cup Pool
+            </div>
+<div class="font-body-sm text-body-sm text-on-surface-variant text-center">
+                © 2024 Helga Predictions • Last update: 2 mins ago
+            </div>
+<div class="flex gap-6 items-center">
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors uppercase" href="#">GitHub API</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors uppercase" href="#">Privacy Policy</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors uppercase" href="#">Datenschutz</a>
+</div>
+</div>
+</footer>
+</body></html>
