@@ -449,7 +449,7 @@ def _summary_extras(
     exact = int(summary.get("hit_exact") or 0)
     trend = int(summary.get("hit_trend") or 0)
     miss = int(summary.get("hit_miss") or 0)
-    next_kickoff = str(future_rows[0].get("kickoff_display") or "") if future_rows else ""
+    next_kickoff = _kickoff_compact_display(future_rows[0].get("event_date"), catalog=catalog) if future_rows else ""
     return {
         "srf_avg_text": catalog.translate("summary.avg_per_match", value=f"{srf_avg:.1f}") if scored else "",
         "twenty_min_avg_text": catalog.translate("summary.avg_per_match", value=f"{twenty_min_avg:.1f}") if scored else "",
@@ -1406,6 +1406,20 @@ def _kickoff_display(value: Any, *, catalog: TranslationCatalog) -> str:
     zurich = parsed.astimezone(ZoneInfo("Europe/Zurich"))
     weekday = catalog.translate(f"weekday.{zurich.weekday()}")
     return f"{weekday}, {zurich.strftime('%d.%m.%Y, %H:%M')}"
+
+
+def _kickoff_compact_display(value: Any, *, catalog: TranslationCatalog) -> str:
+    if not value:
+        return "-"
+    try:
+        parsed = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return str(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    zurich = parsed.astimezone(ZoneInfo("Europe/Zurich"))
+    weekday = catalog.translate(f"weekday.{zurich.weekday()}")
+    return f"{weekday}, {zurich.strftime('%d.%m., %H:%M')}"
 
 
 def _probability_values(row: dict[str, Any]) -> tuple[float, float, float] | None:

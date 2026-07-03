@@ -27,7 +27,9 @@
   --hover-row: #eef0ff;
   --focus-ring: #00c7ff;
   --max: 1240px;
+  --summary-max: calc(var(--max) - (var(--space-lg) * 8));
   --space-2: 2px;
+  --space-4: 4px;
   --space-xs: 4px;
   --space-8: 8px;
   --space-10: 10px;
@@ -303,9 +305,10 @@ h2 {
 
 .summary-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1px;
-  margin: 0;
+  max-width: var(--summary-max);
+  margin: 0 auto;
   padding: 0;
   background: var(--line);
   border: 1px solid var(--line);
@@ -328,7 +331,7 @@ h2 {
   display: block;
   max-width: 100%;
   margin: 0;
-  margin-top: var(--space-2);
+  margin-top: var(--space-4);
   font-family: "Degular", "Cadiz", system-ui, sans-serif;
   font-weight: 400;
   color: var(--helga-blue);
@@ -348,6 +351,11 @@ h2 {
   margin-top: var(--space-xs);
   color: var(--muted);
   font-size: var(--text-md);
+  overflow-wrap: anywhere;
+}
+
+.summary-sub.numeric {
+  white-space: normal;
 }
 
 .summary-hitbar {
@@ -1052,6 +1060,10 @@ h2 {
 }
 
 @media (max-width: 900px) {
+  .summary-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .match-card {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1139,10 +1151,6 @@ h2 {
 
   .theme-switch-label {
     font-size: var(--text-xs);
-  }
-
-  .summary-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .card-tips {
