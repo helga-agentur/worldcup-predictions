@@ -1,7 +1,7 @@
 {% macro page_intro(title_id, title, lead, kicker="FIFA WM 2026", title_html=None) -%}
 <header class="page-intro" aria-labelledby="{{ title_id }}">
-  <p class="kicker">{{ kicker }}</p>
+  <p class="page-intro__kicker">{{ kicker }}</p>
   <h1 id="{{ title_id }}">{% if title_html %}{{ title_html|safe }}{% else %}{{ title }}{% endif %}</h1>
-  <p class="lead">{{ lead|safe }}</p>
+  <p class="page-intro__lead">{{ lead|safe }}</p>
 </header>
 {%- endmacro %}

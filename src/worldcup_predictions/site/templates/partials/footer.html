@@ -1,8 +1,8 @@
 <footer class="site-footer">
-  <p>{{ t("footer.tagline") }}</p>
-  <p>
-    <a href="https://www.helga.ch/datenschutz">{{ t("footer.privacy") }}</a>
-    <span aria-hidden="true"> · </span>
+  <p class="site-footer__text">{{ t("footer.tagline") }}</p>
+  <p class="site-footer__text">
+    <a class="site-footer__link" href="https://www.helga.ch/datenschutz">{{ t("footer.privacy") }}</a>
+    <span class="site-footer__separator" aria-hidden="true"> · </span>
     {{ t("footer.last_update") }}: <time datetime="{{ generated_at_utc }}">{{ generated_at_display }}</time>
   </p>
 </footer>

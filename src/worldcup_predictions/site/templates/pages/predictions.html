@@ -4,59 +4,60 @@
 
 {% block content %}
 <nav class="breadcrumb" aria-label="Breadcrumb">
-  <a href="/{{ locale }}/" aria-current="page">{{ t("nav.predictions") }}</a>
+  <a class="breadcrumb__link" href="/{{ locale }}/" aria-current="page">{{ t("nav.predictions") }}</a>
 </nav>
 
-<section class="intro" aria-labelledby="page-title">
+<section class="section" aria-labelledby="page-title">
   {{ page_intro(
     "page-title",
     t("site.heading"),
     t("site.lead"),
     t("site.kicker")
   ) }}
-  <nav class="resource-links" aria-label="{{ t('resources.aria') }}">
-    <a href="{{ tournament_path }}">{{ t("nav.tournament") }}</a>
-    <span aria-hidden="true">·</span>
-    <a href="https://github.com/helga-agentur/worldcup-predictions">{{ t("resources.github") }}</a>
-    <span aria-hidden="true">·</span>
-    <a href="{{ json_feed_path }}" target="_blank" rel="noopener" data-analytics-event="helga_api_click">{{ t("resources.json_api") }}</a>
+  <nav class="resources" aria-label="{{ t('resources.aria') }}">
+    <a class="resources__link" href="{{ tournament_path }}">{{ t("nav.tournament") }}</a>
+    <span class="resources__separator" aria-hidden="true">·</span>
+    <a class="resources__link" href="https://github.com/helga-agentur/worldcup-predictions">{{ t("resources.github") }}</a>
+    <span class="resources__separator" aria-hidden="true">·</span>
+    <a class="resources__link" href="{{ json_feed_path }}" target="_blank" rel="noopener" data-analytics-event="helga_api_click">{{ t("resources.json_api") }}</a>
   </nav>
-  <section class="summary-dashboard" aria-labelledby="summary-title">
-    <h2 id="summary-title" class="visually-hidden">{{ t("summary.title") }}</h2>
-    <dl class="summary-metrics">
-      <div class="summary-card">
-        <dt class="summary-label">{{ t("summary.srf_points") }}</dt>
-        <dd class="summary-value">{{ summary.srf_points_display }}</dd>
-        {% if summary_extras.srf_avg_text %}<dd class="summary-sub numeric">{{ summary_extras.srf_avg_text }}</dd>{% endif %}
-      </div>
-      <div class="summary-card">
-        <dt class="summary-label">{{ t("summary.twenty_min_points") }}</dt>
-        <dd class="summary-value">{{ summary.twenty_min_points_display }}</dd>
-        {% if summary_extras.twenty_min_avg_text %}<dd class="summary-sub numeric">{{ summary_extras.twenty_min_avg_text }}</dd>{% endif %}
-      </div>
-      <div class="summary-card">
-        <dt class="summary-label">{{ t("summary.hit_rate") }}</dt>
-        <dd class="summary-value">{{ summary_extras.hit_rate_text }}</dd>
-        {% if summary_extras.has_hits %}
-        <dd class="summary-sub numeric">{{ summary_extras.hit_breakdown_text }}</dd>
-        <dd class="summary-hitbar" aria-hidden="true">
-          <span class="hitbar-exact" style="width: {{ summary_extras.hit_widths.exact }}%"></span>
-          <span class="hitbar-trend" style="width: {{ summary_extras.hit_widths.trend }}%"></span>
-        </dd>
-        {% endif %}
-      </div>
-      <div class="summary-card">
-        <dt class="summary-label">{{ t("summary.open") }}</dt>
-        <dd class="summary-value">{{ summary.future }}</dd>
-        {% if summary_extras.next_kickoff %}<dd class="summary-sub numeric">{{ t("summary.next_kickoff") }}: {{ summary_extras.next_kickoff }}</dd>{% endif %}
-      </div>
-    </dl>
-  </section>
 </section>
 
-<section class="table-section" aria-labelledby="future-title">
-  <header class="section-heading">
-    <section class="section-heading-copy">
+<section class="section" aria-labelledby="summary-title">
+  <h2 id="summary-title" class="visually-hidden">{{ t("summary.title") }}</h2>
+  <dl class="summary">
+    <div class="summary__card">
+      <dt class="summary__label">{{ t("summary.srf_points") }}</dt>
+      <dd class="summary__value">{{ summary.srf_points_display }}</dd>
+      {% if summary_extras.srf_avg_text %}<dd class="summary__sub numeric">{{ summary_extras.srf_avg_text }}</dd>{% endif %}
+    </div>
+    <div class="summary__card">
+      <dt class="summary__label">{{ t("summary.twenty_min_points") }}</dt>
+      <dd class="summary__value">{{ summary.twenty_min_points_display }}</dd>
+      {% if summary_extras.twenty_min_avg_text %}<dd class="summary__sub numeric">{{ summary_extras.twenty_min_avg_text }}</dd>{% endif %}
+    </div>
+    <div class="summary__card">
+      <dt class="summary__label">{{ t("summary.hit_rate") }}</dt>
+      <dd class="summary__value">{{ summary_extras.hit_rate_text }}</dd>
+      {% if summary_extras.has_hits %}
+      <dd class="summary__sub numeric">{{ summary_extras.hit_breakdown_text }}</dd>
+      <dd class="summary__hitbar" aria-hidden="true">
+        <span class="summary__hitbar-fill" data-result="exact" style="width: {{ summary_extras.hit_widths.exact }}%"></span>
+        <span class="summary__hitbar-fill" data-result="trend" style="width: {{ summary_extras.hit_widths.trend }}%"></span>
+      </dd>
+      {% endif %}
+    </div>
+    <div class="summary__card">
+      <dt class="summary__label">{{ t("summary.open") }}</dt>
+      <dd class="summary__value">{{ summary.future }}</dd>
+      {% if summary_extras.next_kickoff %}<dd class="summary__sub numeric">{{ t("summary.next_kickoff") }}: {{ summary_extras.next_kickoff }}</dd>{% endif %}
+    </div>
+  </dl>
+</section>
+
+<section class="section" aria-labelledby="future-title">
+  <header class="section__heading">
+    <section class="section__heading-copy">
       <h2 id="future-title">{{ t("section.future.title") }}</h2>
       <p>{{ t("section.future.description") }}</p>
     </section>
@@ -67,14 +68,14 @@
   {% else %}
     <p class="empty">{{ t("empty.future") }}</p>
   {% endif %}
-  <p class="section-actions">
+  <p class="section__actions">
     <a class="content-link" href="{{ future_list_path }}">{{ t("section.future.all") }}</a>
   </p>
 </section>
 
-<section class="table-section" aria-labelledby="past-title">
-  <header class="section-heading">
-    <section class="section-heading-copy">
+<section class="section" aria-labelledby="past-title">
+  <header class="section__heading">
+    <section class="section__heading-copy">
       <h2 id="past-title">{{ t("section.tipped.title") }}</h2>
       <p>{{ t("section.tipped.description") }}</p>
     </section>
@@ -85,21 +86,21 @@
   {% else %}
     <p class="empty">{{ t("empty.tipped") }}</p>
   {% endif %}
-  <p class="section-actions">
+  <p class="section__actions">
     <a class="content-link" href="{{ past_list_path }}">{{ t("section.tipped.all") }}</a>
   </p>
 </section>
 
 {% if champion %}
-<section class="table-section" aria-labelledby="champion-title">
-  <header class="section-heading">
-    <section class="section-heading-copy">
+<section class="section" aria-labelledby="champion-title">
+  <header class="section__heading">
+    <section class="section__heading-copy">
       <h2 id="champion-title">{{ t("tournament.title") }}</h2>
       <p>{{ champion.source_text }}</p>
     </section>
   </header>
   {{ champion_bars(champion.preview_entries) }}
-  <p class="section-actions">
+  <p class="section__actions">
     <a class="content-link" href="{{ tournament_path }}">{{ t("tournament.all") }}</a>
   </p>
 </section>

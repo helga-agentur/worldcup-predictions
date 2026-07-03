@@ -2,17 +2,17 @@
   <a class="brand" href="/{{ locale }}/" aria-label="{{ t('site.heading') }}">
     {% include "partials/logo.html" %}
   </a>
-  <nav aria-label="{{ t('nav.main') }}">
+  <nav class="site-header__nav" aria-label="{{ t('nav.main') }}">
     <label class="theme-switch">
-      <span class="theme-switch-label">{{ t("theme.label") }}</span>
-      <input class="theme-switch-input" type="checkbox" data-theme-toggle aria-label="{{ t('theme.toggle') }}">
-      <span class="theme-switch-track" aria-hidden="true">
-        <span class="theme-switch-thumb"></span>
+      <span class="theme-switch__label">{{ t("theme.label") }}</span>
+      <input class="theme-switch__input" type="checkbox" data-theme-toggle aria-label="{{ t('theme.toggle') }}">
+      <span class="theme-switch__track" aria-hidden="true">
+        <span class="theme-switch__thumb"></span>
       </span>
     </label>
     <div class="language-switch" aria-label="{{ t('nav.language') }}">
       {% for item in language_switch_links %}
-      <a href="{{ item.href }}" lang="{{ item.locale }}" data-analytics-event="helga_language_switch" data-analytics-language="{{ item.locale }}"{% if item.current %} aria-current="true"{% endif %}>{{ item.label }}</a>
+      <a class="language-switch__link" href="{{ item.href }}" lang="{{ item.locale }}" data-analytics-event="helga_language_switch" data-analytics-language="{{ item.locale }}"{% if item.current %} aria-current="true"{% endif %}>{{ item.label }}</a>
       {% endfor %}
     </div>
   </nav>

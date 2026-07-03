@@ -3,12 +3,12 @@
 
 {% block content %}
 <nav class="breadcrumb" aria-label="Breadcrumb">
-  <a href="/{{ locale }}/">{{ t("nav.predictions") }}</a>
+  <a class="breadcrumb__link" href="/{{ locale }}/">{{ t("nav.predictions") }}</a>
   <span aria-hidden="true">/</span>
-  <a href="{{ current_url }}" aria-current="page">{{ page_title }}</a>
+  <a class="breadcrumb__link" href="{{ current_url }}" aria-current="page">{{ page_title }}</a>
 </nav>
 
-<section class="intro intro-compact" aria-labelledby="page-title">
+<section class="section" aria-labelledby="page-title">
   {{ page_intro(
     "page-title",
     page_title,
@@ -17,7 +17,7 @@
   ) }}
 </section>
 
-<section class="table-section table-section-primary" aria-label="{{ page_title }}">
+<section class="section" aria-label="{{ page_title }}">
   {% if rows_to_show %}
     {% if list_kind == "future" %}
       {% include "partials/match_cards.html" %}

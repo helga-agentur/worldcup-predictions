@@ -8,29 +8,29 @@
 
 {% block content %}
 <nav class="breadcrumb" aria-label="Breadcrumb">
-  <a href="/{{ locale }}/">{{ t("nav.predictions") }}</a>
+  <a class="breadcrumb__link" href="/{{ locale }}/">{{ t("nav.predictions") }}</a>
   <span aria-hidden="true">/</span>
-  <a href="{{ row.detail_path }}/" aria-current="page">{{ match_name(row, "match-name match-name-breadcrumb") }}</a>
+  <a class="breadcrumb__link" href="{{ row.detail_path }}/" aria-current="page">{{ match_name(row) }}</a>
 </nav>
 
 <article class="match-detail" aria-labelledby="match-title">
   <header class="detail-hero">
-    <div class="detail-hero-main">
-      <p class="kicker">
+    <div class="detail-hero__main">
+      <p class="detail-hero__kicker">
         {{ t("site.kicker") }}{% if row.stage_label %} · {{ row.stage_label }}{% endif %}
         · <time datetime="{{ row.event_date }}">{{ row.kickoff_display }}</time>
       </p>
-      <h1 id="match-title" class="detail-title">
-        {% if row.home_flag %}<span class="detail-flag" aria-hidden="true">{{ row.home_flag }}</span>{% endif %}
+      <h1 id="match-title" class="detail-hero__title">
+        {% if row.home_flag %}<span class="detail-hero__flag" aria-hidden="true">{{ row.home_flag }}</span>{% endif %}
         {{ row.home_team_label }} – {{ row.away_team_label }}
-        {% if row.away_flag %}<span class="detail-flag" aria-hidden="true">{{ row.away_flag }}</span>{% endif %}
+        {% if row.away_flag %}<span class="detail-hero__flag" aria-hidden="true">{{ row.away_flag }}</span>{% endif %}
       </h1>
       {{ prob_bar(row, full=True) }}
       {% if row.explain_text %}
-      <p class="detail-explain">{{ row.explain_text }}</p>
+      <p class="detail-hero__explain">{{ row.explain_text }}</p>
       {% endif %}
-      <p class="detail-tags">
-        <span class="status status-{{ row.status }}">{{ row.status_label }}</span>
+      <p class="detail-hero__tags">
+        <span class="status" data-status="{{ row.status }}">{{ row.status_label }}</span>
         {% if row.expected_score_display and "-" not in row.expected_score_display %}
         <span class="tag numeric" title="{{ t('label.expected_goals') }}">xG {{ row.expected_score_display }}</span>
         {% endif %}
@@ -42,57 +42,57 @@
     <aside class="verdict" aria-labelledby="verdict-title">
       <h2 id="verdict-title" class="visually-hidden">{{ t("detail.overview") }}</h2>
       {% if row.status == "final" and row.actual_score %}
-      <span class="verdict-label">{{ t("label.result") }}</span>
-      <span class="verdict-score numeric">{{ row.actual_score }}</span>
-      {% if row.hit_label %}<span class="hit-chip hit-{{ row.hit_result }}">{{ row.hit_label }}</span>{% endif %}
-      <span class="verdict-row">
-        <span class="verdict-prov">{{ t("table.srf_tip") }}</span>
+      <span class="verdict__label">{{ t("label.result") }}</span>
+      <span class="verdict__score numeric">{{ row.actual_score }}</span>
+      {% if row.hit_label %}<span class="hit-chip" data-result="{{ row.hit_result }}">{{ row.hit_label }}</span>{% endif %}
+      <span class="verdict__row">
+        <span class="verdict__provider">{{ t("table.srf_tip") }}</span>
         <span>{{ row.srf_tip_label or "-" }}</span>
-        {% if row.srf_account_display %}<span class="verdict-ep numeric">{{ t("chip.points", value="+" ~ row.srf_match_points|float_text(precision=0)) }}</span>{% endif %}
+        {% if row.srf_account_display %}<span class="verdict__points numeric">{{ t("chip.points", value="+" ~ row.srf_match_points|float_text(precision=0)) }}</span>{% endif %}
       </span>
-      <span class="verdict-row">
-        <span class="verdict-prov">{{ t("table.twenty_min_tip") }}</span>
+      <span class="verdict__row">
+        <span class="verdict__provider">{{ t("table.twenty_min_tip") }}</span>
         <span>{{ row.twenty_min_tip_label or "-" }}</span>
-        {% if row.twenty_min_account_display %}<span class="verdict-ep numeric">{{ t("chip.points", value="+" ~ row.twenty_min_match_points|float_text(precision=0)) }}</span>{% endif %}
+        {% if row.twenty_min_account_display %}<span class="verdict__points numeric">{{ t("chip.points", value="+" ~ row.twenty_min_match_points|float_text(precision=0)) }}</span>{% endif %}
       </span>
       {% elif row.srf_tip_label %}
-      <span class="verdict-label">{{ t("table.srf_tip") }}</span>
-      <span class="verdict-score numeric">{{ row.srf_tip_label }}</span>
+      <span class="verdict__label">{{ t("table.srf_tip") }}</span>
+      <span class="verdict__score numeric">{{ row.srf_tip_label }}</span>
       {% if row.srf_expected_points_display %}
-      <span class="verdict-ep">{{ t("label.expected_points") }}: <strong class="numeric">{{ row.srf_expected_points_display }}</strong></span>
+      <span class="verdict__points">{{ t("label.expected_points") }}: <strong class="numeric">{{ row.srf_expected_points_display }}</strong></span>
       {% endif %}
-      <span class="verdict-row">
-        <span class="verdict-prov">{{ t("table.twenty_min_tip") }}</span>
+      <span class="verdict__row">
+        <span class="verdict__provider">{{ t("table.twenty_min_tip") }}</span>
         <span>{{ row.twenty_min_tip_label or "-" }}</span>
         {% if row.twenty_min_expected_points_display %}
-        <span class="verdict-ep numeric" title="{{ t('label.expected_points') }}">{{ t("chip.points", value=row.twenty_min_expected_points_display) }}</span>
+        <span class="verdict__points numeric" title="{{ t('label.expected_points') }}">{{ t("chip.points", value=row.twenty_min_expected_points_display) }}</span>
         {% endif %}
       </span>
       {% if row.advancement %}
-      <span class="verdict-row">
-        <span class="verdict-prov">{{ t("detail.advancement") }}</span>
+      <span class="verdict__row">
+        <span class="verdict__provider">{{ t("detail.advancement") }}</span>
         <span>{% if row.advancement.flag %}<span aria-hidden="true">{{ row.advancement.flag }}</span> {% endif %}{{ row.advancement.team_label }}</span>
-        <span class="verdict-ep numeric">{{ row.advancement.percent_text }}</span>
+        <span class="verdict__points numeric">{{ row.advancement.percent_text }}</span>
       </span>
       {% endif %}
       {% else %}
-      <span class="verdict-label">{{ t("label.status") }}</span>
-      <span class="verdict-score verdict-score-text">{{ row.status_label }}</span>
-      <span class="verdict-ep">{{ t("card.no_prediction") }}</span>
+      <span class="verdict__label">{{ t("label.status") }}</span>
+      <span class="verdict__score" data-size="text">{{ row.status_label }}</span>
+      <span class="verdict__points">{{ t("card.no_prediction") }}</span>
       {% endif %}
     </aside>
   </header>
 
-  <section class="detail-section" aria-labelledby="matrix-title">
+  <section class="section" aria-labelledby="matrix-title">
     <h2 id="matrix-title">{{ t("detail.matrix_title") }}</h2>
     {% if row.heatmap %}
-    <div class="heatmap-layout">
-      <div class="heatmap-scroll">
-        <table class="heatmap-table">
+    <div class="heatmap">
+      <div class="heatmap__scroll">
+        <table class="heatmap__table">
           <caption class="visually-hidden">{{ row.heatmap.axis_text }}</caption>
           <thead>
             <tr>
-              <th scope="col" class="heatmap-corner"><span aria-hidden="true">{{ row.home_flag }}</span>\<span aria-hidden="true">{{ row.away_flag }}</span></th>
+              <th scope="col" class="heatmap__corner"><span aria-hidden="true">{{ row.home_flag }}</span>\<span aria-hidden="true">{{ row.away_flag }}</span></th>
               {% for column in row.heatmap.columns %}
               <th scope="col" class="numeric">{{ column }}</th>
               {% endfor %}
@@ -103,7 +103,7 @@
             <tr>
               <th scope="row" class="numeric">{{ matrix_row.home }}</th>
               {% for cell in matrix_row.cells %}
-              <td class="heatmap-cell{% if cell.hot %} heatmap-cell-hot{% endif %}{% if cell.most_likely %} heatmap-cell-ml{% endif %}{% if cell.actual %} heatmap-cell-actual{% endif %}"
+              <td class="heatmap__cell"{% if cell.hot %} data-hot="true"{% endif %}{% if cell.most_likely %} data-most-likely="true"{% endif %}{% if cell.actual %} data-actual="true"{% endif %}
                   style="--heat: {{ cell.weight }}%" title="{{ cell.title }}">{{ cell.label }}</td>
               {% endfor %}
             </tr>
@@ -111,11 +111,11 @@
           </tbody>
         </table>
       </div>
-      <div class="heatmap-side">
-        <p class="heatmap-axis">{{ row.heatmap.axis_text }}</p>
-        <p class="heatmap-scale" aria-hidden="true"><span>0%</span><span class="heatmap-swatch"></span><span class="numeric">{{ row.most_likely_percent_text }}</span></p>
+      <div class="heatmap__side">
+        <p class="heatmap__axis">{{ row.heatmap.axis_text }}</p>
+        <p class="heatmap__scale" aria-hidden="true"><span>0%</span><span class="heatmap__swatch"></span><span class="numeric">{{ row.most_likely_percent_text }}</span></p>
         {% for note in row.heatmap.legend %}
-        <p class="heatmap-note">{{ note }}</p>
+        <p class="heatmap__note">{{ note }}</p>
         {% endfor %}
       </div>
     </div>
@@ -124,7 +124,7 @@
     {% endif %}
   </section>
 
-  <footer class="detail-actions">
+  <footer class="match-detail__actions">
     <a class="content-link" href="/{{ locale }}/">{{ t("detail.back") }}</a>
   </footer>
 </article>
