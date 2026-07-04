@@ -17,8 +17,10 @@ from worldcup_predictions.core.constants import (
     SRF_EXPERT_URLS,
 )
 from worldcup_predictions.core.contracts import Diagnostic, ScoreTip, Signal, parse_utc_datetime
+from worldcup_predictions.core.datasets import EXTRACTION_DIAGNOSTICS
 from worldcup_predictions.core.datasets import SRF_EXPERT_PREDICTIONS as SRF_EXPERT_PREDICTIONS_DATASET
 from worldcup_predictions.core.datasets import SRF_EXPERT_PERFORMANCE
+from worldcup_predictions.core.extraction import extraction_diagnostic_row
 from worldcup_predictions.core.events import EventName, event_value
 from worldcup_predictions.core.metadata import PluginKind, PluginMetadata, QuotaPolicy
 from worldcup_predictions.core.plugin import BasePlugin, PluginResult
@@ -27,6 +29,11 @@ from worldcup_predictions.plugins.source_runtime import SourceRuntime
 from worldcup_predictions.storage.ledger import SourceRequest, normalize_datetime, stable_hash, utc_now
 from worldcup_predictions.plugins.provider_optimizers.ch_srf.rules import srf_rules_for_fixture
 from worldcup_predictions.tournament.contracts import FixtureRecord
+
+
+# SRF hides tips until each match's countdown expires, so zero-pick pages are
+# expected pregame; re-probe them slowly instead of every expert_refresh cycle.
+ZERO_PICK_REFETCH_BACKOFF = dt.timedelta(hours=6)
 
 
 class SrfExpertsPlugin(BasePlugin):
@@ -41,12 +48,12 @@ class SrfExpertsPlugin(BasePlugin):
         kind=PluginKind.SOURCE,
         description="Fetch SRF public expert pages and emit conservative expert consensus signals.",
         datasets_read=(SRF_EXPERT_PREDICTIONS_DATASET,),
-        datasets_written=(SRF_EXPERT_PREDICTIONS_DATASET, SRF_EXPERT_PERFORMANCE),
+        datasets_written=(SRF_EXPERT_PREDICTIONS_DATASET, SRF_EXPERT_PERFORMANCE, EXTRACTION_DIAGNOSTICS),
         signals_emitted=(EXPERT_HDA_PROBABILITIES,),
         quota_policy=QuotaPolicy(
             quota_limited=False,
             ledger_required=True,
-            description="Public expert pages are refetched at most every 15 minutes while fixtures are open.",
+            description="Public expert pages are refetched at most every 15 minutes while fixtures are open; pages without extractable picks back off for six hours because SRF hides tips until kickoff.",
         ),
         confidence_policy="Expert consensus confidence rises with extracted expert count and is capped below market weight.",
     )
@@ -115,18 +122,36 @@ class SrfExpertsPlugin(BasePlugin):
                 ],
             )
         rows = parse_srf_expert_rows(html, expert_id=expert_id, expert_url=url, fixtures=fixtures)
+        # SRF hides everyone's tips until each match's countdown expires, so
+        # pregame expert pages usually contain no picks at all. A zero-pick
+        # page is re-probed on a slow cadence instead of every quarter hour,
+        # and the miss is recorded as a structured extraction diagnostic.
         runtime.record_success(
             request,
             message="Fetched SRF expert page.",
             metadata={"rows": len(rows)},
+            next_safe_fetch_at=None if rows else normalize_datetime(utc_now() + ZERO_PICK_REFETCH_BACKOFF),
         )
         count = runtime.write_records(SRF_EXPERT_PREDICTIONS_DATASET, rows)
         diagnostics = []
         if not rows:
+            runtime.write_records(
+                EXTRACTION_DIAGNOSTICS,
+                [
+                    extraction_diagnostic_row(
+                        source=SOURCE_SRF_EXPERTS,
+                        extractor="parse_srf_expert_rows",
+                        status="rejected",
+                        reason="no_expert_picks_on_page",
+                        source_url=url,
+                        metadata={"expert": expert_id, "open_fixtures": len(fixtures)},
+                    )
+                ],
+            )
             diagnostics.append(
                 runtime.diagnostic(
                     level="info",
-                    message="No SRF expert predictions were extracted from page.",
+                    message="No SRF expert predictions were extracted; SRF hides tips until kickoff.",
                     metadata={"expert": expert_id},
                 )
             )

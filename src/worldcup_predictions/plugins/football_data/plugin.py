@@ -268,11 +268,18 @@ class FootballDataPlugin(BasePlugin):
         if not api_key:
             return runtime.result()
         state = runtime.tournament_state()
-        candidates = [
-            fixture
-            for fixture in [*state.open_fixtures(), *_recent_finished_fixtures(state)]
-            if fixture.source_id
-        ]
+        # Reconciled fixtures can carry another source's match id (FIFA ids were
+        # sent to the v4 matches endpoint and answered HTTP 400 forever), so
+        # details are fetched only with ids from this plugin's own fixture rows.
+        own_match_ids = self._own_match_ids(runtime)
+        candidates = []
+        unmapped = 0
+        for fixture in [*state.open_fixtures(), *_recent_finished_fixtures(state)]:
+            match_id = own_match_ids.get(fixture.key)
+            if match_id:
+                candidates.append((fixture, match_id))
+            else:
+                unmapped += 1
         # Open fixtures (kickoff-ordered) come first, and each detail fetch is
         # ledger-gated so already-fresh fixtures cost no quota; this per-run cap only
         # bounds bursts against the rate-limited free tier. Raised from 12 so a busy
@@ -280,13 +287,13 @@ class FootballDataPlugin(BasePlugin):
         fetch_limit = 16
         written = 0
         diagnostics: list[Diagnostic] = []
-        for fixture in candidates[:fetch_limit]:
-            endpoint = f"https://api.football-data.org/v4/matches/{fixture.source_id}"
+        for fixture, match_id in candidates[:fetch_limit]:
+            endpoint = f"https://api.football-data.org/v4/matches/{match_id}"
             request = SourceRequest(
                 source=SOURCE_FOOTBALL_DATA,
                 endpoint=endpoint,
                 purpose="world_cup_match_detail",
-                params={"match_id": fixture.source_id},
+                params={"match_id": match_id},
                 fixture_key=fixture.key,
                 quota_cost=1,
                 min_refresh_interval=dt.timedelta(minutes=runtime.context.config.source_defaults.default_refresh_minutes),
@@ -305,7 +312,18 @@ class FootballDataPlugin(BasePlugin):
             count = runtime.write_records(FOOTBALL_DATA_MATCH_DETAILS, rows)
             runtime.record_success(request, message="Fetched football-data.org match detail.", metadata={"rows": count}, quota_remaining=quota_remaining(headers))
             written += count
-        return runtime.result(diagnostics=diagnostics, metadata={"match_details": written})
+        return runtime.result(diagnostics=diagnostics, metadata={"match_details": written, "unmapped_fixtures": unmapped})
+
+    def _own_match_ids(self, runtime: SourceRuntime) -> dict[str, str]:
+        """Map fixture keys to football-data.org match ids from this plugin's rows."""
+
+        match_ids: dict[str, str] = {}
+        for row in runtime.storage.read_records(TOURNAMENT_FIXTURES, source=self.id, latest_only=True):
+            fixture_key = str(row.get("fixture_key") or row.get("record_key") or "")
+            source_id = str(row.get("source_id") or "")
+            if fixture_key and source_id:
+                match_ids[fixture_key] = source_id
+        return match_ids
 
 
 def parse_football_data_matches(payload: dict[str, Any]) -> tuple[list[FixtureRecord], list[ResultRecord]]:

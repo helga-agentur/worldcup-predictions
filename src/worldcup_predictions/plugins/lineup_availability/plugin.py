@@ -44,7 +44,9 @@ class LineupAvailabilityPlugin(BasePlugin):
 
     id = "lineup_availability"
     version = "0.1.0"
-    priority = 280
+    # Runs before public_analysis (270) so prediction-impacting lineup queries
+    # spend the shared NewsAPI daily quota before postgame article backfill.
+    priority = 265
     subscribed_events = (EventName.FEATURE_SIGNALS_REQUESTED.value,)
     metadata = PluginMetadata(
         plugin_id=id,

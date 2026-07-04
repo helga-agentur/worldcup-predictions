@@ -429,6 +429,55 @@ class StorageTest(unittest.TestCase):
             self.assertEqual(summary["calls_avoided"], 1)
             self.assertEqual(summary["quota_cost_avoided"], 1)
 
+    def test_rate_limited_error_without_retry_after_backs_off_and_opens_run_circuit(self) -> None:
+        import urllib.error
+
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            context = WorkflowContext(project_root=Path(tmp), data_root=Path(tmp) / "data", storage=storage, run_id="run-a")
+            runtime = SourceRuntime(BasePlugin(), EventName.FIXTURES_REQUESTED, context)
+            request = SourceRequest(source="news_api", endpoint="/v2/everything", purpose="pregame", params={"q": "a"})
+
+            error = urllib.error.HTTPError("/v2/everything", 429, "Too Many Requests", None, None)
+            runtime.record_error(request, error)
+
+            rows = storage.read_source_ledger(run_id="run-a")
+            self.assertEqual(rows[0]["status"], "rate_limited")
+            next_safe = dt.datetime.fromisoformat(str(rows[0]["next_safe_fetch_at"]).replace("Z", "+00:00"))
+            hours_out = (next_safe - dt.datetime.now(dt.timezone.utc)).total_seconds() / 3600
+            self.assertGreater(hours_out, 5.5)
+            self.assertLess(hours_out, 6.5)
+            self.assertFalse(storage.should_fetch(request).should_fetch)
+
+            other_key_same_source = SourceRequest(source="news_api", endpoint="/v2/everything", purpose="pregame", params={"q": "b"})
+            decision = runtime.should_fetch(other_key_same_source)
+            self.assertFalse(decision.should_fetch)
+            self.assertEqual(decision.reason, "rate_limited_this_run")
+
+            other_source = SourceRequest(source="open_meteo", endpoint="/v1/forecast", purpose="weather", params={"q": "b"})
+            self.assertTrue(runtime.should_fetch(other_source).should_fetch)
+
+    def test_client_error_codes_back_off_broken_request_keys(self) -> None:
+        import urllib.error
+
+        expectations = {400: (20.0, 28.0), 403: (5.5, 6.5), 404: (20.0, 28.0)}
+        for code, (low, high) in expectations.items():
+            with tempfile.TemporaryDirectory() as tmp:
+                storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+                context = WorkflowContext(project_root=Path(tmp), data_root=Path(tmp) / "data", storage=storage, run_id="run-a")
+                runtime = SourceRuntime(BasePlugin(), EventName.FIXTURES_REQUESTED, context)
+                request = SourceRequest(source="espn_scoreboard", endpoint="/scoreboard", purpose="scores", params={"code": code})
+
+                runtime.record_error(request, urllib.error.HTTPError("/scoreboard", code, "blocked", None, None))
+
+                rows = storage.read_source_ledger(run_id="run-a")
+                self.assertEqual(rows[0]["status"], "error")
+                next_safe = dt.datetime.fromisoformat(str(rows[0]["next_safe_fetch_at"]).replace("Z", "+00:00"))
+                hours_out = (next_safe - dt.datetime.now(dt.timezone.utc)).total_seconds() / 3600
+                self.assertGreater(hours_out, low, f"code {code}")
+                self.assertLess(hours_out, high, f"code {code}")
+                self.assertFalse(storage.should_fetch(request).should_fetch)
+
     def test_structured_records_are_append_only_and_latest_reads_reuse_last_available_row(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             storage = DuckDBStorage.at_data_root(Path(tmp) / "data")

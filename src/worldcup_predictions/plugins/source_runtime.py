@@ -11,7 +11,19 @@ from worldcup_predictions.core.events import EventName, event_value
 from worldcup_predictions.core.http import HttpClient
 from worldcup_predictions.core.plugin import BasePlugin, PluginResult
 from worldcup_predictions.plugins.source_utils import load_env_value
-from worldcup_predictions.storage.ledger import SourceLedgerRecord, SourceRequest, normalize_datetime, utc_now
+from worldcup_predictions.storage.ledger import FetchDecision, SourceLedgerRecord, SourceRequest, normalize_datetime, utc_now
+
+
+# Rate limits without a Retry-After header (NewsAPI's daily quota answers 429
+# with no header) previously retried on every half-hourly run; failed request
+# keys with client errors (invalid ids, blocked clients) retried forever.
+RATE_LIMIT_DEFAULT_BACKOFF = dt.timedelta(hours=6)
+CLIENT_ERROR_BACKOFFS = {
+    400: dt.timedelta(hours=24),
+    403: dt.timedelta(hours=6),
+    404: dt.timedelta(hours=24),
+}
+_RATE_LIMITED_SOURCES_STATE_KEY = "_source_runtime_rate_limited_sources"
 from worldcup_predictions.tournament import TournamentState
 from worldcup_predictions.tournament.repository import load_tournament_state
 
@@ -154,7 +166,10 @@ class SourceRuntime:
         return self.storage.read_records(dataset, latest_only=True)
 
     def should_fetch(self, request: SourceRequest):
-        decision = self.storage.should_fetch(request)
+        if request.source in self._rate_limited_sources():
+            decision = FetchDecision(False, "rate_limited_this_run", request.request_key)
+        else:
+            decision = self.storage.should_fetch(request)
         self.context.state["_source_runtime_last_request"] = request
         if not decision.should_fetch:
             self.storage.record_fetch(
@@ -180,6 +195,7 @@ class SourceRuntime:
         message: str | None = None,
         metadata: Mapping[str, Any] | None = None,
         quota_remaining: int | None = None,
+        next_safe_fetch_at: str | None = None,
     ) -> None:
         response_info = self._response_info(request)
         not_modified = bool(response_info.get("not_modified"))
@@ -192,6 +208,7 @@ class SourceRuntime:
                 status=status,
                 run_id=self.context.run_id,
                 quota_remaining=quota_remaining,
+                next_safe_fetch_at=next_safe_fetch_at,
                 message=message or ("Not modified." if not_modified else None),
                 metadata={
                     **dict(metadata or {}),
@@ -211,7 +228,9 @@ class SourceRuntime:
         quota_remaining: int | None = None,
     ) -> None:
         status = _error_status(error)
-        next_safe_fetch_at = _retry_after_next_safe_fetch_at(error) if status == "rate_limited" else None
+        next_safe_fetch_at = _error_next_safe_fetch_at(error, status)
+        if status == "rate_limited":
+            self._rate_limited_sources().add(request.source)
         response_headers = _sanitize_response_headers(getattr(error, "headers", None))
         self.storage.record_fetch(
             SourceLedgerRecord(
@@ -230,6 +249,13 @@ class SourceRuntime:
                 },
             )
         )
+
+    def _rate_limited_sources(self) -> set[str]:
+        sources = self.context.state.get(_RATE_LIMITED_SOURCES_STATE_KEY)
+        if not isinstance(sources, set):
+            sources = set()
+            self.context.state[_RATE_LIMITED_SOURCES_STATE_KEY] = sources
+        return sources
 
     def _matching_request(self, endpoint: str, params: Mapping[str, Any] | None) -> SourceRequest | None:
         request = self.context.state.get("_source_runtime_last_request")
@@ -298,6 +324,17 @@ def _retry_after_next_safe_fetch_at(error: Exception | str) -> str | None:
     if retry_after is None:
         return None
     return normalize_datetime(utc_now() + dt.timedelta(seconds=max(0, retry_after)))
+
+
+def _error_next_safe_fetch_at(error: Exception | str, status: str) -> str | None:
+    """Backoff for failed request keys so they are not retried every run."""
+
+    if status == "rate_limited":
+        return _retry_after_next_safe_fetch_at(error) or normalize_datetime(utc_now() + RATE_LIMIT_DEFAULT_BACKOFF)
+    backoff = CLIENT_ERROR_BACKOFFS.get(_optional_int(getattr(error, "code", None)) or 0)
+    if backoff is None:
+        return None
+    return normalize_datetime(utc_now() + backoff)
 
 
 def _params_match(request_params: Mapping[str, Any], fetch_params: Mapping[str, Any]) -> bool:
