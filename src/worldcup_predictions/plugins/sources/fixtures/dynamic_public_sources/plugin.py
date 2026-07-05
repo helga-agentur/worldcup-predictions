@@ -41,6 +41,7 @@ from worldcup_predictions.plugins.sources.fixtures.dynamic_public_sources.reputa
 from worldcup_predictions.plugins.sources.fixtures.dynamic_public_sources.seeds import (
     domain_from_url,
     dynamic_public_seeds,
+    dynamic_public_seeds_for_run,
     split_url_params,
 )
 from worldcup_predictions.plugins.sources.fixtures.public_score_sources.plugin import public_page_analysis_rows, robots_allows
@@ -102,8 +103,10 @@ class DynamicPublicSourcesPlugin(BasePlugin):
         robots_cache: dict[str, tuple[bool, str]] = {}
         seen_urls: set[str] = set()
         collected = PageExtractionResult()
+        registered_seed_count = len(dynamic_public_seeds(state))
+        run_seeds = dynamic_public_seeds_for_run(state)
 
-        for seed in dynamic_public_seeds(state):
+        for seed in run_seeds:
             seed_result = self._fetch_and_extract(
                 runtime,
                 state,
@@ -174,6 +177,8 @@ class DynamicPublicSourcesPlugin(BasePlugin):
                 "analysis_rows": analysis_count,
                 "extraction_rows": extraction_count,
                 "promoted_results": result_count,
+                "registered_seed_count": registered_seed_count,
+                "run_seed_count": len(run_seeds),
                 "scrapy_selector_available": scrapy_selector_available(),
             },
         )
@@ -200,29 +205,6 @@ class DynamicPublicSourcesPlugin(BasePlugin):
         source = f"{SOURCE_DYNAMIC_PUBLIC}:{domain}"
         result = PageExtractionResult()
 
-        allowed, robots_message = robots_allows(runtime, endpoint, cache=robots_cache)
-        if not allowed:
-            result.page_rows.append(_page_row(url=url, domain=domain, status="robots_disallowed", metadata={"robots": robots_message}))
-            result.diagnostics.append(
-                runtime.diagnostic(
-                    "info",
-                    "Dynamic public page skipped because robots.txt does not allow or could not confirm this path.",
-                    metadata={"url": url, "robots": robots_message},
-                )
-            )
-            result.extraction_rows.append(
-                extraction_diagnostic_row(
-                    source=SOURCE_DYNAMIC_PUBLIC,
-                    extractor="dynamic_public_fetch_v1",
-                    status="rejected",
-                    reason="robots_disallowed_or_unconfirmed",
-                    source_name=label,
-                    source_url=url,
-                    metadata={"domain": domain, "robots": robots_message},
-                )
-            )
-            return result
-
         request = SourceRequest(
             source=source,
             endpoint=endpoint,
@@ -244,6 +226,34 @@ class DynamicPublicSourcesPlugin(BasePlugin):
                 )
             )
             result.diagnostics.extend(runtime.skipped_fetch_result(label or url, decision.reason, metadata=decision.metadata).diagnostics)
+            return result
+
+        allowed, robots_message = robots_allows(runtime, endpoint, cache=robots_cache)
+        if not allowed:
+            runtime.record_success(
+                request,
+                message="Dynamic public page skipped because robots.txt disallowed or could not confirm it.",
+                metadata={"url": url, "robots_allowed": False, "robots": robots_message},
+            )
+            result.page_rows.append(_page_row(url=url, domain=domain, status="robots_disallowed", metadata={"robots": robots_message}))
+            result.diagnostics.append(
+                runtime.diagnostic(
+                    "info",
+                    "Dynamic public page skipped because robots.txt does not allow or could not confirm this path.",
+                    metadata={"url": url, "robots": robots_message},
+                )
+            )
+            result.extraction_rows.append(
+                extraction_diagnostic_row(
+                    source=SOURCE_DYNAMIC_PUBLIC,
+                    extractor="dynamic_public_fetch_v1",
+                    status="rejected",
+                    reason="robots_disallowed_or_unconfirmed",
+                    source_name=label,
+                    source_url=url,
+                    metadata={"domain": domain, "robots": robots_message},
+                )
+            )
             return result
 
         try:

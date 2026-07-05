@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import unittest
 
 from worldcup_predictions.core.contracts import ScoreTip
@@ -11,6 +12,12 @@ from worldcup_predictions.plugins.sources.fixtures.dynamic_public_sources.consen
 )
 from worldcup_predictions.plugins.sources.fixtures.dynamic_public_sources.extractors import extract_claims_from_page
 from worldcup_predictions.plugins.sources.fixtures.dynamic_public_sources.reputation import build_reputation_rows
+from worldcup_predictions.plugins.sources.fixtures.dynamic_public_sources.seeds import (
+    DYNAMIC_PUBLIC_TRUSTED_SOURCE_BATCH_SIZE,
+    dynamic_public_seeds,
+    dynamic_public_seeds_for_run,
+    trusted_public_source_seeds,
+)
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamResolver, build_tournament_state
 
 
@@ -168,6 +175,26 @@ class DynamicPublicSourcesTest(unittest.TestCase):
 
         self.assertEqual(len(links), 1)
         self.assertEqual(links[0].url, "https://www.example.com/football/world-cup/brazil-japan-preview")
+
+    def test_trusted_seed_registry_contains_at_least_100_unique_sources(self) -> None:
+        seeds = trusted_public_source_seeds()
+
+        self.assertGreaterEqual(len(seeds), 100)
+        self.assertEqual(len({seed.url for seed in seeds}), len(seeds))
+        self.assertTrue(all(seed.category != "core" for seed in seeds))
+
+    def test_run_seed_batch_keeps_trusted_sources_bounded(self) -> None:
+        match = fixture()
+        state = build_tournament_state([match], [])
+        all_seeds = dynamic_public_seeds(state)
+        run_seeds = dynamic_public_seeds_for_run(
+            state,
+            now=dt.datetime(2026, 7, 6, 12, tzinfo=dt.UTC),
+        )
+        trusted_run_seeds = [seed for seed in run_seeds if seed.category not in {"core", "scoreboard"}]
+
+        self.assertGreaterEqual(len(all_seeds), 100)
+        self.assertEqual(len(trusted_run_seeds), DYNAMIC_PUBLIC_TRUSTED_SOURCE_BATCH_SIZE)
 
 
 if __name__ == "__main__":

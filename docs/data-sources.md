@@ -56,7 +56,9 @@ These plugins write fixture and result observations. Raw result observations ent
 
 `fifa_match_centre` fetches FIFA's public calendar API for World Cup 2026 (`idCompetition=17`, `idSeason=285023`). It writes official fixture/result evidence plus `fifa_match_details` rows with match number, group/stage, venue, officials, attendance, possession when available, and formations/tactics. The API does not currently expose player-level starting XIs, so formations are used as neutral official lineup context rather than as player availability data.
 
-`dynamic_public_sources` extends the fixed public adapters with bounded public-page discovery. It starts from known public seed pages, fetches only robots-allowed same-domain pages through the source ledger, stores page metadata and content fingerprints, then extracts atomic fixture/result/market claims. Result claims are promoted to `tournament_results` only after the dynamic layer has multi-domain weighted consensus; those promoted rows still pass through the central tournament-state result consensus before they can affect published results, calibration, or provider points.
+`dynamic_public_sources` extends the fixed public adapters with bounded public-page discovery. It starts from known public seed pages plus a curated registry of 100+ official, wire, major-media, specialist, and data-app sources. Core fixture/result pages are checked every run, while the broader trusted registry rotates in batches so half-hourly cron runs do not fetch every source at once. Each selected page is fetched only when the source ledger says it is stale, only after robots.txt allows the path, and with same-domain link discovery capped per seed.
+
+The plugin stores page metadata and content fingerprints, then extracts atomic fixture/result/market claims. Result claims are promoted to `tournament_results` only after the dynamic layer has multi-domain weighted consensus; those promoted rows still pass through the central tournament-state result consensus before they can affect published results, calibration, or provider points.
 
 Writes:
 
