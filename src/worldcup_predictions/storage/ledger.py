@@ -58,6 +58,8 @@ class SourceRequest:
     quota_cost: int = 1
     min_refresh_interval: dt.timedelta | None = None
     quota_remaining_floor: int = 0
+    quota_scope: str | None = None
+    rate_limit_backoff: dt.timedelta | None = None
 
     @property
     def request_key(self) -> str:

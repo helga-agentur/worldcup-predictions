@@ -137,6 +137,8 @@ class MarketOddsPlugin(BasePlugin):
             quota_cost=1,
             min_refresh_interval=dt.timedelta(minutes=30),
             quota_remaining_floor=runtime.context.config.source_defaults.odds_quota_remaining_floor,
+            quota_scope=SOURCE_THE_ODDS_API,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:
@@ -157,9 +159,9 @@ class MarketOddsPlugin(BasePlugin):
             message = exc.read().decode("utf-8", errors="replace")[:500]
             runtime.record_error(
                 request,
-                f"HTTP {exc.code}: {message}",
+                exc,
                 quota_remaining=_optional_int(exc.headers.get("x-requests-remaining")),
-                metadata={"reason": exc.reason},
+                metadata={"reason": exc.reason, "response_body": message},
             )
             return runtime.result(
                 diagnostics=[
@@ -243,6 +245,8 @@ class MarketOddsPlugin(BasePlugin):
                 quota_cost=len([market for market in THE_ODDS_API_EVENT_MARKETS.split(",") if market]),
                 min_refresh_interval=dt.timedelta(minutes=30),
                 quota_remaining_floor=runtime.context.config.source_defaults.odds_quota_remaining_floor,
+                quota_scope=SOURCE_THE_ODDS_API,
+                rate_limit_backoff=dt.timedelta(hours=6),
             )
             decision = runtime.should_fetch(request)
             if not decision.should_fetch:
@@ -270,9 +274,9 @@ class MarketOddsPlugin(BasePlugin):
                 message = exc.read().decode("utf-8", errors="replace")[:500]
                 runtime.record_error(
                     request,
-                    f"HTTP {exc.code}: {message}",
+                    exc,
                     quota_remaining=_optional_int(exc.headers.get("x-requests-remaining")),
-                    metadata={"reason": exc.reason},
+                    metadata={"reason": exc.reason, "response_body": message},
                 )
                 diagnostics.append(
                     runtime.diagnostic(
@@ -323,6 +327,8 @@ class MarketOddsPlugin(BasePlugin):
             quota_cost=1,
             min_refresh_interval=dt.timedelta(hours=6),
             quota_remaining_floor=runtime.context.config.source_defaults.odds_quota_remaining_floor,
+            quota_scope=SOURCE_THE_ODDS_API,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:
@@ -354,6 +360,8 @@ class MarketOddsPlugin(BasePlugin):
             quota_cost=1,
             min_refresh_interval=dt.timedelta(hours=12),
             quota_remaining_floor=runtime.context.config.source_defaults.odds_quota_remaining_floor,
+            quota_scope=SOURCE_THE_ODDS_API,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(sports_request)
         diagnostics: list[Diagnostic] = []
@@ -391,6 +399,8 @@ class MarketOddsPlugin(BasePlugin):
                 quota_cost=1,
                 min_refresh_interval=dt.timedelta(hours=6),
                 quota_remaining_floor=runtime.context.config.source_defaults.odds_quota_remaining_floor,
+                quota_scope=SOURCE_THE_ODDS_API,
+                rate_limit_backoff=dt.timedelta(hours=6),
             )
             outright_decision = runtime.should_fetch(request)
             if not outright_decision.should_fetch:

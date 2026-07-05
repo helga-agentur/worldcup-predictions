@@ -141,6 +141,8 @@ class LineupAvailabilityPlugin(BasePlugin):
             quota_cost=1,
             min_refresh_interval=dt.timedelta(minutes=runtime.context.config.source_defaults.default_refresh_minutes),
             quota_remaining_floor=runtime.context.config.source_defaults.news_quota_remaining_floor,
+            quota_scope=SOURCE_NEWS_API,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:
@@ -149,7 +151,7 @@ class LineupAvailabilityPlugin(BasePlugin):
             articles, _headers = fetch_news_api(
                 query=query,
                 page_size=NEWS_API_DEFAULT_PAGE_SIZE,
-                http_client=runtime.http_client(),
+                fetcher=runtime.fetch_json,
             )
         except (OSError, TimeoutError, urllib.error.HTTPError, json.JSONDecodeError) as exc:
             runtime.record_error(request, exc)

@@ -154,6 +154,8 @@ class FootballDataPlugin(BasePlugin):
             params={},
             quota_cost=1,
             min_refresh_interval=dt.timedelta(days=1),
+            quota_scope=SOURCE_FOOTBALL_DATA,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:
@@ -180,6 +182,8 @@ class FootballDataPlugin(BasePlugin):
             params={"season": 2026},
             quota_cost=1,
             min_refresh_interval=dt.timedelta(minutes=runtime.context.config.source_defaults.default_refresh_minutes),
+            quota_scope=SOURCE_FOOTBALL_DATA,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:
@@ -216,6 +220,8 @@ class FootballDataPlugin(BasePlugin):
             params={"season": 2026},
             quota_cost=1,
             min_refresh_interval=dt.timedelta(minutes=runtime.context.config.source_defaults.default_refresh_minutes),
+            quota_scope=SOURCE_FOOTBALL_DATA,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:
@@ -249,6 +255,8 @@ class FootballDataPlugin(BasePlugin):
             params={"season": 2026},
             quota_cost=1,
             min_refresh_interval=dt.timedelta(minutes=runtime.context.config.source_defaults.default_refresh_minutes),
+            quota_scope=SOURCE_FOOTBALL_DATA,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:
@@ -297,6 +305,8 @@ class FootballDataPlugin(BasePlugin):
                 fixture_key=fixture.key,
                 quota_cost=1,
                 min_refresh_interval=dt.timedelta(minutes=runtime.context.config.source_defaults.default_refresh_minutes),
+                quota_scope=SOURCE_FOOTBALL_DATA,
+                rate_limit_backoff=dt.timedelta(hours=6),
             )
             decision = runtime.should_fetch(request)
             if not decision.should_fetch:

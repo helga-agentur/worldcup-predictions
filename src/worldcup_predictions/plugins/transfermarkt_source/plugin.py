@@ -83,6 +83,8 @@ class TransfermarktSourcePlugin(BasePlugin):
             params={"query": team},
             quota_cost=0,
             min_refresh_interval=dt.timedelta(days=7),
+            quota_scope=SOURCE_TRANSFERMARKT,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:

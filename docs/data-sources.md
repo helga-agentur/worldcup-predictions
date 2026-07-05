@@ -14,12 +14,14 @@ This command runs the source plugins that are relevant to currently open fixture
 
 The source ledger protects API limits and makes skipped calls auditable. A source request records:
 
-- source, endpoint, purpose, fixture key, params, and quota cost
+- source, endpoint, purpose, fixture key, params, quota cost, and optional quota scope
 - whether the call was made, skipped, failed, or rate-limited
 - quota remaining and next safe fetch time when known
 - source-specific metadata such as extracted row counts
 
 Skipped calls are recorded with status `skipped`, so daily reports can show calls made, calls avoided, quota cost spent, and quota cost avoided.
+
+Exact request keys still control ordinary freshness and HTTP cache validators. When a plugin declares a shared quota scope, provider-level blocks are also reused across sibling requests: one NewsAPI 429, Odds API quota exhaustion, or football-data.org rate-limit response prevents different fixture queries in the same scope from immediately spending more calls. Freshness skips for one exact request do not block sibling requests.
 
 ## Core Sources
 

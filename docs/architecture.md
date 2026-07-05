@@ -212,6 +212,8 @@ Source plugins should use shared plumbing from `worldcup_predictions.plugins.sou
 
 The source ledger is also the HTTP cache-validator ledger. Every request is keyed by source, endpoint, purpose, normalized params, and optional fixture key. Successful source-runtime fetches store response headers in ledger metadata, with cookie headers redacted, and keep `ETag` / `Last-Modified` values as `cache_validators`. Later eligible fetches send `If-None-Match` and `If-Modified-Since` for the same request key. A `304 Not Modified` response is recorded as `not_modified` and means no new source facts should be written for that request. Raw response bodies are still not stored.
 
+Quota-limited plugins can also declare a shared `quota_scope` on individual `SourceRequest` objects. Exact request keys still handle per-resource freshness; the shared scope handles provider-wide limits, quota floors, and source blocks. For example, after one NewsAPI query returns a 429, sibling fixture queries in the same NewsAPI scope are skipped until the recorded next-safe time instead of spending more calls. Ordinary `fresh_enough` skips for one exact request do not block sibling requests.
+
 Provider-specific tips are emitted separately as `OptimizedTip` records. Optimizer plugins subscribe to `provider_optimization_requested`, read the neutral prediction, apply one ruleset, and return a new typed artifact. They must not change the prediction probabilities or score matrix.
 
 An optimized tip is not always an exact score. Providers may ask for different selections:
@@ -327,7 +329,7 @@ Generated alias candidates live in `entity_aliases_generated`. They can be rebui
 
 The source ledger stores request intent and quota facts:
 
-- source, endpoint, purpose, parameter hash, fixture key
+- source, endpoint, purpose, parameter hash, fixture key, optional quota scope
 - workflow run id
 - quota cost, remaining quota, status, message
 - fetched time, rate-limit reset time, next safe fetch time

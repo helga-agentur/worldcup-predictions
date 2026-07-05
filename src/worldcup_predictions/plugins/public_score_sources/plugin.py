@@ -218,6 +218,8 @@ class PublicScoreSourcesPlugin(BasePlugin):
             params=source.params or {},
             quota_cost=0,
             min_refresh_interval=source.min_refresh,
+            quota_scope=source.source,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:

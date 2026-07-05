@@ -78,6 +78,8 @@ class OpenFootballSourcePlugin(BasePlugin):
             params={"file": filename},
             quota_cost=0,
             min_refresh_interval=dt.timedelta(minutes=runtime.context.config.source_defaults.default_refresh_minutes),
+            quota_scope=SOURCE_OPENFOOTBALL,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:

@@ -110,6 +110,7 @@ Source fix:
 - improve source-ledger handling
 - adjust robots-aware discovery
 - handle rate-limit headers more accurately
+- add or tighten a shared quota scope when one provider-level block is causing repeated sibling requests
 
 Plugin logic fix:
 

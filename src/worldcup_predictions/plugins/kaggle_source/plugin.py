@@ -101,6 +101,8 @@ class KaggleSourcePlugin(BasePlugin):
             params={"search": query, "pageSize": 10},
             quota_cost=1,
             min_refresh_interval=dt.timedelta(days=7),
+            quota_scope=SOURCE_KAGGLE,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:
@@ -141,6 +143,8 @@ class KaggleSourcePlugin(BasePlugin):
             params={"dataset_ref": dataset_ref},
             quota_cost=1,
             min_refresh_interval=dt.timedelta(days=1),
+            quota_scope=SOURCE_KAGGLE,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:

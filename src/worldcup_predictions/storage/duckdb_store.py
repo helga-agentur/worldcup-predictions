@@ -70,6 +70,7 @@ class DuckDBStorage:
                     endpoint TEXT NOT NULL,
                     purpose TEXT NOT NULL,
                     fixture_key TEXT,
+                    quota_scope TEXT,
                     params_json TEXT NOT NULL,
                     quota_cost INTEGER NOT NULL,
                     status TEXT NOT NULL,
@@ -83,6 +84,7 @@ class DuckDBStorage:
                 """
             )
             self._ensure_column(con, "source_ledger", "run_id", "TEXT")
+            self._ensure_column(con, "source_ledger", "quota_scope", "TEXT")
             con.execute(
                 """
                 CREATE TABLE IF NOT EXISTS structured_records (
@@ -105,6 +107,10 @@ class DuckDBStorage:
 
         now = now or utc_now()
         now_iso = normalize_datetime(now) or ""
+        scoped_decision = self._quota_scope_decision(request, now=now, now_iso=now_iso)
+        if scoped_decision is not None:
+            return scoped_decision
+
         con = self._connect()
         try:
             row = con.execute(
@@ -156,6 +162,82 @@ class DuckDBStorage:
 
         return FetchDecision(True, "stale_or_retry_allowed", request.request_key)
 
+    def _quota_scope_decision(self, request: SourceRequest, *, now, now_iso: str) -> FetchDecision | None:
+        """Block sibling request keys when a shared provider quota is exhausted."""
+
+        quota_scope = str(request.quota_scope or "").strip()
+        if not quota_scope:
+            return None
+
+        con = self._connect()
+        try:
+            blocked_row = con.execute(
+                """
+                SELECT request_key, status, fetched_at_utc, next_safe_fetch_at
+                FROM source_ledger
+                WHERE source = ?
+                  AND quota_scope = ?
+                  AND (
+                    status = 'rate_limited'
+                    OR (status = 'error' AND metadata_json LIKE '%"http_status":403%')
+                  )
+                  AND next_safe_fetch_at IS NOT NULL
+                ORDER BY fetched_at_utc DESC
+                LIMIT 1
+                """,
+                [request.source, quota_scope],
+            ).fetchone()
+            quota_row = con.execute(
+                """
+                SELECT request_key, status, fetched_at_utc, quota_remaining
+                FROM source_ledger
+                WHERE source = ?
+                  AND quota_scope = ?
+                  AND quota_remaining IS NOT NULL
+                ORDER BY fetched_at_utc DESC
+                LIMIT 1
+                """,
+                [request.source, quota_scope],
+            ).fetchone()
+        finally:
+            con.close()
+
+        if blocked_row:
+            blocked_key, blocked_status, blocked_at, next_safe_fetch_at = blocked_row
+            next_safe_dt = parse_datetime(next_safe_fetch_at)
+            if next_safe_dt and next_safe_dt > now:
+                return FetchDecision(
+                    False,
+                    "quota_scope_next_safe_fetch_at_not_reached",
+                    request.request_key,
+                    next_safe_fetch_at=next_safe_fetch_at,
+                    metadata={
+                        "now": now_iso,
+                        "quota_scope": quota_scope,
+                        "blocked_request_key": blocked_key,
+                        "blocked_status": blocked_status,
+                        "blocked_at": blocked_at,
+                    },
+                )
+
+        if quota_row:
+            quota_key, quota_status, quota_at, quota_remaining = quota_row
+            if quota_remaining is not None and quota_remaining <= request.quota_remaining_floor:
+                return FetchDecision(
+                    False,
+                    "quota_scope_quota_floor_reached",
+                    request.request_key,
+                    metadata={
+                        "quota_scope": quota_scope,
+                        "quota_remaining": quota_remaining,
+                        "quota_remaining_floor": request.quota_remaining_floor,
+                        "quota_request_key": quota_key,
+                        "quota_status": quota_status,
+                        "quota_observed_at": quota_at,
+                    },
+                )
+        return None
+
     def cache_validators(self, request: SourceRequest) -> dict[str, str]:
         """Return the latest HTTP cache validators stored for this request."""
 
@@ -203,6 +285,7 @@ class DuckDBStorage:
                     endpoint,
                     purpose,
                     fixture_key,
+                    quota_scope,
                     params_json,
                     quota_cost,
                     status,
@@ -213,7 +296,7 @@ class DuckDBStorage:
                     message,
                     metadata_json
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     record.request.request_key,
@@ -222,6 +305,7 @@ class DuckDBStorage:
                     record.request.endpoint,
                     record.request.purpose,
                     record.request.fixture_key,
+                    record.request.quota_scope,
                     canonical_json(dict(record.request.params)),
                     record.request.quota_cost,
                     record.status,
@@ -269,6 +353,7 @@ class DuckDBStorage:
                     endpoint,
                     purpose,
                     fixture_key,
+                    quota_scope,
                     params_json,
                     quota_cost,
                     status,
@@ -295,6 +380,7 @@ class DuckDBStorage:
                 "endpoint": endpoint,
                 "purpose": purpose,
                 "fixture_key": fixture_key,
+                "quota_scope": quota_scope,
                 "params": self._loads_json(params_json),
                 "quota_cost": quota_cost,
                 "status": row_status,
@@ -312,6 +398,7 @@ class DuckDBStorage:
                 endpoint,
                 purpose,
                 fixture_key,
+                quota_scope,
                 params_json,
                 quota_cost,
                 row_status,

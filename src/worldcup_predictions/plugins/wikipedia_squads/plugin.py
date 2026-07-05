@@ -78,6 +78,8 @@ class WikipediaSquadsPlugin(BasePlugin):
             fixture_key=None,
             quota_cost=0,
             min_refresh_interval=dt.timedelta(days=1),
+            quota_scope=SOURCE_WIKIPEDIA,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:

@@ -66,6 +66,8 @@ class HistoricalResultsSourcePlugin(BasePlugin):
             endpoint=ENDPOINT_MARTJ42_RESULTS,
             purpose="historical_results_csv",
             min_refresh_interval=dt.timedelta(days=1),
+            quota_scope=SOURCE_MARTJ42_RESULTS,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:
@@ -96,6 +98,8 @@ class HistoricalResultsSourcePlugin(BasePlugin):
             endpoint=ENDPOINT_MARTJ42_SHOOTOUTS,
             purpose="historical_shootouts_csv",
             min_refresh_interval=dt.timedelta(days=1),
+            quota_scope=SOURCE_MARTJ42_RESULTS,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:

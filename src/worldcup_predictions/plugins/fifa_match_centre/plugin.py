@@ -56,6 +56,8 @@ class FifaMatchCentrePlugin(BasePlugin):
             params=_calendar_params(),
             quota_cost=0,
             min_refresh_interval=dt.timedelta(minutes=runtime.context.config.source_defaults.default_refresh_minutes),
+            quota_scope=SOURCE_FIFA_MATCH_CENTRE,
+            rate_limit_backoff=dt.timedelta(hours=6),
         )
         decision = runtime.should_fetch(request)
         if not decision.should_fetch:
