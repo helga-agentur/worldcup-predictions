@@ -14,9 +14,9 @@ import statistics
 from collections import defaultdict
 from typing import Any
 
-from worldcup_predictions.core.constants import SOURCE_MARKET_TREND
+from worldcup_predictions.core.constants import DYNAMIC_SOURCE_MARKET_MIN_CONFIDENCE, SOURCE_DYNAMIC_PUBLIC, SOURCE_MARKET_TREND
 from worldcup_predictions.core.contracts import Artifact, Diagnostic, Signal
-from worldcup_predictions.core.datasets import MARKET_ODDS, MARKET_TRENDS
+from worldcup_predictions.core.datasets import MARKET_ODDS, MARKET_TRENDS, PUBLIC_MARKET_OBSERVATIONS
 from worldcup_predictions.core.events import EventName, event_value
 from worldcup_predictions.core.metadata import PluginKind, PluginMetadata
 from worldcup_predictions.core.plugin import BasePlugin, PluginResult
@@ -42,7 +42,7 @@ class MarketTrendPlugin(BasePlugin):
         plugin_id=id,
         kind=PluginKind.SIGNAL,
         description="Derive market movement (totals-line drift, disagreement, favorite move) from the odds snapshot history.",
-        datasets_read=(MARKET_ODDS,),
+        datasets_read=(MARKET_ODDS, PUBLIC_MARKET_OBSERVATIONS),
         datasets_written=(MARKET_TRENDS,),
         signals_emitted=(TOTAL_GOALS_FACTOR,),
         confidence_policy="Trends need multiple snapshots; confidence rises with snapshot count and falls with cross-snapshot disagreement.",
@@ -56,12 +56,13 @@ class MarketTrendPlugin(BasePlugin):
                 diagnostics=[Diagnostic("warning", "Structured storage is unavailable; market trends were skipped.", self.id)],
             )
         history = context.storage.read_records(MARKET_ODDS, latest_only=False)
+        public_history = public_market_history_rows(context.storage.read_records(PUBLIC_MARKET_OBSERVATIONS, latest_only=False))
         state = context.state.get("tournament_state")
         if not isinstance(state, TournamentState):
             state = load_tournament_state(context.storage)
             context.state["tournament_state"] = state
         open_keys = {fixture.key for fixture in state.open_fixtures()}
-        rows = market_trend_rows(history, open_keys=open_keys)
+        rows = market_trend_rows([*history, *public_history], open_keys=open_keys)
         count = context.storage.write_records(MARKET_TRENDS, rows, source=self.id, run_id=context.run_id)
         signals = market_trend_signals(rows)
         diagnostics = []
@@ -77,6 +78,31 @@ class MarketTrendPlugin(BasePlugin):
             diagnostics=diagnostics,
             metadata={"rows": count, "signals": len(signals)},
         )
+
+
+def public_market_history_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalize high-confidence public-page market observations for trend analysis."""
+
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        confidence = _optional_float(row.get("confidence"))
+        if confidence is None or confidence < DYNAMIC_SOURCE_MARKET_MIN_CONFIDENCE:
+            continue
+        fixture_key = str(row.get("fixture_key") or "")
+        if not fixture_key:
+            continue
+        normalized.append(
+            {
+                **row,
+                "metadata": {
+                    **dict(row.get("metadata") or {}),
+                    "source": SOURCE_DYNAMIC_PUBLIC,
+                    "bookmaker": row.get("domain") or (row.get("metadata") or {}).get("bookmaker") or "",
+                    "public_market_confidence": confidence,
+                },
+            }
+        )
+    return normalized
 
 
 def market_trend_rows(history: list[dict[str, Any]], *, open_keys: set[str] | None = None) -> list[dict[str, Any]]:

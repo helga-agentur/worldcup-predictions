@@ -13,6 +13,7 @@ Generated from plugin metadata declared in the codebase.
 | `wikipedia_squads` | source | 126 | `feature_signals_requested` | `wikipedia_squads`, `squad_players` | - | no |
 | `transfermarkt_source` | source | 127 | `feature_signals_requested` | `transfermarkt_search_results` | - | no |
 | `public_score_sources` | source | 130 | `fixtures_requested` | `tournament_results`, `public_match_analysis`, `extraction_diagnostics` | - | no |
+| `dynamic_public_sources` | source | 132 | `fixtures_requested` | `tournament_results`, `public_source_pages`, `public_source_claims`, `public_claim_consensus`, `public_source_reputation`, `public_market_observations`, `public_match_analysis`, `extraction_diagnostics` | - | no |
 | `historical_results_source` | source | 135 | `feature_signals_requested` | `historical_results`, `shootouts` | - | no |
 | `result_monitoring` | output | 145 | `results_updated` | `result_update_audit` | - | no |
 | `market_odds` | source | 250 | `feature_signals_requested` | `market_odds`, `market_outrights` | `market_hda_probabilities`, `market_total_goals`, `market_goal_diff` | yes |
@@ -175,6 +176,21 @@ Fetch robots-aware FIFA, ESPN, FotMob, SofaScore, and 20min public pages for res
 - Quota: not limited and ledger-required - Public pages are robots-gated and source-ledgered; private/disallowed APIs are not fetched.
 - Confidence policy: Only finished score rows with canonical team-code matches are stored; page analysis rows require recognized pre/postgame signals or stat snippets.
 
+### `dynamic_public_sources`
+
+Discover robots-aware public pages, extract fixture/result/market claims, and score domain reputation over time.
+
+- Version: `0.1.0`
+- Kind: `source`
+- Priority: `132`
+- Events: `fixtures_requested`
+- Reads: `public_source_claims`, `public_source_reputation`, `tournament_results`
+- Writes: `tournament_results`, `public_source_pages`, `public_source_claims`, `public_claim_consensus`, `public_source_reputation`, `public_market_observations`, `public_match_analysis`, `extraction_diagnostics`
+- Signals: -
+- Locales: `en`, `de`
+- Quota: not limited and ledger-required - Every page fetch is robots-gated, source-ledgered, cache-validator aware, and rate-limit backed off per domain.
+- Confidence policy: Dynamic public results require multi-domain weighted consensus before becoming raw result observations; market rows need a confidence floor before trend use.
+
 ### `historical_results_source`
 
 Fetch martj42 international_results CSVs and write normalized historical results and shootouts.
@@ -228,7 +244,7 @@ Derive market movement (totals-line drift, disagreement, favorite move) from the
 - Kind: `signal`
 - Priority: `255`
 - Events: `feature_signals_requested`
-- Reads: `market_odds`
+- Reads: `market_odds`, `public_market_observations`
 - Writes: `market_trends`
 - Signals: `total_goals_factor`
 - Locales: `en`, `de`

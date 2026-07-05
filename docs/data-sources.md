@@ -50,10 +50,23 @@ Plugins:
 - `fifa_match_centre`
 - `football_data`
 - `public_score_sources`
+- `dynamic_public_sources`
 
 These plugins write fixture and result observations. Raw result observations enter `tournament_results` first. A final score is used by tournament state, calibration, provider points, and website publishing only after consensus confirmation: at least three independent sources agree, or at least two high-authority sources agree.
 
 `fifa_match_centre` fetches FIFA's public calendar API for World Cup 2026 (`idCompetition=17`, `idSeason=285023`). It writes official fixture/result evidence plus `fifa_match_details` rows with match number, group/stage, venue, officials, attendance, possession when available, and formations/tactics. The API does not currently expose player-level starting XIs, so formations are used as neutral official lineup context rather than as player availability data.
+
+`dynamic_public_sources` extends the fixed public adapters with bounded public-page discovery. It starts from known public seed pages, fetches only robots-allowed same-domain pages through the source ledger, stores page metadata and content fingerprints, then extracts atomic fixture/result/market claims. Result claims are promoted to `tournament_results` only after the dynamic layer has multi-domain weighted consensus; those promoted rows still pass through the central tournament-state result consensus before they can affect published results, calibration, or provider points.
+
+Writes:
+
+- `public_source_pages`
+- `public_source_claims`
+- `public_claim_consensus`
+- `public_source_reputation`
+- `public_market_observations`
+- `public_match_analysis`
+- `extraction_diagnostics`
 
 ### Market Odds
 
@@ -80,7 +93,7 @@ Market signals are strong prediction inputs, but capped below a full overwrite s
 
 Plugin: `market_trend`
 
-Reads append-only `market_odds` rows and derives small movement signals such as totals-line drift, favorite movement, and cross-snapshot disagreement.
+Reads append-only `market_odds` rows plus high-confidence `public_market_observations` rows and derives small movement signals such as totals-line drift, favorite movement, and cross-snapshot disagreement.
 
 Writes:
 
@@ -242,6 +255,11 @@ Prediction runs write extracted output rows to ignored local storage. The exact 
 - `data/structured/market_trends.parquet`
 - `data/structured/weather_observations.parquet`
 - `data/structured/public_match_analysis.parquet`
+- `data/structured/public_source_pages.parquet`
+- `data/structured/public_source_claims.parquet`
+- `data/structured/public_claim_consensus.parquet`
+- `data/structured/public_source_reputation.parquet`
+- `data/structured/public_market_observations.parquet`
 - `data/structured/lineup_availability.parquet`
 - `data/structured/lineup_consensus.parquet`
 - `data/structured/automatic_match_notes.parquet`

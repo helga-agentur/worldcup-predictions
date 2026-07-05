@@ -5,6 +5,7 @@ from worldcup_predictions.plugins.signals.automatic_match_notes import Automatic
 from worldcup_predictions.plugins.diagnostics.debug_report import DebugReportPlugin
 from worldcup_predictions.plugins.sources.fixtures.fifa_match_centre import FifaMatchCentrePlugin
 from worldcup_predictions.plugins.sources.fixtures.football_data import FootballDataPlugin
+from worldcup_predictions.plugins.sources.fixtures.dynamic_public_sources import DynamicPublicSourcesPlugin
 from worldcup_predictions.plugins.sources.history.historical_results_source import HistoricalResultsSourcePlugin
 from worldcup_predictions.plugins.sources.enrichment.kaggle_source import KaggleSourcePlugin
 from worldcup_predictions.plugins.sources.enrichment.lineup_availability import LineupAvailabilityPlugin
@@ -43,6 +44,7 @@ def builtin_plugins():
         HistoricalResultsSourcePlugin(),
         FootballDataPlugin(),
         PublicScoreSourcesPlugin(),
+        DynamicPublicSourcesPlugin(),
         ResultMonitoringPlugin(),
         KaggleSourcePlugin(),
         WikipediaSquadsPlugin(),

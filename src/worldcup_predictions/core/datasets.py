@@ -18,6 +18,11 @@ HISTORICAL_RESULTS = "historical_results"
 MARKET_ODDS = "market_odds"
 WEATHER_OBSERVATIONS = "weather_observations"
 PUBLIC_MATCH_ANALYSIS = "public_match_analysis"
+PUBLIC_SOURCE_PAGES = "public_source_pages"
+PUBLIC_SOURCE_CLAIMS = "public_source_claims"
+PUBLIC_CLAIM_CONSENSUS = "public_claim_consensus"
+PUBLIC_SOURCE_REPUTATION = "public_source_reputation"
+PUBLIC_MARKET_OBSERVATIONS = "public_market_observations"
 LINEUP_AVAILABILITY = "lineup_availability"
 LINEUP_CONSENSUS = "lineup_consensus"
 POSTMATCH_STATS = "postmatch_stats"
@@ -94,6 +99,11 @@ DATASET_CONTRACTS: dict[str, DatasetContract] = {
     MARKET_TRENDS: DatasetContract(MARKET_TRENDS, "Market movement facts derived from the odds snapshot history.", ("fixture_key",)),
     WEATHER_OBSERVATIONS: DatasetContract(WEATHER_OBSERVATIONS, "Aggregated match-window weather rows.", ("fixture_key",)),
     PUBLIC_MATCH_ANALYSIS: DatasetContract(PUBLIC_MATCH_ANALYSIS, "Reliable public pre/postgame analysis rows.", ("fixture_key", "phase")),
+    PUBLIC_SOURCE_PAGES: DatasetContract(PUBLIC_SOURCE_PAGES, "Fetched public-source page metadata and content fingerprints.", ("url", "domain", "status")),
+    PUBLIC_SOURCE_CLAIMS: DatasetContract(PUBLIC_SOURCE_CLAIMS, "Atomic fixture, result, market, and analysis claims extracted from dynamic public sources.", ("claim_id", "claim_type", "source_url", "domain")),
+    PUBLIC_CLAIM_CONSENSUS: DatasetContract(PUBLIC_CLAIM_CONSENSUS, "Grouped public-source claim consensus and weighted support.", ("claim_type", "consensus_key")),
+    PUBLIC_SOURCE_REPUTATION: DatasetContract(PUBLIC_SOURCE_REPUTATION, "Domain-level public-source reputation by claim type.", ("domain", "claim_type", "source_score")),
+    PUBLIC_MARKET_OBSERVATIONS: DatasetContract(PUBLIC_MARKET_OBSERVATIONS, "Allowed public-page market observations normalized for trend diagnostics.", ("fixture_key", "domain")),
     LINEUP_AVAILABILITY: DatasetContract(LINEUP_AVAILABILITY, "Automatic injury, suspension, rotation, and availability rows.", ("fixture_key", "affected_side")),
     LINEUP_CONSENSUS: DatasetContract(LINEUP_CONSENSUS, "Aggregated lineup/availability consensus rows by fixture and side.", ("fixture_key", "affected_side")),
     POSTMATCH_STATS: DatasetContract(POSTMATCH_STATS, "Postmatch xG/stat input rows.", ("fixture_key",)),
