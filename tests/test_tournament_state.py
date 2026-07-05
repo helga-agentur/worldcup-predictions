@@ -12,7 +12,7 @@ except ModuleNotFoundError:  # pragma: no cover
 from worldcup_predictions.core.contracts import ScoreTip
 from worldcup_predictions.core.plugin import PluginManager
 from worldcup_predictions.core.workflow import PredictionWorkflow
-from worldcup_predictions.plugins.tournament_state import TournamentStatePlugin
+from worldcup_predictions.plugins.workflow.tournament_state import TournamentStatePlugin
 from worldcup_predictions.storage import DuckDBStorage
 from worldcup_predictions.tournament import (
     FixtureRecord,

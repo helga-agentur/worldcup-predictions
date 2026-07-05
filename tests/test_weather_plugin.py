@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import unittest
 
-from worldcup_predictions.plugins.weather.plugin import (
+from worldcup_predictions.plugins.sources.enrichment.weather.plugin import (
     weather_goal_factor,
     weather_row_from_open_meteo,
     weather_signals_from_rows,

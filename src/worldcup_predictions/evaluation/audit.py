@@ -8,7 +8,7 @@ from typing import Any
 from worldcup_predictions.core.contracts import ScoreTip, parse_utc_datetime
 from worldcup_predictions.core.datasets import PREDICTION_AUDIT
 from worldcup_predictions.evaluation.provider_points import points_for_row
-from worldcup_predictions.plugins.provider_optimizers.common import score_outcome
+from worldcup_predictions.plugins.providers.common import score_outcome
 from worldcup_predictions.tournament import ResultRecord, TournamentState
 
 

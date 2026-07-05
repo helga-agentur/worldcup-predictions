@@ -75,33 +75,42 @@ The modeling layer restores and extends the legacy forecasting features: histori
 - `worldcup_predictions.tournament`: fixtures, results, openfootball imports, standings, and group-state motivation signals.
 - `worldcup_predictions.providers`: public facade for provider scoring and optimization helpers.
 - `worldcup_predictions.simulations`: provider-neutral tournament simulation contracts, 2026 bracket helpers, and Monte Carlo runner.
-- `worldcup_predictions.plugins.provider_optimizers.common`: shared score-matrix optimization helpers.
-- `worldcup_predictions.plugins.provider_optimizers.ch_srf`: `srf.ch` rules, plugin, and bonus-question evaluation.
-- `worldcup_predictions.plugins.provider_optimizers.ch_20min`: `20min.ch` rules, plugin, and bonus-question evaluation.
-- `worldcup_predictions.plugins.baseline_model`: prediction plugin that emits provider-neutral baseline predictions.
-- `worldcup_predictions.plugins.openfootball_source`: automatic openfootball/worldcup fixture/result source plugin.
-- `worldcup_predictions.plugins.historical_results_source`: automatic martj42 historical international result/shootout source plugin.
-- `worldcup_predictions.plugins.football_data`: football-data.org fixture/result/team/squad source plugin.
-- `worldcup_predictions.plugins.market_odds`: market-odds aggregation plugin using The Odds API, source-ledger checks, and structured extracted facts only.
-- `worldcup_predictions.plugins.market_trend`: derives market movement (totals-line drift, cross-snapshot disagreement, favorite move) from the append-only `market_odds` snapshot history and emits a small capped trend signal.
-- `worldcup_predictions.plugins.phase_context`: phase-gated knockout and final-group-match context signal plugin.
-- `worldcup_predictions.plugins.weather`: Open-Meteo match-window weather aggregation and total-goal signals.
-- `worldcup_predictions.plugins.public_analysis`: reliable-source pregame/postgame article extraction and tactical tempo signals.
-- `worldcup_predictions.plugins.lineup_availability`: automatic injury, suspension, rotation, and availability signals from reliable public sources.
-- `worldcup_predictions.plugins.postmatch_stats`: postmatch xG/stat normalization with shots/on-target/corners fallback and red-card down-weighting.
-- `worldcup_predictions.plugins.player_impact`: squad market-value and composition signal plugin.
-- `worldcup_predictions.plugins.ml_outcome`: deterministic historical outcome-calibration signal plugin.
-- `worldcup_predictions.plugins.live_calibration`: conservative team-level calibration from finished tournament matches.
-- `worldcup_predictions.plugins.srf_experts`: SRF public expert pick extraction and consensus signals.
-- `worldcup_predictions.plugins.match_intel`: prematch review-priority output plugin.
-- `worldcup_predictions.plugins.debug_report`: per-fixture prediction debug reports.
+- `worldcup_predictions.plugins.providers.common`: shared score-matrix optimization helpers.
+- `worldcup_predictions.plugins.providers.ch_srf`: `srf.ch` rules, plugin, and bonus-question evaluation.
+- `worldcup_predictions.plugins.providers.ch_20min`: `20min.ch` rules, plugin, and bonus-question evaluation.
+- `worldcup_predictions.plugins.models.baseline_model`: prediction plugin that emits provider-neutral baseline predictions.
+- `worldcup_predictions.plugins.sources.fixtures.openfootball_source`: automatic openfootball/worldcup fixture/result source plugin.
+- `worldcup_predictions.plugins.sources.history.historical_results_source`: automatic martj42 historical international result/shootout source plugin.
+- `worldcup_predictions.plugins.sources.fixtures.football_data`: football-data.org fixture/result/team/squad source plugin.
+- `worldcup_predictions.plugins.sources.markets.market_odds`: market-odds aggregation plugin using The Odds API, source-ledger checks, and structured extracted facts only.
+- `worldcup_predictions.plugins.signals.market_trend`: derives market movement (totals-line drift, cross-snapshot disagreement, favorite move) from the append-only `market_odds` snapshot history and emits a small capped trend signal.
+- `worldcup_predictions.plugins.signals.phase_context`: phase-gated knockout and final-group-match context signal plugin.
+- `worldcup_predictions.plugins.sources.enrichment.weather`: Open-Meteo match-window weather aggregation and total-goal signals.
+- `worldcup_predictions.plugins.sources.enrichment.public_analysis`: reliable-source pregame/postgame article extraction and tactical tempo signals.
+- `worldcup_predictions.plugins.sources.enrichment.lineup_availability`: automatic injury, suspension, rotation, and availability signals from reliable public sources.
+- `worldcup_predictions.plugins.sources.enrichment.postmatch_stats`: postmatch xG/stat normalization with shots/on-target/corners fallback and red-card down-weighting.
+- `worldcup_predictions.plugins.signals.player_impact`: squad market-value and composition signal plugin.
+- `worldcup_predictions.plugins.signals.ml_outcome`: deterministic historical outcome-calibration signal plugin.
+- `worldcup_predictions.plugins.signals.live_calibration`: conservative team-level calibration from finished tournament matches.
+- `worldcup_predictions.plugins.sources.enrichment.srf_experts`: SRF public expert pick extraction and consensus signals.
+- `worldcup_predictions.plugins.diagnostics.match_intel`: prematch review-priority output plugin.
+- `worldcup_predictions.plugins.diagnostics.debug_report`: per-fixture prediction debug reports.
 - `worldcup_predictions.plugins.source_runtime`: shared source-plugin storage, tournament-state, ledger, HTTP, and artifact plumbing.
-- `worldcup_predictions.plugins.tournament_state`: workflow plugin that loads tournament state, records results, and emits group-state signals.
-- `worldcup_predictions.plugins.structured_output`: persists extracted prediction facts as structured records.
+- `worldcup_predictions.plugins.workflow.tournament_state`: workflow plugin that loads tournament state, records results, and emits group-state signals.
+- `worldcup_predictions.plugins.workflow.structured_output`: persists extracted prediction facts as structured records.
 - `worldcup_predictions.evaluation`: backtests, model calibration, snapshots, comparisons, provider points, bonus tracking, match intel, and postmatch learning helpers.
 - `worldcup_predictions.site`: builds the public static website from the frozen published prediction ledger.
 - `worldcup_predictions.cli`: runnable command line interface.
 - `worldcup_predictions.documentation`: generated Markdown documentation from plugin metadata.
+
+Plugin packages are grouped by workflow role:
+
+- `plugins.sources`: external/API/public-page imports and structured enrichment.
+- `plugins.signals`: derivations from stored facts into model signals.
+- `plugins.models`: provider-neutral prediction models.
+- `plugins.providers`: provider-specific tip optimizers and rules.
+- `plugins.workflow`: orchestration, state, persistence, and source diagnostics.
+- `plugins.diagnostics`: debug and review outputs.
 
 ## Plugin Metadata
 
@@ -261,8 +270,8 @@ The neutral simulation output includes:
 
 Provider folders translate that output into competition-specific bonus views:
 
-- `plugins.provider_optimizers.ch_srf.bonus`: SRF bonus answers such as champion, Switzerland stage, Switzerland goals, top scorer goals, and number of 0:0 matches.
-- `plugins.provider_optimizers.ch_20min.bonus`: 20min-ready distributions such as champion, team progress, group winners, qualification, top scorer goals, and 0:0 matches.
+- `plugins.providers.ch_srf.bonus`: SRF bonus answers such as champion, Switzerland stage, Switzerland goals, top scorer goals, and number of 0:0 matches.
+- `plugins.providers.ch_20min.bonus`: 20min-ready distributions such as champion, team progress, group winners, qualification, top scorer goals, and 0:0 matches.
 
 The simulator must not apply SRF or 20min scoring rules directly. Provider rules remain on top of the generic tournament distributions.
 

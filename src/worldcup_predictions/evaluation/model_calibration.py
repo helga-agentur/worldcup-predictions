@@ -27,14 +27,14 @@ from worldcup_predictions.model import BaselineModel, BaselineModelConfig, Histo
 from worldcup_predictions.model.baseline import compute_elo, compute_goal_profiles
 from worldcup_predictions.model.contracts import ModelSignalPolicy, TeamProfile
 from worldcup_predictions.model.signal_application import SignalApplierRegistry
-from worldcup_predictions.plugins.ml_outcome.plugin import (
+from worldcup_predictions.plugins.signals.ml_outcome.plugin import (
     ml_signals_for_fixtures,
     sklearn_signals_for_fixtures,
     train_outcome_bucket_model,
     train_sklearn_outcome_model,
 )
-from worldcup_predictions.plugins.provider_optimizers.ch_srf.rules import srf_rules_for_fixture
-from worldcup_predictions.plugins.provider_optimizers.common import ScoreMatrixOptimizer, score_outcome
+from worldcup_predictions.plugins.providers.ch_srf.rules import srf_rules_for_fixture
+from worldcup_predictions.plugins.providers.common import ScoreMatrixOptimizer, score_outcome
 from worldcup_predictions.storage.ledger import stable_hash, utc_now
 from worldcup_predictions.tournament import FixtureRecord
 

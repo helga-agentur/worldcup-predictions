@@ -6,8 +6,8 @@ from typing import Any
 
 from worldcup_predictions.core.contracts import ScoreTip
 from worldcup_predictions.core.datasets import OPTIMIZED_TIPS, PREDICTION_BACKTEST, PREDICTION_LEDGER, PROVIDER_POINTS
-from worldcup_predictions.plugins.provider_optimizers.ch_srf.rules import srf_rules_for_fixture
-from worldcup_predictions.plugins.provider_optimizers.common import score_outcome
+from worldcup_predictions.plugins.providers.ch_srf.rules import srf_rules_for_fixture
+from worldcup_predictions.plugins.providers.common import score_outcome
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TournamentState
 
 
@@ -127,7 +127,7 @@ def points_for_row(provider: str, fixture: FixtureRecord, result: ResultRecord, 
 
 
 def twenty_min_points_for_selection(fixture: FixtureRecord, result: ResultRecord, selection_type: str, selection: str) -> float:
-    from worldcup_predictions.plugins.provider_optimizers.ch_20min.rules import twenty_min_points_for_fixture
+    from worldcup_predictions.plugins.providers.ch_20min.rules import twenty_min_points_for_fixture
 
     phase, points = twenty_min_points_for_fixture(fixture.to_fixture())
     if phase == "group_stage":

@@ -3,20 +3,20 @@ from __future__ import annotations
 import unittest
 
 from worldcup_predictions.plugins.article_sources import extract_postmatch_stats_from_text, source_reliability, stat_row_from_public_analysis
-from worldcup_predictions.plugins.fifa_match_centre import (
+from worldcup_predictions.plugins.sources.fixtures.fifa_match_centre import (
     parse_fifa_match_details,
     parse_fifa_match_fixtures,
     parse_fifa_match_results,
 )
-from worldcup_predictions.plugins.lineup_availability.plugin import (
+from worldcup_predictions.plugins.sources.enrichment.lineup_availability.plugin import (
     classify_availability_signal,
     fifa_match_detail_formation_rows,
     lineup_consensus_rows,
     lineup_availability_rows_from_articles,
     lineup_availability_signals_from_rows,
 )
-from worldcup_predictions.plugins.market_odds.plugin import market_signals_from_rows, odds_api_event_ids, odds_api_rows
-from worldcup_predictions.plugins.public_analysis.plugin import (
+from worldcup_predictions.plugins.sources.markets.market_odds.plugin import market_signals_from_rows, odds_api_event_ids, odds_api_rows
+from worldcup_predictions.plugins.sources.enrichment.public_analysis.plugin import (
     classify_tempo_signal,
     public_analysis_rows_from_articles,
     public_analysis_signals_from_rows,
@@ -32,9 +32,9 @@ from pathlib import Path
 from worldcup_predictions.core.datasets import EXTRACTION_DIAGNOSTICS, TOURNAMENT_FIXTURES
 from worldcup_predictions.core.events import EventName
 from worldcup_predictions.core.workflow import WorkflowContext
-from worldcup_predictions.plugins.football_data.plugin import FootballDataPlugin
+from worldcup_predictions.plugins.sources.fixtures.football_data.plugin import FootballDataPlugin
 from worldcup_predictions.plugins.source_runtime import SourceRuntime
-from worldcup_predictions.plugins.srf_experts.plugin import SrfExpertsPlugin
+from worldcup_predictions.plugins.sources.enrichment.srf_experts.plugin import SrfExpertsPlugin
 from worldcup_predictions.storage import DuckDBStorage
 from worldcup_predictions.tournament import build_tournament_state
 

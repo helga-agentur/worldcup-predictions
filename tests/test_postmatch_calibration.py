@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 
 from worldcup_predictions.core.contracts import ScoreTip
-from worldcup_predictions.plugins.live_calibration.plugin import calibration_rows_from_state, calibration_signals_for_open_fixtures
-from worldcup_predictions.plugins.postmatch_stats.plugin import chance_quality, team_performance_rows
+from worldcup_predictions.plugins.signals.live_calibration.plugin import calibration_rows_from_state, calibration_signals_for_open_fixtures
+from worldcup_predictions.plugins.sources.enrichment.postmatch_stats.plugin import chance_quality, team_performance_rows
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamResolver
 from worldcup_predictions.tournament.state import build_tournament_state
 

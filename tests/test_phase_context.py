@@ -6,7 +6,7 @@ import unittest
 from worldcup_predictions.core.contracts import ScoreTip
 from worldcup_predictions.core.signals import LIVE_DRAW_ADJUSTMENT, TEAM_EXPECTED_GOALS_FACTOR, TOTAL_GOALS_FACTOR
 from worldcup_predictions.model import BaselineModel, HistoricalResult
-from worldcup_predictions.plugins.phase_context.plugin import phase_context_rows, phase_context_signals
+from worldcup_predictions.plugins.signals.phase_context.plugin import phase_context_rows, phase_context_signals
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamResolver, build_tournament_state
 
 

@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 
 from worldcup_predictions.core.contracts import Fixture, OutcomeProbabilities, Prediction, ScoreTip, Signal
-from worldcup_predictions.plugins.debug_report.plugin import debug_rows, signal_impact_rows
-from worldcup_predictions.plugins.srf_experts.plugin import parse_srf_expert_rows, srf_expert_signals_from_rows
+from worldcup_predictions.plugins.diagnostics.debug_report.plugin import debug_rows, signal_impact_rows
+from worldcup_predictions.plugins.sources.enrichment.srf_experts.plugin import parse_srf_expert_rows, srf_expert_signals_from_rows
 from worldcup_predictions.tournament import FixtureRecord, TeamResolver
 
 

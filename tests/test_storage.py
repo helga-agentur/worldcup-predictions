@@ -30,11 +30,11 @@ from worldcup_predictions.evaluation.data_hooks import run_data_update_hooks
 from worldcup_predictions.evaluation.provider_points import build_provider_points_rows
 from worldcup_predictions.evaluation.reports import write_standard_reports
 from worldcup_predictions.evaluation.scheduled_update import summarize_source_ledger_rows
-from worldcup_predictions.plugins.debug_report import DebugReportPlugin
-from worldcup_predictions.plugins.debug_report.plugin import signal_impact_rows
+from worldcup_predictions.plugins.diagnostics.debug_report import DebugReportPlugin
+from worldcup_predictions.plugins.diagnostics.debug_report.plugin import signal_impact_rows
 from worldcup_predictions.plugins.source_runtime import SourceRuntime
-from worldcup_predictions.plugins.structured_output import StructuredOutputPlugin
-from worldcup_predictions.plugins.provider_optimizers import SrfChProviderOptimizerPlugin
+from worldcup_predictions.plugins.workflow.structured_output import StructuredOutputPlugin
+from worldcup_predictions.plugins.providers import SrfChProviderOptimizerPlugin
 from worldcup_predictions.storage import DuckDBStorage, SourceLedgerRecord, SourceRequest
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamResolver, TournamentState
 

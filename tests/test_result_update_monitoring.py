@@ -13,9 +13,9 @@ from worldcup_predictions.core.contracts import ScoreTip
 from worldcup_predictions.core.datasets import CALIBRATION_DECISIONS, RESULT_UPDATE_AUDIT
 from worldcup_predictions.core.plugin import PluginManager
 from worldcup_predictions.core.workflow import PredictionWorkflow, result_row_changes
-from worldcup_predictions.plugins.live_calibration import LiveCalibrationPlugin
-from worldcup_predictions.plugins.result_monitoring import ResultMonitoringPlugin
-from worldcup_predictions.plugins.tournament_state import TournamentStatePlugin
+from worldcup_predictions.plugins.signals.live_calibration import LiveCalibrationPlugin
+from worldcup_predictions.plugins.workflow.result_monitoring import ResultMonitoringPlugin
+from worldcup_predictions.plugins.workflow.tournament_state import TournamentStatePlugin
 from worldcup_predictions.storage import DuckDBStorage
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamResolver
 from worldcup_predictions.tournament.repository import write_fixtures, write_results

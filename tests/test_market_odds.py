@@ -14,8 +14,8 @@ from worldcup_predictions.core.events import EventName
 from worldcup_predictions.core.plugin import PluginManager
 from worldcup_predictions.core.workflow import PredictionWorkflow
 from worldcup_predictions.model import BaselineModel
-from worldcup_predictions.plugins.market_odds import MarketOddsPlugin
-from worldcup_predictions.plugins.market_odds.plugin import MARKET_ODDS_DATASET, market_signals_from_rows, odds_api_rows
+from worldcup_predictions.plugins.sources.markets.market_odds import MarketOddsPlugin
+from worldcup_predictions.plugins.sources.markets.market_odds.plugin import MARKET_ODDS_DATASET, market_signals_from_rows, odds_api_rows
 from worldcup_predictions.storage import DuckDBStorage
 from worldcup_predictions.tournament import FixtureRecord, TeamResolver
 from worldcup_predictions.tournament.repository import write_fixtures

@@ -4,7 +4,7 @@ import unittest
 
 from worldcup_predictions.core.contracts import ScoreTip
 from worldcup_predictions.model.baseline import mismatch_blowout_adjustment
-from worldcup_predictions.plugins.live_calibration.plugin import (
+from worldcup_predictions.plugins.signals.live_calibration.plugin import (
     PRIOR_DRAW_RATE,
     global_calibration_rows_from_state,
 )

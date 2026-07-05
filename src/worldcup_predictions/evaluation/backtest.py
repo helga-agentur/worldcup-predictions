@@ -13,9 +13,9 @@ from worldcup_predictions.evaluation.metrics import (
 )
 from worldcup_predictions.model import BaselineModel, HistoricalResult
 from worldcup_predictions.model.signal_application import SignalApplierRegistry
-from worldcup_predictions.plugins.provider_optimizers.ch_srf.rules import srf_rules_for_fixture
-from worldcup_predictions.plugins.provider_optimizers.ch_20min.rules import optimize_twenty_min_tip
-from worldcup_predictions.plugins.provider_optimizers.common import ScoreMatrixOptimizer, score_outcome
+from worldcup_predictions.plugins.providers.ch_srf.rules import srf_rules_for_fixture
+from worldcup_predictions.plugins.providers.ch_20min.rules import optimize_twenty_min_tip
+from worldcup_predictions.plugins.providers.common import ScoreMatrixOptimizer, score_outcome
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TournamentState
 
 

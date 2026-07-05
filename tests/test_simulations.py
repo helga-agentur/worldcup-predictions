@@ -18,11 +18,11 @@ from worldcup_predictions.core.contracts import (
     ScoreTip,
 )
 from worldcup_predictions.tournament.contracts import FixtureRecord, ResultRecord, TeamRef, TournamentState
-from worldcup_predictions.plugins.provider_optimizers.ch_20min import (
+from worldcup_predictions.plugins.providers.ch_20min import (
     best_twenty_min_bonus_answers,
     evaluate_twenty_min_bonus_questions,
 )
-from worldcup_predictions.plugins.provider_optimizers.ch_srf import (
+from worldcup_predictions.plugins.providers.ch_srf import (
     best_srf_bonus_answers,
     evaluate_srf_bonus_questions,
 )

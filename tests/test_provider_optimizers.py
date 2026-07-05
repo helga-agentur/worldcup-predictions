@@ -10,7 +10,7 @@ from worldcup_predictions.core.contracts import (
     ScoreTip,
 )
 from worldcup_predictions.core.events import EventName
-from worldcup_predictions.plugins.provider_optimizers import (
+from worldcup_predictions.plugins.providers import (
     SrfChProviderOptimizerPlugin,
     TwentyMinChProviderOptimizerPlugin,
 )

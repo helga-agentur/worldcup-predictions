@@ -5,10 +5,10 @@ import unittest
 
 from worldcup_predictions.plugins.article_sources import fetch_news_api
 from worldcup_predictions.plugins.article_sources import analysis_query, classify_public_note, lineup_query
-from worldcup_predictions.plugins.lineup_availability.plugin import classify_availability_signal
-from worldcup_predictions.plugins.lineup_availability.plugin import lineup_availability_signals_from_rows
-from worldcup_predictions.plugins.ml_outcome.plugin import RollingFeatureBuilder
-from worldcup_predictions.plugins.srf_experts.plugin import (
+from worldcup_predictions.plugins.sources.enrichment.lineup_availability.plugin import classify_availability_signal
+from worldcup_predictions.plugins.sources.enrichment.lineup_availability.plugin import lineup_availability_signals_from_rows
+from worldcup_predictions.plugins.signals.ml_outcome.plugin import RollingFeatureBuilder
+from worldcup_predictions.plugins.sources.enrichment.srf_experts.plugin import (
     expert_weights_from_performance,
     srf_expert_signals_from_rows,
 )

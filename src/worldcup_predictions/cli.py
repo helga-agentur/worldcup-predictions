@@ -55,8 +55,8 @@ from worldcup_predictions.model import load_historical_results
 from worldcup_predictions.model import BaselineModelConfig, HistoricalResult
 from worldcup_predictions.model.baseline import compute_elo
 from worldcup_predictions.plugins import builtin_plugins
-from worldcup_predictions.plugins.provider_optimizers.ch_srf import best_srf_bonus_answers, evaluate_srf_bonus_questions
-from worldcup_predictions.plugins.provider_optimizers.ch_20min import best_twenty_min_bonus_answers, evaluate_twenty_min_bonus_questions
+from worldcup_predictions.plugins.providers.ch_srf import best_srf_bonus_answers, evaluate_srf_bonus_questions
+from worldcup_predictions.plugins.providers.ch_20min import best_twenty_min_bonus_answers, evaluate_twenty_min_bonus_questions
 from worldcup_predictions.simulations import SimulationInputs, TournamentSimulator, pair_key
 from worldcup_predictions.site import build_site, serve_site
 from worldcup_predictions.site.generator import gtm_container_id_from_env

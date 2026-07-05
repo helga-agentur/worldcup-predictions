@@ -18,11 +18,11 @@ from worldcup_predictions.evaluation.match_intel import build_match_intel_rows
 from worldcup_predictions.evaluation.prediction_snapshots import compare_snapshot_rows, prediction_snapshot_rows
 from worldcup_predictions.evaluation.scheduled_update import build_prediction_run_summary_row
 from worldcup_predictions.model import HistoricalResult
-from worldcup_predictions.plugins.football_data.plugin import parse_football_data_matches, parse_football_data_teams
-from worldcup_predictions.plugins.ml_outcome.plugin import ml_signals_for_fixtures, train_outcome_bucket_model
-from worldcup_predictions.plugins.player_impact.plugin import player_impact_rows, signals_from_impact_rows
-from worldcup_predictions.plugins.public_analysis.plugin import match_analysis_cause_rows, match_analysis_team_adjustment_rows
-from worldcup_predictions.plugins.srf_public.plugin import parse_srf_results
+from worldcup_predictions.plugins.sources.fixtures.football_data.plugin import parse_football_data_matches, parse_football_data_teams
+from worldcup_predictions.plugins.signals.ml_outcome.plugin import ml_signals_for_fixtures, train_outcome_bucket_model
+from worldcup_predictions.plugins.signals.player_impact.plugin import player_impact_rows, signals_from_impact_rows
+from worldcup_predictions.plugins.sources.enrichment.public_analysis.plugin import match_analysis_cause_rows, match_analysis_team_adjustment_rows
+from worldcup_predictions.plugins.sources.fixtures.srf_public.plugin import parse_srf_results
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamResolver, TournamentState
 
 
@@ -278,7 +278,7 @@ class LegacyFeatureMigrationTest(unittest.TestCase):
         self.assertEqual(resolved.method, "ambiguous")
 
     def test_live_global_calibration_emits_draw_signal(self) -> None:
-        from worldcup_predictions.plugins.live_calibration.plugin import global_calibration_rows_from_state, global_calibration_signals
+        from worldcup_predictions.plugins.signals.live_calibration.plugin import global_calibration_rows_from_state, global_calibration_signals
 
         resolver = TeamResolver.default()
         fixtures = []
