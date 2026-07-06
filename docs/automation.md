@@ -7,7 +7,7 @@ The project is designed to run unattended on a server. Runtime data is local and
 Run two recurring jobs:
 
 ```bash
-# Hourly prediction/update workflow
+# Half-hourly prediction/update workflow
 worldcup-predictions scheduled-update
 
 # Daily heavier maintenance workflow
@@ -21,7 +21,7 @@ docker compose run --rm predictions worldcup-predictions scheduled-update
 docker compose run --rm predictions worldcup-predictions simulate-tournament
 ```
 
-## Hourly Job
+## Scheduled Update Job
 
 Command:
 
@@ -145,7 +145,7 @@ When GTM is enabled, the static theme script pushes these custom events to `data
 Example host cron shape:
 
 ```cron
-0,30 * * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-scheduled.lock ./scripts/run-with-timing.sh scheduled-update ./scripts/run-prod-compose.sh run --rm predictions worldcup-predictions scheduled-update >> logs/scheduled-update.log 2>&1
+0,30 * * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-scheduled.lock ./scripts/run-with-timing.sh scheduled-update ./scripts/run-live-scheduled-update.sh >> logs/scheduled-update.log 2>&1
 15 7 * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-simulate.lock ./scripts/run-with-timing.sh simulate-tournament ./scripts/run-prod-compose.sh run --rm predictions worldcup-predictions simulate-tournament >> logs/simulate-tournament.log 2>&1
 ```
 
@@ -155,6 +155,7 @@ Use whatever process supervisor fits the deployment. The important part is the c
 
 - `scripts/run-with-timing.sh`: cron wrapper that writes one `START` line and one `FINISH` line around a command, including exit status and wall-clock duration. The application still writes its own run manifest and prediction counts; the wrapper records scheduler-level runtime, including Docker startup and teardown.
 - `scripts/run-prod-compose.sh`: production compose wrapper that loads `/etc/worldcup-predictions/env` into the host process environment before calling `docker compose -f compose.prod.yaml`.
+- `scripts/run-live-scheduled-update.sh`: production scheduled-update wrapper. It pulls the latest `ghcr.io/helga-agentur/worldcup-predictions:main` image, reads the image's `org.opencontainers.image.revision` label, resets the checkout to that exact commit if it is reachable from `origin/main`, then runs `scheduled-update` through `run-prod-compose.sh`.
 - `scripts/sync-live-data.sh`: local development helper that pulls ignored live runtime data from the production server into local `./data/`.
 
 ## Runtime Data Update Hooks
@@ -167,7 +168,7 @@ Runtime data migrations are handled by versioned one-shot hooks:
 
 Each hook records a successful run in the `data_update_hooks` structured dataset. Later deploys skip hook ids that are already marked successful. These hooks are for cleanup of persisted runtime data only; they should not run predictions or publish tips.
 
-The hourly `scheduled-update` command runs pending data update hooks before it reads tournament state or writes new prediction outputs. In normal runs where all hooks are already applied, this is just a cheap no-op check.
+The scheduled `scheduled-update` command runs pending data update hooks before it reads tournament state or writes new prediction outputs. In normal runs where all hooks are already applied, this is just a cheap no-op check.
 
 ## Production Compose
 
@@ -200,7 +201,7 @@ BASE_URL=https://tippspiel.helga.ch
 GTM_CONTAINER_ID=
 ```
 
-The live cron entries must call `./scripts/run-prod-compose.sh`, not `docker compose` directly, otherwise `/etc/worldcup-predictions/env` will not be loaded.
+The live scheduled-update cron entry must call `./scripts/run-live-scheduled-update.sh`, and other live Docker commands should call `./scripts/run-prod-compose.sh`, not `docker compose` directly, otherwise `/etc/worldcup-predictions/env` will not be loaded.
 
 ## Sync Live Runtime Data
 
@@ -227,30 +228,17 @@ The helper requires `rsync` locally and on the live server.
 
 The remote `rsync` runs under non-blocking shared `flock` locks for the scheduled-update and simulation lock files. If live automation is currently writing data, the helper aborts instead of waiting or copying partial structured Parquet/DuckDB state.
 
-## GitHub Actions Deployment
+## GitHub Actions Image Publishing
 
-The repository includes a production deploy workflow at `.github/workflows/deploy.yml`. It runs on every push to `main` and can also be started manually from GitHub Actions.
+The repository includes a production image workflow at `.github/workflows/deploy.yml`. It runs on every push to `main` and can also be started manually from GitHub Actions. Manual runs only publish the production image when the selected ref is `main`.
 
-Deployment follows an image-promotion model:
+Deployment follows a pull-on-cron model:
 
 1. GitHub Actions builds the Docker image with Buildx.
-2. The image is pushed to GitHub Container Registry as `ghcr.io/helga-agentur/worldcup-predictions:main`.
-3. GitHub Actions connects to the server, resets `/opt/worldcup-predictions` to `origin/main`, and pulls the new image with `compose.prod.yaml`.
-4. Cron remains responsible for running data update hooks, `scheduled-update`, and publishing the next generated site.
-
-Required repository secrets:
-
-- `DEPLOY_HOST`: server hostname or IP address.
-- `DEPLOY_USER`: SSH user, for example `deploy`.
-- `DEPLOY_SSH_KEY`: private SSH key with access to the server.
-- `DEPLOY_KNOWN_HOSTS`: pinned SSH known-hosts entry for the server.
-- `DEPLOY_PORT`: optional SSH port. Defaults to `22`.
-
-Create `DEPLOY_KNOWN_HOSTS` from a trusted machine and verify the fingerprint before saving it as a GitHub secret:
-
-```bash
-ssh-keyscan -p 22 -H 49.13.7.69
-```
+2. The image is pushed to GitHub Container Registry as `ghcr.io/helga-agentur/worldcup-predictions:main` and tagged with the source commit SHA.
+3. The next live `scheduled-update` cron run pulls the production image.
+4. The server reads the image's `org.opencontainers.image.revision` label and resets `/opt/worldcup-predictions` to that exact commit.
+5. The same cron run applies pending data update hooks, runs `scheduled-update`, and publishes the regenerated site.
 
 The workflow uses the built-in `GITHUB_TOKEN` to push the image to GHCR. The production server pulls the image as the `deploy` user, so that user must be logged in to GHCR when the package is private or organization policy blocks public package visibility.
 
@@ -265,17 +253,26 @@ unset GHCR_PAT
 
 Docker stores this pull credential under the deploy user's Docker config. Do not put the GHCR token in the repository, GitHub Actions secrets, cron, or `/etc/worldcup-predictions/env`.
 
-The server deploy step runs:
+The server-side scheduled-update wrapper runs:
 
 ```bash
-git fetch origin main
-git reset --hard origin/main
 docker compose -f compose.prod.yaml pull predictions
+docker image inspect ghcr.io/helga-agentur/worldcup-predictions:main
+git fetch --prune origin main:refs/remotes/origin/main
+git reset --hard <image-revision>
+./scripts/run-prod-compose.sh run --rm predictions worldcup-predictions scheduled-update
 ```
 
-The deploy job has a 30-minute GitHub Actions timeout. The remote deploy command waits up to 10 minutes for `/tmp/worldcup-predictions-scheduled.lock`, so it does not reset the checkout or pull a new image while live automation is running. The next `scheduled-update` cron run applies any pending data update hooks and publishes the regenerated site with the newly pulled image.
+This means a successful image publish is picked up on the next half-hourly cron run. If the image build fails, live keeps using the previous image. If cron runs before GitHub Actions has finished pushing the new image, live keeps using the previous image and tries again on the next cron run.
 
-Deploy logs include the GitHub run context, image tags, remote host and Docker Compose version, current live commit, visible lock holder snapshot, lock wait start/acquire/release timestamps, reset target, and pulled image digest. If a deploy is cancelled or times out, check whether the log reached `acquired scheduled-update lock`; if not, it was still waiting behind live automation.
+Scheduled-update logs include the pulled image digest, image revision, checkout reset target, and normal prediction/site-build output. The scheduled-update cron lock still serializes code/image promotion with runtime data writes.
+
+One-time migration for an existing live server:
+
+1. Wait for a successful image publish from this commit.
+2. Under the scheduled-update lock, update `/opt/worldcup-predictions` to `origin/main` once so `scripts/run-live-scheduled-update.sh` exists.
+3. Update the scheduled-update crontab line to call `./scripts/run-live-scheduled-update.sh` as shown above.
+4. Leave the daily `simulate-tournament` cron line on `./scripts/run-prod-compose.sh`.
 
 ## Failure Behavior
 
