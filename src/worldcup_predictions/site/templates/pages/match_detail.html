@@ -27,9 +27,11 @@
       </h1>
       {{ prob_bar(row, full=True) }}
       <div class="detail-hero__tags">
+        {% if row.status == "future" %}
         <span class="status" data-status="{{ row.status }}">{{ row.status_label }}</span>
+        {% endif %}
         {% if row.status == "final" and row.actual_score %}
-        <span class="tag numeric">{{ t("label.result") }}: {{ row.actual_score }}</span>
+        <span class="tag numeric"{% if row.hit_result %} data-result="{{ row.hit_result }}"{% endif %}>{{ t("label.result") }}: {{ row.actual_score }}</span>
         {% if row.hit_label %}
         <span class="hit-chip" data-result="{{ row.hit_result }}">{{ row.hit_label }}</span>
         {% endif %}

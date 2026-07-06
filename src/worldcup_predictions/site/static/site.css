@@ -792,9 +792,9 @@ main p a:hover {
 }
 
 .status[data-status="future"] {
-  color: var(--paper);
-  border-color: var(--accent);
-  background: var(--accent);
+  color: var(--helga-blue);
+  border-color: var(--hover-row);
+  background: var(--hover-row);
 }
 
 .status[data-status="locked"] {
@@ -1025,19 +1025,22 @@ main p a:hover {
   margin-top: var(--space-8);
 }
 
-.hit-chip[data-result="exact"] {
+.hit-chip[data-result="exact"],
+.tag[data-result="exact"] {
   color: var(--paper);
   border-color: var(--accent);
   background: var(--accent);
 }
 
-.hit-chip[data-result="trend"] {
+.hit-chip[data-result="trend"],
+.tag[data-result="trend"] {
   color: var(--ink);
   border-color: var(--warning);
   background: var(--warning);
 }
 
-.hit-chip[data-result="miss"] {
+.hit-chip[data-result="miss"],
+.tag[data-result="miss"] {
   color: var(--paper);
   border-color: var(--danger);
   background: var(--danger);
