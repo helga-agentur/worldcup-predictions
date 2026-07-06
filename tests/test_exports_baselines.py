@@ -27,6 +27,7 @@ from worldcup_predictions.core.datasets import (
     PREDICTIONS,
     SIMULATION_SUMMARY,
     TOURNAMENT_FIXTURES,
+    TOURNAMENT_RESULTS,
 )
 from worldcup_predictions.core.events import EventName, event_value
 from worldcup_predictions.core.plugin import BasePlugin, PluginManager, PluginResult
@@ -263,6 +264,18 @@ class ExportAndBaselineTest(unittest.TestCase):
                 TOURNAMENT_FIXTURES,
                 [
                     {
+                        "record_key": "2026-07-03T18:00:00Z|RSA|CAN",
+                        "fixture_key": "2026-07-03T18:00:00Z|RSA|CAN",
+                        "event_date": "2026-07-03T18:00:00Z",
+                        "home_team": "South Africa",
+                        "away_team": "Canada",
+                        "home_fifa_code": "RSA",
+                        "away_fifa_code": "CAN",
+                        "stage": "Round of 32",
+                        "status": "final",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 73},
+                    },
+                    {
                         "record_key": "2026-07-06T19:00:00Z|POR|ESP",
                         "fixture_key": "2026-07-06T19:00:00Z|POR|ESP",
                         "event_date": "2026-07-06T19:00:00Z",
@@ -313,6 +326,40 @@ class ExportAndBaselineTest(unittest.TestCase):
                 ],
                 source="fifa_match_centre",
             )
+            storage.write_records(
+                TOURNAMENT_RESULTS,
+                [
+                    {
+                        "record_key": "result-fifa-m73",
+                        "fixture_key": "2026-07-03T18:00:00Z|RSA|CAN",
+                        "event_date": "2026-07-03T18:00:00Z",
+                        "home_team": "South Africa",
+                        "away_team": "Canada",
+                        "home_fifa_code": "RSA",
+                        "away_fifa_code": "CAN",
+                        "home_score": 0,
+                        "away_score": 1,
+                        "status": "final",
+                        "source": "fifa_match_centre",
+                        "metadata": {"match_number": 73},
+                    },
+                    {
+                        "record_key": "result-football-data-m73",
+                        "fixture_key": "2026-07-03T18:00:00Z|RSA|CAN",
+                        "event_date": "2026-07-03T18:00:00Z",
+                        "home_team": "South Africa",
+                        "away_team": "Canada",
+                        "home_fifa_code": "RSA",
+                        "away_fifa_code": "CAN",
+                        "home_score": 0,
+                        "away_score": 1,
+                        "status": "final",
+                        "source": "football_data_org",
+                        "metadata": {"match_number": 73},
+                    },
+                ],
+                source="test",
+            )
 
             result = build_site(project_root=root, storage=storage, gtm_container_id="", base_url="http://127.0.0.1:8000/")
             tournament_html = (result.output_dir / "en" / "tournament-forecast" / "index.html").read_text(encoding="utf-8")
@@ -320,6 +367,8 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertTrue((result.output_dir / "assets" / "vendor" / "bracketry-1.1.3.esm.js").exists())
             self.assertIn('import { createBracket } from "/assets/vendor/bracketry-1.1.3.esm.js";', tournament_html)
             self.assertIn('class="bracket-tree" data-bracketry-root', tournament_html)
+            self.assertNotIn('"matchLabel": "M73"', tournament_html)
+            self.assertNotIn('"name": "Round of 32"', tournament_html)
             self.assertEqual(tournament_html.count('"matchLabel": "M93"'), 1)
             self.assertIn('"matchStatus": "Mon, 06.07., 21:00"', tournament_html)
             self.assertIn('"matchLabel": "M93"', tournament_html)

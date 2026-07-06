@@ -599,14 +599,17 @@ def _localized_tournament_bracket(
 ) -> dict[str, Any] | None:
     if not matches:
         return None
-    round_index = {round_name: index for index, round_name in enumerate(KNOCKOUT_BRACKET_ROUNDS)}
+    visible_rounds = _visible_knockout_bracket_rounds(matches)
+    if not visible_rounds:
+        return None
+    round_index = {round_name: index for index, round_name in enumerate(visible_rounds)}
     round_match_numbers = {
         round_name: sorted(
             int(match_id.removeprefix("M"))
             for match_id, name in ROUND_NAMES.items()
             if name == round_name
         )
-        for round_name in KNOCKOUT_BRACKET_ROUNDS
+        for round_name in visible_rounds
     }
     bracket_matches = []
     contestants: dict[str, dict[str, Any]] = {}
@@ -657,7 +660,7 @@ def _localized_tournament_bracket(
         return None
     rounds = [
         {"name": catalog.translate(KNOCKOUT_ROUND_STAGE_KEYS[round_name])}
-        for round_name in KNOCKOUT_BRACKET_ROUNDS
+        for round_name in visible_rounds
     ]
     data = {
         "rounds": rounds,
@@ -668,6 +671,20 @@ def _localized_tournament_bracket(
         "data_json": json.dumps(data, ensure_ascii=False, sort_keys=True),
         "fallback_rows": fallback_rows,
     }
+
+
+def _visible_knockout_bracket_rounds(matches: list[KnockoutBracketMatch]) -> list[str]:
+    matches_by_round: dict[str, list[KnockoutBracketMatch]] = {round_name: [] for round_name in KNOCKOUT_BRACKET_ROUNDS}
+    for match in matches:
+        round_name = ROUND_NAMES.get(f"M{match.match_number}")
+        if round_name in matches_by_round:
+            matches_by_round[round_name].append(match)
+    return [
+        round_name
+        for round_name in KNOCKOUT_BRACKET_ROUNDS
+        if matches_by_round[round_name]
+        and (round_name == "Final" or any(match.result is None for match in matches_by_round[round_name]))
+    ]
 
 
 def _bracket_side(contestant_id: str, *, score: int | None, is_winner: bool) -> dict[str, Any]:
