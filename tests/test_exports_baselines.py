@@ -142,7 +142,67 @@ class ExportAndBaselineTest(unittest.TestCase):
                         "stage": "Semi-final",
                         "status": "scheduled",
                         "metadata": {"source": "fifa_match_centre"},
-                    }
+                    },
+                    {
+                        "record_key": "2026-07-14T22:00:00Z|ARG|POR",
+                        "fixture_key": "2026-07-14T22:00:00Z|ARG|POR",
+                        "event_date": "2026-07-14T22:00:00Z",
+                        "home_team": "Argentina",
+                        "away_team": "Portugal",
+                        "home_fifa_code": "ARG",
+                        "away_fifa_code": "POR",
+                        "stage": "Semi-final",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre"},
+                    },
+                    {
+                        "record_key": "2026-07-15T20:00:00Z|ENG|NED",
+                        "fixture_key": "2026-07-15T20:00:00Z|ENG|NED",
+                        "event_date": "2026-07-15T20:00:00Z",
+                        "home_team": "England",
+                        "away_team": "Netherlands",
+                        "home_fifa_code": "ENG",
+                        "away_fifa_code": "NED",
+                        "stage": "Semi-final",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre"},
+                    },
+                    {
+                        "record_key": "2026-07-15T22:00:00Z|COL|GHA",
+                        "fixture_key": "2026-07-15T22:00:00Z|COL|GHA",
+                        "event_date": "2026-07-15T22:00:00Z",
+                        "home_team": "Colombia",
+                        "away_team": "Ghana",
+                        "home_fifa_code": "COL",
+                        "away_fifa_code": "GHA",
+                        "stage": "Semi-final",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre"},
+                    },
+                    {
+                        "record_key": "2026-07-16T20:00:00Z|CRO|SUI",
+                        "fixture_key": "2026-07-16T20:00:00Z|CRO|SUI",
+                        "event_date": "2026-07-16T20:00:00Z",
+                        "home_team": "Croatia",
+                        "away_team": "Switzerland",
+                        "home_fifa_code": "CRO",
+                        "away_fifa_code": "SUI",
+                        "stage": "Semi-final",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre"},
+                    },
+                    {
+                        "record_key": "2026-07-16T22:00:00Z|MEX|JPN",
+                        "fixture_key": "2026-07-16T22:00:00Z|MEX|JPN",
+                        "event_date": "2026-07-16T22:00:00Z",
+                        "home_team": "Mexico",
+                        "away_team": "Japan",
+                        "home_fifa_code": "MEX",
+                        "away_fifa_code": "JPN",
+                        "stage": "Semi-final",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre"},
+                    },
                 ],
                 source="fifa_match_centre",
             )
@@ -158,6 +218,15 @@ class ExportAndBaselineTest(unittest.TestCase):
                                 {"answer": "Germany", "probability": 0.60},
                                 {"answer": "Spain", "probability": 0.123456},
                                 {"answer": "France", "probability": 0.04},
+                                {"answer": "Argentina", "probability": 0.03},
+                                {"answer": "Portugal", "probability": 0.025},
+                                {"answer": "England", "probability": 0.02},
+                                {"answer": "Netherlands", "probability": 0.018},
+                                {"answer": "Colombia", "probability": 0.016},
+                                {"answer": "Ghana", "probability": 0.014},
+                                {"answer": "Croatia", "probability": 0.012},
+                                {"answer": "Switzerland", "probability": 0.01},
+                                {"answer": "Mexico", "probability": 0.008},
                                 {"answer": "Brazil", "probability": 0.01},
                             ]
                         },
@@ -172,6 +241,7 @@ class ExportAndBaselineTest(unittest.TestCase):
 
             self.assertIn("Spanien", tournament_html)
             self.assertIn("Frankreich", tournament_html)
+            self.assertIn("Mexico", en_tournament_html)
             self.assertIn("12.35%", tournament_html)
             self.assertIn("4.00%", tournament_html)
             self.assertRegex(

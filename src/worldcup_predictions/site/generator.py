@@ -82,7 +82,6 @@ LEGACY_TOURNAMENT_PATHS = {
 }
 HOMEPAGE_MATCH_PREVIEW_LIMIT = 5
 HOMEPAGE_CHAMPION_PREVIEW_LIMIT = 5
-CHAMPION_ODDS_LIMIT = 10
 HEATMAP_MAX_GOALS = 5
 KNOCKOUT_ROUND_STAGE_KEYS = {
     "Round of 32": "slot.round.round_of_32",
@@ -568,7 +567,7 @@ def _simulation_champion_odds(
         "source": "simulation",
         "iterations": _optional_int(payload.get("iterations")) or 0,
         "as_of": latest[0],
-        "entries": entries[:CHAMPION_ODDS_LIMIT],
+        "entries": entries,
     }
 
 
@@ -603,7 +602,7 @@ def _market_champion_odds(
         "source": "market",
         "iterations": 0,
         "as_of": as_of,
-        "entries": entries[:CHAMPION_ODDS_LIMIT],
+        "entries": entries,
     }
 
 

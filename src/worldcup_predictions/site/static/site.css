@@ -1039,6 +1039,11 @@ main p a:hover {
   background: var(--warning);
 }
 
+html[data-theme="dark"] .hit-chip[data-result="trend"],
+html[data-theme="dark"] .tag[data-result="trend"] {
+  color: var(--paper);
+}
+
 .hit-chip[data-result="miss"],
 .tag[data-result="miss"] {
   color: var(--paper);
