@@ -719,7 +719,12 @@ main p a:hover {
   display: inline-flex;
   align-items: center;
   gap: var(--space-8);
+  color: var(--helga-blue);
   text-decoration: none;
+}
+
+.action-link:hover {
+  color: var(--ink);
 }
 
 .action-link .icon {
@@ -733,7 +738,12 @@ main p a:hover {
 .action-link:hover .icon,
 .action-link:focus-visible .icon {
   opacity: 0.72;
-  transform: translateX(4px);
+  transform: translateX(12px);
+}
+
+.action-link--back:hover .icon,
+.action-link--back:focus-visible .icon {
+  transform: translateX(-12px);
 }
 
 .match-name {

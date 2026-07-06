@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "partials/country_name.html" import country_name %}
+{% from "partials/icons.html" import icon %}
 {% from "partials/match_name.html" import match_name %}
 {% from "partials/probability_bar.html" import prob_bar %}
 
@@ -124,7 +125,7 @@
   </section>
 
   <footer class="match-detail__actions">
-    <a href="/{{ locale }}/">{{ t("detail.back") }}</a>
+    <a class="action-link action-link--back" href="/{{ locale }}/">{{ icon("arrow-left") }}<span>{{ t("detail.back") }}</span></a>
   </footer>
 </article>
 {% endblock %}

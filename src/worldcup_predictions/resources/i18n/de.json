@@ -7,7 +7,7 @@
   "confidence.medium_high": "Eher hoch",
   "confidence.medium_low": "Eher tief",
   "detail.advancement": "Weiterkommen",
-  "detail.back": "Zurück zur Übersicht",
+  "detail.back": "Zurück zur Startseite",
   "detail.explain_diff": "Wahrscheinlichstes Resultat ist {score} ({percent}) — der SRF-Tipp {tip} maximiert die erwarteten Punkte über alle wahrscheinlichen Spielverläufe.",
   "detail.explain_same": "Der SRF-Tipp entspricht dem wahrscheinlichsten Resultat {score} ({percent}).",
   "detail.hda_title": "Heimsieg / Unentschieden / Auswärtssieg",

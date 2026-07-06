@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
 {% from "partials/page_intro.html" import page_intro %}
 
 {% block content %}
@@ -28,4 +29,8 @@
     <p class="empty">{{ empty_text }}</p>
   {% endif %}
 </section>
+
+<footer class="match-detail__actions">
+  <a class="action-link action-link--back" href="/{{ locale }}/">{{ icon("arrow-left") }}<span>{{ t("detail.back") }}</span></a>
+</footer>
 {% endblock %}

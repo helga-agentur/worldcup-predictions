@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
 {% from "partials/page_intro.html" import page_intro %}
 {% from "partials/champion_odds.html" import champion_bars %}
 
@@ -28,6 +29,6 @@
 </section>
 
 <footer class="match-detail__actions">
-  <a href="/{{ locale }}/">{{ t("detail.back") }}</a>
+  <a class="action-link action-link--back" href="/{{ locale }}/">{{ icon("arrow-left") }}<span>{{ t("detail.back") }}</span></a>
 </footer>
 {% endblock %}

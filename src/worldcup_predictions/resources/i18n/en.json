@@ -7,7 +7,7 @@
   "confidence.medium_high": "Medium-high",
   "confidence.medium_low": "Medium-low",
   "detail.advancement": "Advancing chance",
-  "detail.back": "Back to overview",
+  "detail.back": "Back to home",
   "detail.explain_diff": "The most likely result is {score} ({percent}) — the SRF tip {tip} maximizes expected points across all likely outcomes.",
   "detail.explain_same": "The SRF tip matches the most likely result {score} ({percent}).",
   "detail.hda_title": "Home win / draw / away win",
