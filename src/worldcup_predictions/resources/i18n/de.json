@@ -120,7 +120,7 @@
   "tournament.lead": "Wahrscheinlichkeiten pro Team über alle offenen Spiele — bereits gespielte Resultate sind fixiert.",
   "tournament.source_market": "Markt-implizite Wahrscheinlichkeiten (No-Vig, Ø mehrere Buchmacher), Stand {date}.",
   "tournament.source_simulation": "Turniersimulation mit {iterations} Durchläufen, Stand {date}.",
-  "tournament.title": "Wer wird Weltmeister?",
+  "tournament.title": "Turnierprognose",
   "weekday.0": "Mo",
   "weekday.1": "Di",
   "weekday.2": "Mi",

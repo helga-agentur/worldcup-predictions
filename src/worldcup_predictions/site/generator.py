@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import html as html_lib
 import json
 import mimetypes
 import shutil
@@ -72,6 +73,10 @@ LOCALE_MATCH_LIST_PATHS = {
     },
 }
 LOCALE_TOURNAMENT_PATHS = {
+    "de": "/de/turnierprognose",
+    "en": "/en/tournament-forecast",
+}
+LEGACY_TOURNAMENT_PATHS = {
     "de": "/de/turnier",
     "en": "/en/tournament",
 }
@@ -649,6 +654,7 @@ def _html_files(localized_contexts: dict[str, dict[str, Any]]) -> list[str]:
         html_files.append(f"{locale}/index.html")
         html_files.extend(f"{LOCALE_MATCH_LIST_PATHS[locale][kind].lstrip('/')}/index.html" for kind in ("future", "past"))
         html_files.append(f"{LOCALE_TOURNAMENT_PATHS[locale].lstrip('/')}/index.html")
+        html_files.append(f"{LEGACY_TOURNAMENT_PATHS[locale].lstrip('/')}/index.html")
         html_files.extend(f"{str(row['detail_path']).lstrip('/')}/index.html" for row in context["rows"])
     return html_files
 
@@ -810,6 +816,13 @@ def _write_site_files(
             empty_key="empty.tipped",
         )
         _write_tournament_page(output_dir, template=tournament_template, context=context)
+        _write_redirect_page(
+            output_dir,
+            from_path=LEGACY_TOURNAMENT_PATHS[locale],
+            to_path=LOCALE_TOURNAMENT_PATHS[locale],
+            title=context["t"]("tournament.title"),
+            locale=locale,
+        )
         for row in context["rows"]:
             detail_dir = output_dir / str(row["detail_path"]).lstrip("/")
             detail_dir.mkdir(parents=True, exist_ok=True)
@@ -882,6 +895,12 @@ def _write_tournament_page(output_dir: Path, *, template, context: dict[str, Any
     page_dir.joinpath("index.html").write_text(template.render(**page_context), encoding="utf-8")
 
 
+def _write_redirect_page(output_dir: Path, *, from_path: str, to_path: str, title: str, locale: str) -> None:
+    page_dir = output_dir / from_path.lstrip("/")
+    page_dir.mkdir(parents=True, exist_ok=True)
+    page_dir.joinpath("index.html").write_text(_static_redirect_html(to_path, title=title, locale=locale), encoding="utf-8")
+
+
 def _tournament_alternate_links() -> list[dict[str, str]]:
     links = [{"locale": locale, "href": LOCALE_TOURNAMENT_PATHS[locale]} for locale in SITE_LOCALES]
     links.append({"locale": "x-default", "href": LOCALE_TOURNAMENT_PATHS[DEFAULT_SITE_LOCALE]})
@@ -946,6 +965,26 @@ def _language_redirect_html() -> str:
 </head>
 <body>
   <p><a href="/{fallback}/">{catalog.translate("redirect.continue")}</a></p>
+</body>
+</html>
+"""
+
+
+def _static_redirect_html(target: str, *, title: str, locale: str) -> str:
+    escaped_target = html_lib.escape(target, quote=True)
+    escaped_title = html_lib.escape(title, quote=True)
+    escaped_locale = html_lib.escape(locale, quote=True)
+    return f"""<!doctype html>
+<html lang="{escaped_locale}">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex">
+  <meta http-equiv="refresh" content="0; url={escaped_target}">
+  <title>{escaped_title}</title>
+  <script>window.location.replace({json.dumps(target)});</script>
+</head>
+<body>
+  <p><a href="{escaped_target}">{escaped_title}</a></p>
 </body>
 </html>
 """
@@ -2054,14 +2093,18 @@ def _sitemap_xml(localized_contexts: dict[str, dict[str, Any]]) -> str:
     urls = []
     for locale, context in localized_contexts.items():
         generated_at_utc = str(context["generated_at_utc"])
-        urls.append((f"/{locale}/", generated_at_utc))
-        urls.extend((LOCALE_MATCH_LIST_PATHS[locale][kind], generated_at_utc) for kind in ("future", "past"))
-        urls.append((LOCALE_TOURNAMENT_PATHS[locale], generated_at_utc))
-        urls.extend((str(row["detail_path"]) + "/", generated_at_utc) for row in context["rows"])
+        base_url = str(context["base_url"])
+        urls.append((_absolute_site_url(f"/{locale}/", base_url=base_url), generated_at_utc))
+        urls.extend(
+            (_absolute_site_url(LOCALE_MATCH_LIST_PATHS[locale][kind], base_url=base_url), generated_at_utc)
+            for kind in ("future", "past")
+        )
+        urls.append((_absolute_site_url(LOCALE_TOURNAMENT_PATHS[locale], base_url=base_url), generated_at_utc))
+        urls.extend((_absolute_site_url(str(row["detail_path"]) + "/", base_url=base_url), generated_at_utc) for row in context["rows"])
     url_nodes = "\n".join(
         f"""  <url>
-    <loc>{loc}</loc>
-    <lastmod>{lastmod}</lastmod>
+    <loc>{html_lib.escape(loc)}</loc>
+    <lastmod>{html_lib.escape(lastmod)}</lastmod>
   </url>"""
         for loc, lastmod in urls
     )

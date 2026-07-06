@@ -120,7 +120,7 @@
   "tournament.lead": "Per-team probabilities across all open matches — played results stay fixed.",
   "tournament.source_market": "Market-implied probabilities (no-vig, avg. of several bookmakers), as of {date}.",
   "tournament.source_simulation": "Tournament simulation with {iterations} runs, as of {date}.",
-  "tournament.title": "Who wins the World Cup?",
+  "tournament.title": "Tournament forecast",
   "weekday.0": "Mon",
   "weekday.1": "Tue",
   "weekday.2": "Wed",

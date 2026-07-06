@@ -91,8 +91,8 @@ Generated files include:
 - `public/current/en/index.html`
 - `public/current/de/spiele/kommende/index.html` and `.../vergangene/index.html`
 - `public/current/en/matches/future/index.html` and `.../past/index.html`
-- `public/current/de/turnier/index.html`
-- `public/current/en/tournament/index.html`
+- `public/current/de/turnierprognose/index.html`
+- `public/current/en/tournament-forecast/index.html`
 - `public/current/de/spiele/<match-slug>/index.html`
 - `public/current/en/matches/<match-slug>/index.html`
 - `public/current/api/predictions`
@@ -101,6 +101,8 @@ Generated files include:
 - `public/current/assets/favicon.svg`
 - `public/current/sitemap.xml`
 - `public/current/robots.txt`
+
+Legacy redirect pages are also emitted for `public/current/de/turnier/index.html` and `public/current/en/tournament/index.html`.
 
 Build manually:
 
