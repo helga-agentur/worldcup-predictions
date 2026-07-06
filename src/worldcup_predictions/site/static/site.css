@@ -522,10 +522,10 @@ h2 {
 .summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
+  gap: var(--space-sm);
   padding: 0;
-  background: var(--line);
-  border: 1px solid var(--line);
+  background: transparent;
+  border: 0;
 }
 
 .summary__card {
@@ -533,6 +533,7 @@ h2 {
   gap: var(--space-4);
   min-width: 0;
   padding: 18px;
+  border: 1px solid var(--line);
   background: var(--paper);
   text-align: center;
 }
@@ -714,9 +715,8 @@ h2 {
   font-size: var(--text-sm);
 }
 
-.homepage-grid__aside .odds__row {
-  grid-template-columns: minmax(0, 1.2fr) minmax(70px, 0.8fr) 52px;
-  gap: var(--space-8);
+.homepage-grid__aside .odds {
+  column-gap: var(--space-md);
 }
 
 .homepage-grid__aside .odds__team {
@@ -1291,18 +1291,21 @@ main p a:hover {
 
 .odds {
   display: grid;
-  gap: var(--space-10);
+  grid-template-columns: minmax(0, max-content) minmax(70px, 1fr) max-content;
+  gap: var(--space-md) var(--space-xl);
   margin-top: var(--space-md);
-}
-
-.odds__row {
-  display: grid;
-  grid-template-columns: 188px minmax(0, 1fr) 64px;
-  gap: var(--space-md);
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: var(--paper);
   align-items: center;
 }
 
+.odds__row {
+  display: contents;
+}
+
 .odds__team {
+  min-width: 0;
   font-size: var(--text-md);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1311,6 +1314,8 @@ main p a:hover {
 
 .odds__track {
   display: block;
+  width: 100%;
+  min-width: 0;
   height: 12px;
   border-radius: 6px;
   background: var(--line);
@@ -1325,6 +1330,7 @@ main p a:hover {
 }
 
 .odds__pct {
+  justify-self: end;
   font-family: "Degular", "Cadiz", system-ui, sans-serif;
   font-size: 1.15rem;
   text-align: right;
@@ -1366,18 +1372,23 @@ main p a:hover {
   text-decoration: none;
 }
 
+@media (max-width: 1272px) {
+  .homepage-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 900px) {
   .summary {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .homepage-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .homepage-grid__aside .odds__row {
+    display: contents;
   }
 
-  .homepage-grid__aside .odds__row {
-    grid-template-columns: 120px minmax(0, 1fr) 56px;
-    gap: var(--space-10);
+  .homepage-grid__aside .odds {
+    column-gap: var(--space-lg);
   }
 
   .homepage-grid__aside .odds__team {
@@ -1388,16 +1399,40 @@ main p a:hover {
     font-size: 1.15rem;
   }
 
+  .match-card__details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .match-card__when {
-    grid-auto-flow: column;
-    justify-content: start;
-    align-items: baseline;
-    gap: var(--space-10);
+    width: 100%;
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: center;
+    justify-items: center;
+    align-items: start;
+    gap: var(--space-2);
+    text-align: center;
+  }
+
+  .match-card__matchup {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: var(--space-8);
+  }
+
+  .match-card__team[data-side="home"],
+  .match-card__team[data-side="away"] {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .match-card__team[data-side="home"] .match-card__team-identity {
+    justify-content: center;
   }
 
   .match-card__tips {
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: row;
+    grid-auto-columns: unset;
   }
 
   .heatmap {
@@ -1405,8 +1440,7 @@ main p a:hover {
   }
 
   .odds__row {
-    grid-template-columns: 120px minmax(0, 1fr) 56px;
-    gap: var(--space-10);
+    display: contents;
   }
 }
 
@@ -1447,31 +1481,6 @@ main p a:hover {
     flex-direction: row;
     flex-wrap: nowrap;
     gap: var(--space-sm);
-  }
-
-  .match-card__details {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .match-card__matchup {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: center;
-    gap: var(--space-8);
-  }
-
-  .match-card__team[data-side="home"],
-  .match-card__team[data-side="away"] {
-    justify-content: center;
-    text-align: center;
-  }
-
-  .match-card__team[data-side="home"] .match-card__team-identity {
-    justify-content: center;
-  }
-
-  .match-card__tips {
-    grid-auto-flow: row;
-    grid-auto-columns: unset;
   }
 
   .detail-picks {

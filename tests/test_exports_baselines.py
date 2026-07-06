@@ -25,6 +25,7 @@ from worldcup_predictions.core.datasets import (
     PROVIDER_POINTS,
     PUBLISHED_PREDICTION_LEDGER,
     PREDICTIONS,
+    SIMULATION_SUMMARY,
     TOURNAMENT_FIXTURES,
 )
 from worldcup_predictions.core.events import EventName, event_value
@@ -122,6 +123,67 @@ class ExportAndBaselineTest(unittest.TestCase):
     def test_site_base_url_normalization_accepts_trailing_slash(self) -> None:
         self.assertEqual(normalized_base_url("http://127.0.0.1:8000/"), "http://127.0.0.1:8000")
         self.assertEqual(normalized_base_url("https://tippspiel.helga.ch"), "https://tippspiel.helga.ch")
+
+    def test_tournament_forecast_filters_eliminated_teams_and_formats_percentages(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            storage = DuckDBStorage.at_data_root(root / "data")
+            storage.write_records(
+                TOURNAMENT_FIXTURES,
+                [
+                    {
+                        "record_key": "2026-07-14T20:00:00Z|ESP|FRA",
+                        "fixture_key": "2026-07-14T20:00:00Z|ESP|FRA",
+                        "event_date": "2026-07-14T20:00:00Z",
+                        "home_team": "Spain",
+                        "away_team": "France",
+                        "home_fifa_code": "ESP",
+                        "away_fifa_code": "FRA",
+                        "stage": "Semi-final",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre"},
+                    }
+                ],
+                source="fifa_match_centre",
+            )
+            storage.write_records(
+                SIMULATION_SUMMARY,
+                [
+                    {
+                        "record_key": "sim-1",
+                        "simulation_id": "sim-1",
+                        "iterations": 20000,
+                        "distributions": {
+                            "champion": [
+                                {"answer": "Germany", "probability": 0.60},
+                                {"answer": "Spain", "probability": 0.123456},
+                                {"answer": "France", "probability": 0.04},
+                                {"answer": "Brazil", "probability": 0.01},
+                            ]
+                        },
+                    }
+                ],
+                source="simulate_tournament",
+            )
+
+            result = build_site(project_root=root, storage=storage, gtm_container_id="", base_url="http://127.0.0.1:8000/")
+            tournament_html = (result.output_dir / "de" / "turnierprognose" / "index.html").read_text(encoding="utf-8")
+            en_tournament_html = (result.output_dir / "en" / "tournament-forecast" / "index.html").read_text(encoding="utf-8")
+
+            self.assertIn("Spanien", tournament_html)
+            self.assertIn("Frankreich", tournament_html)
+            self.assertIn("12.35%", tournament_html)
+            self.assertIn("4.00%", tournament_html)
+            self.assertRegex(
+                tournament_html,
+                r"Turniersimulation mit 20(?:'|&#39;)000 Durchläufen, Stand \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}\.",
+            )
+            self.assertNotIn("Deutschland", tournament_html)
+            self.assertNotIn("Brasilien", tournament_html)
+            self.assertIn("Spain", en_tournament_html)
+            self.assertIn("France", en_tournament_html)
+            self.assertNotIn("Germany", en_tournament_html)
+            self.assertNotIn("Brazil", en_tournament_html)
 
     def test_published_ledger_replaces_stale_shifted_fixture_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -921,8 +983,11 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn(".content-width--narrow", css)
             self.assertIn("--content-width-max: var(--content-width-narrow-max);", css)
             self.assertIn(".summary", css)
+            self.assertIn(".summary {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: var(--space-sm);", css)
+            self.assertIn("background: transparent;", css)
             self.assertIn(".summary__card", css)
             self.assertIn(".summary__card {\n  display: grid;\n  gap: var(--space-4);", css)
+            self.assertIn(".summary__card {\n  display: grid;\n  gap: var(--space-4);\n  min-width: 0;\n  padding: 18px;\n  border: 1px solid var(--line);\n  background: var(--paper);", css)
             self.assertIn(".summary__value {\n  display: block;\n  max-width: 100%;\n  margin: 0;", css)
             self.assertIn("font-size: var(--text-value);", css)
             self.assertNotIn(".summary__value {\n  display: block;\n  max-width: 100%;\n  margin: 0;\n  margin-top:", css)
@@ -952,7 +1017,13 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn(".homepage-grid", css)
             self.assertIn("grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);", css)
             self.assertIn(".homepage-grid__main", css)
-            self.assertIn(".homepage-grid__aside .odds__row", css)
+            self.assertIn(".homepage-grid__aside .odds", css)
+            self.assertIn(
+                ".odds {\n  display: grid;\n  grid-template-columns: minmax(0, max-content) minmax(70px, 1fr) max-content;",
+                css,
+            )
+            self.assertIn(".odds__row {\n  display: contents;", css)
+            self.assertIn(".odds__track {\n  display: block;\n  width: 100%;\n  min-width: 0;", css)
             self.assertIn(".match-card", css)
             self.assertIn(".match-card__details", css)
             self.assertIn(".match-card__team-identity", css)
@@ -1004,8 +1075,10 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("transform: translateX(-12px);", css)
             self.assertIn(".language-switch", css)
             self.assertIn('.language-switch__link[aria-current="true"]', css)
+            self.assertIn("@media (max-width: 1272px)", css)
             self.assertIn("@media (max-width: 900px)", css)
             self.assertIn("@media (max-width: 760px)", css)
+            self.assertIn(".match-card__when {\n    width: 100%;\n    grid-auto-flow: row;\n    grid-template-columns: minmax(0, 1fr);\n    justify-content: center;\n    justify-items: center;", css)
             self.assertIn(".site-menu__footer {\n    align-items: center;\n    flex-direction: row;\n    flex-wrap: nowrap;\n    gap: var(--space-sm);", css)
             self.assertNotIn(".site-menu__footer {\n    align-items: flex-start;\n    flex-direction: column;", css)
             self.assertIn("@media (prefers-reduced-motion: reduce)", css)
