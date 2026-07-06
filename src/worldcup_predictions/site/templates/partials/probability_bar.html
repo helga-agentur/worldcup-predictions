@@ -8,16 +8,16 @@
   </div>
   {% if full %}
   {% set texts = [row.hda_bar.home_text, row.hda_bar.draw_text, row.hda_bar.away_text] %}
-  <p class="prob__legend" aria-hidden="true">
+  <p class="bar__legend" aria-hidden="true">
     {% for part in row.hda_parts %}
-    <span><span class="prob__dot" data-kind="{{ ["home", "draw", "away"][loop.index0] }}"></span>{{ part.label }} <span class="numeric">{{ texts[loop.index0] }}</span></span>
+    <span class="bar__legend-item"><span class="bar__dot" data-series="{{ ["primary", "muted", "contrast"][loop.index0] }}"></span>{{ part.label }} <span class="numeric">{{ texts[loop.index0] }}</span></span>
     {% endfor %}
   </p>
   {% else %}
-  <p class="prob__legend" aria-hidden="true">
-    <span><span class="prob__dot" data-kind="home"></span>{{ row.hda_bar.home_label }} <span class="numeric">{{ row.hda_bar.home_text }}</span></span>
-    <span><span class="prob__dot" data-kind="draw"></span>{{ row.hda_bar.draw_label }} <span class="numeric">{{ row.hda_bar.draw_text }}</span></span>
-    <span><span class="prob__dot" data-kind="away"></span>{{ row.hda_bar.away_label }} <span class="numeric">{{ row.hda_bar.away_text }}</span></span>
+  <p class="bar__legend" aria-hidden="true">
+    <span class="bar__legend-item"><span class="bar__dot" data-series="primary"></span>{{ row.hda_bar.home_label }} <span class="numeric">{{ row.hda_bar.home_text }}</span></span>
+    <span class="bar__legend-item"><span class="bar__dot" data-series="muted"></span>{{ row.hda_bar.draw_label }} <span class="numeric">{{ row.hda_bar.draw_text }}</span></span>
+    <span class="bar__legend-item"><span class="bar__dot" data-series="contrast"></span>{{ row.hda_bar.away_label }} <span class="numeric">{{ row.hda_bar.away_text }}</span></span>
   </p>
   {% endif %}
 </div>
