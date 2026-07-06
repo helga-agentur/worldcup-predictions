@@ -128,7 +128,8 @@
       </header>
       {% if tipped_preview_rows %}
         {% set rows_to_show = tipped_preview_rows %}
-        {% include "partials/match_rows.html" %}
+        {% set match_card_variant = "past" %}
+        {% include "partials/match_cards.html" %}
       {% else %}
         <p class="empty">{{ t("empty.tipped") }}</p>
       {% endif %}

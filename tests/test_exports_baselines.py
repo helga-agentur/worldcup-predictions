@@ -746,12 +746,22 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<a class="content-link" href="/de/spiele/kommende">Alle kommenden Spiele</a>', future_section)
             self.assertIn('<p class="section__actions">', past_section)
             self.assertIn('<a class="content-link" href="/de/spiele/vergangene">Alle vergangenen Spiele</a>', past_section)
-            self.assertIn('<a class="match-row" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open">', past_section)
-            self.assertIn("SRF Tipp 1:0", past_section)
-            self.assertIn("<strong>2:0</strong>", past_section)
-            self.assertIn("SRF +6 · 20min +5", past_section)
+            self.assertIn(
+                '<a class="match-card" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open" data-variant="past">',
+                past_section,
+            )
+            self.assertNotIn('<a class="match-row"', past_section)
+            self.assertIn("<span>2:0</span>", past_section)
+            self.assertIn('<span class="tip-chip__provider">SRF Tipp</span>', past_section)
+            self.assertIn('<span class="tip-chip__value numeric">1:0</span>', past_section)
+            self.assertIn('<span class="tip-chip__points numeric">+6 P.</span>', past_section)
+            self.assertIn('<span class="tip-chip__points numeric">+5 P.</span>', past_section)
             self.assertIn('<span class="hit-chip" data-result="trend">Richtig</span>', past_section)
             self.assertIn("🇧🇷", past_section)
+            self.assertIn(
+                '<a class="match-row" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open">',
+                de_past_html,
+            )
             self.assertNotIn('href="/">Prognosen</a>', html)
             self.assertIn('href="/de/" lang="de"', html)
             self.assertIn('aria-current="true">DE</a>', html)
@@ -863,10 +873,12 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn(".match-card__details", css)
             self.assertIn(".match-card__team-identity", css)
             self.assertIn(".match-card__matchup", css)
+            self.assertIn(".match-card__outcome", css)
             self.assertIn(".match-card__score", css)
             self.assertIn(".match-card__teams", css)
             self.assertIn(".tip-chip", css)
             self.assertIn(".match-rows", css)
+            self.assertIn(".status,\n.hit-chip", css)
             self.assertIn(".hit-chip", css)
             self.assertIn(".detail-hero", css)
             self.assertIn(".verdict", css)

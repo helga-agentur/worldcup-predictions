@@ -725,13 +725,15 @@ h2 {
   white-space: nowrap;
 }
 
-.status {
+.status,
+.hit-chip {
   display: inline-flex;
   align-items: center;
   min-height: 26px;
   padding: 3px 8px;
   border: 1px solid currentColor;
   font-size: var(--text-xs);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -874,6 +876,13 @@ h2 {
 
 .match-card__score[data-empty="true"] {
   color: var(--muted);
+}
+
+.match-card__outcome {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  align-items: center;
 }
 
 .match-card__tips {
@@ -1019,30 +1028,21 @@ h2 {
   justify-self: end;
 }
 
-.hit-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: var(--text-xs);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
 .hit-chip[data-result="exact"] {
   color: var(--paper);
+  border-color: var(--accent);
   background: var(--accent);
 }
 
 .hit-chip[data-result="trend"] {
   color: var(--ink);
+  border-color: var(--accent-soft);
   background: var(--accent-soft);
 }
 
 .hit-chip[data-result="miss"] {
   color: var(--paper);
+  border-color: var(--danger);
   background: var(--danger);
 }
 
