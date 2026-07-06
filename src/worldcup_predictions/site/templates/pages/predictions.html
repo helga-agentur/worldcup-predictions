@@ -73,10 +73,10 @@
           <span class="summary__chip-label">{{ t("summary.wrong_short") }}</span>
         </span>
       </dd>
-      <dd class="summary__hitbar" aria-hidden="true">
-        <span class="summary__hitbar-fill" data-result="exact" style="width: {{ summary_extras.hit_widths.exact }}%"></span>
-        <span class="summary__hitbar-fill" data-result="trend" style="width: {{ summary_extras.hit_widths.trend }}%"></span>
-        <span class="summary__hitbar-fill" data-result="miss" style="width: {{ summary_extras.hit_widths.miss }}%"></span>
+      <dd class="bar bar--status" aria-hidden="true">
+        <span class="bar__segment" data-state="strong" style="width: {{ summary_extras.hit_widths.exact }}%"></span>
+        <span class="bar__segment" data-state="good" style="width: {{ summary_extras.hit_widths.trend }}%"></span>
+        <span class="bar__segment" data-state="bad" style="width: {{ summary_extras.hit_widths.miss }}%"></span>
       </dd>
       {% endif %}
     </div>
@@ -92,54 +92,60 @@
   </dl>
 </section>
 
-<section class="section" aria-labelledby="future-title">
-  <header class="section__heading">
-    <section class="section__heading-copy">
-      <h2 id="future-title">{{ t("section.future.title") }}</h2>
-      <p>{{ t("section.future.description") }}</p>
+<div class="section homepage-grid{% if not champion %} homepage-grid--single{% endif %}">
+  <div class="homepage-grid__main">
+    <section class="homepage-panel" aria-labelledby="future-title">
+      <header class="section__heading">
+        <section class="section__heading-copy">
+          <h2 id="future-title">{{ t("section.future.title") }}</h2>
+          <p>{{ t("section.future.description") }}</p>
+        </section>
+      </header>
+      {% if future_preview_rows %}
+        {% set rows_to_show = future_preview_rows %}
+        {% include "partials/match_cards.html" %}
+      {% else %}
+        <p class="empty">{{ t("empty.future") }}</p>
+      {% endif %}
+      <p class="section__actions">
+        <a class="content-link" href="{{ future_list_path }}">{{ t("section.future.all") }}</a>
+      </p>
     </section>
-  </header>
-  {% if future_preview_rows %}
-    {% set rows_to_show = future_preview_rows %}
-    {% include "partials/match_cards.html" %}
-  {% else %}
-    <p class="empty">{{ t("empty.future") }}</p>
-  {% endif %}
-  <p class="section__actions">
-    <a class="content-link" href="{{ future_list_path }}">{{ t("section.future.all") }}</a>
-  </p>
-</section>
 
-<section class="section" aria-labelledby="past-title">
-  <header class="section__heading">
-    <section class="section__heading-copy">
-      <h2 id="past-title">{{ t("section.tipped.title") }}</h2>
-      <p>{{ t("section.tipped.description") }}</p>
+    <section class="homepage-panel" aria-labelledby="past-title">
+      <header class="section__heading">
+        <section class="section__heading-copy">
+          <h2 id="past-title">{{ t("section.tipped.title") }}</h2>
+          <p>{{ t("section.tipped.description") }}</p>
+        </section>
+      </header>
+      {% if tipped_preview_rows %}
+        {% set rows_to_show = tipped_preview_rows %}
+        {% include "partials/match_rows.html" %}
+      {% else %}
+        <p class="empty">{{ t("empty.tipped") }}</p>
+      {% endif %}
+      <p class="section__actions">
+        <a class="content-link" href="{{ past_list_path }}">{{ t("section.tipped.all") }}</a>
+      </p>
     </section>
-  </header>
-  {% if tipped_preview_rows %}
-    {% set rows_to_show = tipped_preview_rows %}
-    {% include "partials/match_rows.html" %}
-  {% else %}
-    <p class="empty">{{ t("empty.tipped") }}</p>
-  {% endif %}
-  <p class="section__actions">
-    <a class="content-link" href="{{ past_list_path }}">{{ t("section.tipped.all") }}</a>
-  </p>
-</section>
+  </div>
 
-{% if champion %}
-<section class="section" aria-labelledby="champion-title">
-  <header class="section__heading">
-    <section class="section__heading-copy">
-      <h2 id="champion-title">{{ t("tournament.title") }}</h2>
-      <p>{{ champion.source_text }}</p>
+  {% if champion %}
+  <aside class="homepage-grid__aside">
+    <section class="homepage-panel" aria-labelledby="champion-title">
+      <header class="section__heading">
+        <section class="section__heading-copy">
+          <h2 id="champion-title">{{ t("tournament.title") }}</h2>
+          <p>{{ champion.source_text }}</p>
+        </section>
+      </header>
+      {{ champion_bars(champion.preview_entries) }}
+      <p class="section__actions">
+        <a class="content-link" href="{{ tournament_path }}">{{ t("tournament.all") }}</a>
+      </p>
     </section>
-  </header>
-  {{ champion_bars(champion.preview_entries) }}
-  <p class="section__actions">
-    <a class="content-link" href="{{ tournament_path }}">{{ t("tournament.all") }}</a>
-  </p>
-</section>
-{% endif %}
+  </aside>
+  {% endif %}
+</div>
 {% endblock %}

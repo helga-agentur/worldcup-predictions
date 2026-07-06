@@ -1,10 +1,10 @@
 {% macro prob_bar(row, full=False) -%}
 {% if row.hda_bar %}
 <div class="prob"{% if full %} data-full="true"{% endif %}>
-  <div class="prob__bar" role="img" aria-label="{{ row.hda_aria }}">
-    <span class="prob__segment" data-kind="home" style="width: {{ row.hda_bar.home_width }}%"></span>
-    <span class="prob__segment" data-kind="draw" style="width: {{ row.hda_bar.draw_width }}%"></span>
-    <span class="prob__segment" data-kind="away"></span>
+  <div class="bar bar--series" role="img" aria-label="{{ row.hda_aria }}">
+    <span class="bar__segment" data-series="primary" style="width: {{ row.hda_bar.home_width }}%"></span>
+    <span class="bar__segment" data-series="muted" style="width: {{ row.hda_bar.draw_width }}%"></span>
+    <span class="bar__segment" data-series="contrast"></span>
   </div>
   {% if full %}
   {% set texts = [row.hda_bar.home_text, row.hda_bar.draw_text, row.hda_bar.away_text] %}
@@ -15,9 +15,9 @@
   </p>
   {% else %}
   <p class="prob__legend" aria-hidden="true">
-    <span><span class="prob__dot" data-kind="home"></span>1 <span class="numeric">{{ row.hda_bar.home_text }}</span></span>
-    <span><span class="prob__dot" data-kind="draw"></span>X <span class="numeric">{{ row.hda_bar.draw_text }}</span></span>
-    <span><span class="prob__dot" data-kind="away"></span>2 <span class="numeric">{{ row.hda_bar.away_text }}</span></span>
+    <span><span class="prob__dot" data-kind="home"></span>{{ row.hda_bar.home_label }} <span class="numeric">{{ row.hda_bar.home_text }}</span></span>
+    <span><span class="prob__dot" data-kind="draw"></span>{{ row.hda_bar.draw_label }} <span class="numeric">{{ row.hda_bar.draw_text }}</span></span>
+    <span><span class="prob__dot" data-kind="away"></span>{{ row.hda_bar.away_label }} <span class="numeric">{{ row.hda_bar.away_text }}</span></span>
   </p>
   {% endif %}
 </div>

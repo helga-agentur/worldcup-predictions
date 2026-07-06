@@ -29,6 +29,8 @@ from worldcup_predictions.core.i18n import SUPPORTED_LOCALES, TranslationCatalog
 from worldcup_predictions.entities.countries import CountryRegistry, load_country_registry
 from worldcup_predictions.entities.countries import normalize_entity_text
 from worldcup_predictions.evaluation.provider_points import points_for_row
+from worldcup_predictions.plugins.providers.ch_20min.rules import twenty_min_points_for_fixture
+from worldcup_predictions.plugins.providers.ch_srf.rules import srf_rules_for_fixture
 from worldcup_predictions.simulations.worldcup_2026 import ROUND_NAMES, group_letter
 from worldcup_predictions.storage.ledger import normalize_datetime, utc_now
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamRef
@@ -73,7 +75,7 @@ LOCALE_TOURNAMENT_PATHS = {
     "de": "/de/turnier",
     "en": "/en/tournament",
 }
-HOMEPAGE_MATCH_PREVIEW_LIMIT = 10
+HOMEPAGE_MATCH_PREVIEW_LIMIT = 5
 HOMEPAGE_CHAMPION_PREVIEW_LIMIT = 5
 CHAMPION_ODDS_LIMIT = 10
 HEATMAP_MAX_GOALS = 5
@@ -107,6 +109,7 @@ API_PRESENTATION_KEYS = {
     "advancement",
     "alternate_links",
     "away_flag",
+    "away_team_display",
     "away_team_label",
     "confidence_text",
     "current_url",
@@ -121,6 +124,7 @@ API_PRESENTATION_KEYS = {
     "heatmap",
     "hit_label",
     "home_flag",
+    "home_team_display",
     "home_team_label",
     "jsonld",
     "kickoff_display",
@@ -138,6 +142,7 @@ API_PRESENTATION_KEYS = {
     "record_key",
     "srf_account_display",
     "srf_expected_points_display",
+    "srf_projected_points_display",
     "srf_tip_label",
     "stage_label",
     "status_label",
@@ -1074,7 +1079,7 @@ def _fixture_record_from_site_row(row: dict[str, Any]) -> FixtureRecord:
         home_team=TeamRef(str(row.get("home_team") or ""), home_code or None),
         away_team=TeamRef(str(row.get("away_team") or ""), away_code or None),
         stage=_fixture_stage_from_site_row(row, metadata),
-        group=row.get("group"),
+        group=row.get("group") or metadata.get("group"),
         matchday=_optional_int(row.get("matchday")),
         source_id=row.get("source_id"),
         venue=row.get("venue"),
@@ -1084,10 +1089,12 @@ def _fixture_record_from_site_row(row: dict[str, Any]) -> FixtureRecord:
 
 
 def _fixture_stage_from_site_row(row: dict[str, Any], metadata: dict[str, Any]) -> str | None:
-    stage = row.get("stage") or metadata.get("phase")
+    stage = row.get("stage") or metadata.get("stage") or metadata.get("phase")
     current_metadata = metadata.get("current_prediction_ledger_metadata")
     if not stage and isinstance(current_metadata, dict):
-        stage = current_metadata.get("phase")
+        stage = current_metadata.get("stage") or current_metadata.get("phase")
+    if not stage:
+        stage = _knockout_round_name(row)
     return str(stage) if stage not in (None, "") else None
 
 
@@ -1307,12 +1314,16 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
     away_code = _country_code_from_fixture_key(str(prepared.get("fixture_key") or ""), side="away")
     home_flag = FIFA_FLAG_EMOJIS.get(home_code, "")
     away_flag = FIFA_FLAG_EMOJIS.get(away_code, "")
+    home_display = _country_name_display(home_name, home_flag)
+    away_display = _country_name_display(away_name, away_flag)
     prepared["match"] = f"{home_name} - {away_name}".strip(" -")
     prepared["home_team_label"] = home_name
     prepared["away_team_label"] = away_name
     prepared["home_flag"] = home_flag
     prepared["away_flag"] = away_flag
-    prepared["match_display"] = _match_display(home_name, home_code, away_name, away_code)
+    prepared["home_team_display"] = home_display
+    prepared["away_team_display"] = away_display
+    prepared["match_display"] = _match_display(home_display, away_display)
     prepared["status_label"] = _status_label(prepared.get("status"), catalog=catalog)
     prepared["actual_score_label"] = catalog.translate("label.result") if prepared.get("actual_score") else ""
     prepared["srf_tip_label"] = _tip_display_text(prepared.get("srf_tip"), country_registry=country_registry, locale=locale)
@@ -1339,10 +1350,20 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
     most_likely_away = _optional_int(prepared.get("most_likely_away"))
     prepared["most_likely_home_display"] = "" if most_likely_home is None else str(most_likely_home)
     prepared["most_likely_away_display"] = "" if most_likely_away is None else str(most_likely_away)
-    prepared["hda_bar"] = _hda_bar(prepared)
+    prepared["hda_bar"] = _hda_bar(prepared, catalog=catalog)
     prepared["hda_aria"] = _hda_aria(prepared, catalog=catalog)
-    prepared["srf_expected_points_display"] = _expected_points_display(prepared.get("srf_expected_points"))
-    prepared["twenty_min_expected_points_display"] = _expected_points_display(prepared.get("twenty_min_expected_points"))
+    prepared["srf_expected_points_display"] = _expected_points_display(
+        prepared.get("srf_expected_points"),
+        max_points=_srf_expected_points_max(prepared),
+    )
+    prepared["srf_projected_points_display"] = _projected_points_display(
+        _srf_points_for_most_likely_score(prepared),
+        max_points=_srf_expected_points_max(prepared),
+    )
+    prepared["twenty_min_expected_points_display"] = _expected_points_display(
+        prepared.get("twenty_min_expected_points"),
+        max_points=_twenty_min_expected_points_max(prepared),
+    )
     prepared["hit_result"] = _hit_category(prepared)
     prepared["hit_label"] = _hit_label(prepared.get("hit_result"), catalog=catalog)
     prepared["most_likely_percent_text"] = _most_likely_percent_text(prepared)
@@ -1441,14 +1462,18 @@ def _probability_values(row: dict[str, Any]) -> tuple[float, float, float] | Non
     return values[0], values[1], values[2]
 
 
-def _hda_bar(row: dict[str, Any]) -> dict[str, str] | None:
+def _hda_bar(row: dict[str, Any], *, catalog: TranslationCatalog) -> dict[str, str] | None:
     values = _probability_values(row)
     if values is None:
         return None
     home, draw, away = values
+    labels = _hda_compact_labels(row, catalog=catalog)
     return {
         "home_width": f"{home * 100:.2f}",
         "draw_width": f"{draw * 100:.2f}",
+        "home_label": labels["home"],
+        "draw_label": labels["draw"],
+        "away_label": labels["away"],
         "home_text": _round_percent_text(home),
         "draw_text": _round_percent_text(draw),
         "away_text": _round_percent_text(away),
@@ -1473,11 +1498,90 @@ def _round_percent_text(value: Any) -> str:
     return f"{round(number * 100)}%"
 
 
-def _expected_points_display(value: Any) -> str:
+def _expected_points_display(value: Any, *, max_points: Any = None) -> str:
     try:
-        return f"{float(value):.1f}"
+        value_text = f"{float(value):.1f}"
     except (TypeError, ValueError):
         return ""
+    max_text = _expected_points_max_display(max_points)
+    if max_text:
+        return f"{value_text}/{max_text}"
+    return value_text
+
+
+def _projected_points_display(value: Any, *, max_points: Any = None) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if number < 0:
+        return ""
+    value_text = str(int(number)) if number.is_integer() else f"{number:g}"
+    max_text = _expected_points_max_display(max_points)
+    if max_text:
+        return f"{value_text}/{max_text}"
+    return value_text
+
+
+def _expected_points_max_display(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if number <= 0:
+        return ""
+    if number.is_integer():
+        return str(int(number))
+    return f"{number:g}"
+
+
+def _srf_expected_points_max(row: dict[str, Any]) -> float | None:
+    try:
+        fixture = _fixture_record_from_site_row(row).to_fixture()
+        return float(srf_rules_for_fixture(fixture).ruleset().metadata["exact_score_points"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _twenty_min_expected_points_max(row: dict[str, Any]) -> float | None:
+    try:
+        fixture = _fixture_record_from_site_row(row).to_fixture()
+        _phase, points = twenty_min_points_for_fixture(fixture)
+        return float(points)
+    except (TypeError, ValueError):
+        return None
+
+
+def _srf_points_for_most_likely_score(row: dict[str, Any]) -> float | None:
+    tip = _score_tip_from_text(row.get("srf_tip"))
+    most_likely = _most_likely_score_tip(row)
+    if tip is None or most_likely is None:
+        return None
+    try:
+        fixture = _fixture_record_from_site_row(row).to_fixture()
+        return float(srf_rules_for_fixture(fixture).points_for_tip(tip, most_likely))
+    except (TypeError, ValueError):
+        return None
+
+
+def _most_likely_score_tip(row: dict[str, Any]) -> ScoreTip | None:
+    home = _optional_int(row.get("most_likely_home"))
+    away = _optional_int(row.get("most_likely_away"))
+    if home is None or away is None:
+        return _score_tip_from_text(row.get("most_likely_score"))
+    return ScoreTip(home, away)
+
+
+def _score_tip_from_text(value: Any) -> ScoreTip | None:
+    text = str(value or "")
+    if ":" not in text:
+        return None
+    home, away = text.split(":", 1)
+    home_goals = _optional_int(home)
+    away_goals = _optional_int(away)
+    if home_goals is None or away_goals is None:
+        return None
+    return ScoreTip(home_goals, away_goals)
 
 
 def _hit_category(row: dict[str, Any]) -> str | None:
@@ -1680,6 +1784,16 @@ def _hda_parts(row: dict[str, Any], *, catalog: TranslationCatalog) -> list[dict
     ]
 
 
+def _hda_compact_labels(row: dict[str, Any], *, catalog: TranslationCatalog) -> dict[str, str]:
+    home = str(row.get("home_team_label") or "").strip() or catalog.translate("prob.home")
+    away = str(row.get("away_team_label") or "").strip() or catalog.translate("prob.away")
+    return {
+        "home": home,
+        "draw": catalog.translate("prob.draw_short"),
+        "away": away,
+    }
+
+
 def _hda_title(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
     return " / ".join(
         (
@@ -1763,12 +1877,18 @@ def _country_code_from_fixture_key(fixture_key: str, *, side: str) -> str:
     return value if len(value) == 3 else ""
 
 
-def _match_display(home_name: str, home_code: str, away_name: str, away_code: str) -> str:
-    home_flag = FIFA_FLAG_EMOJIS.get(home_code)
-    away_flag = FIFA_FLAG_EMOJIS.get(away_code)
-    home_display = f"{home_flag} {home_name}" if home_flag else home_name
-    away_display = f"{away_name} {away_flag}" if away_flag else away_name
-    return f"{home_display} - {away_display}".strip(" -")
+def _country_name_display(label: str, flag: Any) -> dict[str, str]:
+    text = str(label or "").strip()
+    emoji = str(flag or "").strip()
+    return {
+        "flag": emoji,
+        "label": text,
+        "text": _flagged_label(emoji, text),
+    }
+
+
+def _match_display(home: dict[str, str], away: dict[str, str]) -> str:
+    return f"{home['text']} - {away['text']}".strip(" -")
 
 
 def _top_scores(score_matrix: Any, limit: int = 3) -> list[dict[str, Any]]:

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/country_name.html" import country_name %}
 {% from "partials/match_name.html" import match_name %}
 {% from "partials/probability_bar.html" import prob_bar %}
 
@@ -21,9 +22,7 @@
         · <time datetime="{{ row.event_date }}">{{ row.kickoff_display }}</time>
       </p>
       <h1 id="match-title" class="detail-hero__title">
-        {% if row.home_flag %}<span class="detail-hero__flag" aria-hidden="true">{{ row.home_flag }}</span>{% endif %}
-        {{ row.home_team_label }} – {{ row.away_team_label }}
-        {% if row.away_flag %}<span class="detail-hero__flag" aria-hidden="true">{{ row.away_flag }}</span>{% endif %}
+        {{ country_name(row.home_team_display, flag_class="detail-hero__flag") }} – {{ country_name(row.away_team_display, flag_class="detail-hero__flag") }}
       </h1>
       {{ prob_bar(row, full=True) }}
       {% if row.explain_text %}

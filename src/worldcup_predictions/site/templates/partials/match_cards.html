@@ -1,47 +1,56 @@
+{% from "partials/country_name.html" import country_name %}
 {% from "partials/probability_bar.html" import prob_bar %}
 <div class="match-cards">
   {% for row in rows_to_show %}
   <a class="match-card" href="{{ row.detail_path }}/" data-analytics-event="helga_match_open">
-    <span class="match-card__when">
-      {% if row.stage_label %}<span class="match-card__stage">{{ row.stage_label }}</span>{% endif %}
-      <time class="match-card__kickoff numeric" datetime="{{ row.event_date }}">{{ row.kickoff_display }}</time>
-    </span>
     <span class="match-card__teams">
-      <span class="match-card__team">
-        {% if row.home_flag %}<span class="match-card__flag" aria-hidden="true">{{ row.home_flag }}</span>{% endif %}
-        <span class="match-card__team-name">{{ row.home_team_label }}</span>
-        <span class="match-card__goal numeric">{{ row.most_likely_home_display }}</span>
-      </span>
-      <span class="match-card__team">
-        {% if row.away_flag %}<span class="match-card__flag" aria-hidden="true">{{ row.away_flag }}</span>{% endif %}
-        <span class="match-card__team-name">{{ row.away_team_label }}</span>
-        <span class="match-card__goal numeric">{{ row.most_likely_away_display }}</span>
+      <span class="match-card__matchup">
+        <span class="match-card__team" data-side="home">
+          {{ country_name(row.home_team_display, class_name="match-card__team-identity", flag_class="match-card__flag", label_class="match-card__team-name") }}
+        </span>
+        <span class="match-card__score numeric"{% if not row.most_likely_home_display and not row.most_likely_away_display %} data-empty="true"{% endif %}>
+          {%- if row.most_likely_home_display or row.most_likely_away_display -%}
+          <span>{{ row.most_likely_home_display or "-" }}</span><span aria-hidden="true">:</span><span>{{ row.most_likely_away_display or "-" }}</span>
+          {%- else -%}
+          <span>-</span>
+          {%- endif -%}
+        </span>
+        <span class="match-card__team" data-side="away">
+          {{ country_name(row.away_team_display, class_name="match-card__team-identity", flag_class="match-card__flag", label_class="match-card__team-name") }}
+        </span>
       </span>
       {{ prob_bar(row) }}
     </span>
-    <span class="match-card__tips">
-      {% if row.srf_tip_label or row.twenty_min_tip_label %}
-      {% if row.srf_tip_label %}
-      <span class="tip-chip" data-kind="primary">
-        <span class="tip-chip__provider">{{ t("table.srf_tip") }}</span>
-        <span class="tip-chip__value numeric">{{ row.srf_tip_label }}</span>
-        {% if row.srf_expected_points_display %}
-        <span class="tip-chip__points numeric" title="{{ t('label.expected_points') }}">{{ t("chip.points", value=row.srf_expected_points_display) }}</span>
+    <span class="match-card__details">
+      <span class="match-card__when">
+        {% if row.stage_label %}<span class="match-card__stage">{{ row.stage_label }}</span>{% endif %}
+        <time class="match-card__kickoff numeric" datetime="{{ row.event_date }}">{{ row.kickoff_display }}</time>
+      </span>
+      <span class="match-card__tips">
+        {% if row.srf_tip_label or row.twenty_min_tip_label %}
+        {% if row.srf_tip_label %}
+        <span class="tip-chip">
+          <span class="tip-chip__provider">{{ t("table.srf_tip") }}</span>
+          <span class="tip-chip__value numeric">{{ row.srf_tip_label }}</span>
+          {% set srf_points_display = row.srf_projected_points_display or row.srf_expected_points_display %}
+          {% if srf_points_display %}
+          <span class="tip-chip__points numeric" title="{{ t('label.projected_points') if row.srf_projected_points_display else t('label.expected_points') }}">{{ t("chip.points", value=srf_points_display) }}</span>
+          {% endif %}
+        </span>
+        {% endif %}
+        {% if row.twenty_min_tip_label %}
+        <span class="tip-chip">
+          <span class="tip-chip__provider">{{ t("table.twenty_min_tip") }}</span>
+          <span class="tip-chip__value">{{ row.twenty_min_tip_label }}</span>
+          {% if row.twenty_min_expected_points_display %}
+          <span class="tip-chip__points numeric" title="{{ t('label.expected_points') }}">{{ t("chip.points", value=row.twenty_min_expected_points_display) }}</span>
+          {% endif %}
+        </span>
+        {% endif %}
+        {% else %}
+        <span class="tip-chip" data-empty="true">{{ t("card.no_prediction") }}</span>
         {% endif %}
       </span>
-      {% endif %}
-      {% if row.twenty_min_tip_label %}
-      <span class="tip-chip">
-        <span class="tip-chip__provider">{{ t("table.twenty_min_tip") }}</span>
-        <span class="tip-chip__value">{{ row.twenty_min_tip_label }}</span>
-        {% if row.twenty_min_expected_points_display %}
-        <span class="tip-chip__points numeric" title="{{ t('label.expected_points') }}">{{ t("chip.points", value=row.twenty_min_expected_points_display) }}</span>
-        {% endif %}
-      </span>
-      {% endif %}
-      {% else %}
-      <span class="tip-chip" data-empty="true">{{ t("card.no_prediction") }}</span>
-      {% endif %}
     </span>
   </a>
   {% endfor %}

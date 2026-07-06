@@ -529,6 +529,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                         "provider_tips": {"srf.ch": {"tip": "1:0"}},
                         "srf_tip": "1:0",
                         "twenty_min_tip": "Brazil",
+                        "metadata": {"stage": "Group Stage", "group": "A"},
                     }
                 ],
                 source="test",
@@ -561,6 +562,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                         "score_matrix": [{"home": 4, "away": 4, "probability": 0.99}],
                         "srf_tip": "4:4",
                         "twenty_min_tip": "Draw",
+                        "metadata": {"stage": "Group Stage", "group": "A"},
                     }
                 ],
                 source="test",
@@ -691,10 +693,10 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<span class="summary__chip" data-result="trend">', html)
             self.assertIn('<span class="summary__chip-value">1</span>', html)
             self.assertIn('<span class="summary__chip-label">Richtig</span>', html)
-            self.assertIn('<dd class="summary__hitbar" aria-hidden="true">', html)
-            self.assertIn('<span class="summary__hitbar-fill" data-result="exact" style="width: 0.00%"></span>', html)
-            self.assertIn('<span class="summary__hitbar-fill" data-result="trend" style="width: 100.00%"></span>', html)
-            self.assertIn('<span class="summary__hitbar-fill" data-result="miss" style="width: 0.00%"></span>', html)
+            self.assertIn('<dd class="bar bar--status" aria-hidden="true">', html)
+            self.assertIn('<span class="bar__segment" data-state="strong" style="width: 0.00%"></span>', html)
+            self.assertIn('<span class="bar__segment" data-state="good" style="width: 100.00%"></span>', html)
+            self.assertIn('<span class="bar__segment" data-state="bad" style="width: 0.00%"></span>', html)
             self.assertIn('<dt class="summary__label">Offene Tipps</dt>', html)
             self.assertIn("Ø 6.0/Spiel", html)
             self.assertIn("Hit rate", en_html)
@@ -729,13 +731,15 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("<span>JSON API</span>", html)
             self.assertNotIn("resources__separator", html)
             self.assertIn(".resources__link .icon", css)
+            self.assertIn('<div class="section homepage-grid', html)
+            self.assertIn('<div class="homepage-grid__main">', html)
             future_section = html.split(
-                '<section class="section" aria-labelledby="future-title">', 1
+                '<section class="homepage-panel" aria-labelledby="future-title">', 1
             )[1].split(
-                '<section class="section" aria-labelledby="past-title">',
+                '<section class="homepage-panel" aria-labelledby="past-title">',
                 1,
             )[0]
-            past_section = html.split('<section class="section" aria-labelledby="past-title">', 1)[1]
+            past_section = html.split('<section class="homepage-panel" aria-labelledby="past-title">', 1)[1]
             self.assertIn('<p class="section__actions">', future_section)
             self.assertIn('<a class="content-link" href="/de/spiele/kommende">Alle kommenden Spiele</a>', future_section)
             self.assertIn('<p class="section__actions">', past_section)
@@ -765,13 +769,12 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('"startDate": "2026-07-10T18:00:00Z"', detail)
             self.assertIn('<h1 id="match-title" class="detail-hero__title">', detail)
             h1_match_name = detail.split('<h1 id="match-title" class="detail-hero__title">', 1)[1].split("</h1>", 1)[0]
-            self.assertIn("Brasilien – Japan", h1_match_name)
             self.assertIn('<span class="detail-hero__flag" aria-hidden="true">🇧🇷</span>', h1_match_name)
-            self.assertIn(
-                "Brazil – Japan",
-                en_detail.split('<h1 id="match-title" class="detail-hero__title">', 1)[1].split("</h1>", 1)[0],
-            )
-            self.assertIn('<div class="prob__bar" role="img"', detail)
+            self.assertIn('Brasilien – <span class="detail-hero__flag" aria-hidden="true">🇯🇵</span> Japan', h1_match_name)
+            en_h1_match_name = en_detail.split('<h1 id="match-title" class="detail-hero__title">', 1)[1].split("</h1>", 1)[0]
+            self.assertIn("Brazil –", en_h1_match_name)
+            self.assertIn('<span class="detail-hero__flag" aria-hidden="true">🇯🇵</span> Japan', en_h1_match_name)
+            self.assertIn('<div class="bar bar--series" role="img"', detail)
             self.assertIn("Sieg Brasilien 🇧🇷 52%", detail)
             self.assertIn("Unentschieden 27%", detail)
             self.assertIn("Brazil win 🇧🇷 52%", en_detail)
@@ -836,13 +839,23 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn(".summary__chips", css)
             self.assertIn(".summary__chip", css)
             self.assertIn(".summary__chip.numeric", css)
-            self.assertIn(".summary__hitbar", css)
-            self.assertIn('.summary__hitbar-fill[data-result="miss"]', css)
+            self.assertIn(".bar", css)
+            self.assertIn(".bar__segment", css)
+            self.assertIn(".bar--status", css)
+            self.assertIn('.bar--status .bar__segment[data-state="bad"]', css)
+            self.assertIn(".bar--series", css)
+            self.assertIn('.bar--series .bar__segment[data-series="primary"]', css)
+            self.assertIn(".homepage-grid", css)
+            self.assertIn("grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);", css)
+            self.assertIn(".homepage-grid__main", css)
+            self.assertIn(".homepage-grid__aside .odds__row", css)
             self.assertIn(".match-card", css)
+            self.assertIn(".match-card__details", css)
+            self.assertIn(".match-card__team-identity", css)
+            self.assertIn(".match-card__matchup", css)
+            self.assertIn(".match-card__score", css)
             self.assertIn(".match-card__teams", css)
             self.assertIn(".tip-chip", css)
-            self.assertIn(".prob__bar", css)
-            self.assertIn('.prob__segment[data-kind="home"]', css)
             self.assertIn(".match-rows", css)
             self.assertIn(".hit-chip", css)
             self.assertIn(".detail-hero", css)
@@ -888,6 +901,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                 "actual_score_label",
                 "alternate_links",
                 "away_flag",
+                "away_team_display",
                 "away_team_label",
                 "confidence_text",
                 "current_url",
@@ -897,6 +911,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                 "hda_title",
                 "hda_parts",
                 "home_flag",
+                "home_team_display",
                 "home_team_label",
                 "language_switch_links",
                 "match",
@@ -906,6 +921,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                 "record_key",
                 "srf_account_display",
                 "srf_tip_label",
+                "srf_projected_points_display",
                 "status_label",
                 "top_score_matrix",
                 "twenty_min_account_display",
@@ -971,7 +987,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertEqual(rows[0]["metadata"]["twenty_min_source"], "srf_tip_outcome_from_published_prediction_seed")
             self.assertTrue(rows[0]["metadata"]["replaced_retrospective_prediction"])
 
-    def test_site_scores_knockout_rows_from_published_metadata_phase(self) -> None:
+    def test_site_scores_knockout_rows_from_published_metadata_stage(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             storage = DuckDBStorage.at_data_root(root / "data")
@@ -991,7 +1007,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                         "actual_away": 1,
                         "srf_tip": "0:1",
                         "twenty_min_tip": "Canada",
-                        "metadata": {"phase": "knockout_stage"},
+                        "metadata": {"stage": "knockout_stage"},
                     }
                 ],
                 source="test",
@@ -1002,6 +1018,47 @@ class ExportAndBaselineTest(unittest.TestCase):
 
             self.assertEqual(payload["summary"]["srf_points"], 20.0)
             self.assertEqual(payload["summary"]["srf_points_display"], "20")
+
+    def test_site_shows_expected_points_against_provider_round_max(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            storage = DuckDBStorage.at_data_root(root / "data")
+            fixture_key = "2026-07-06T19:00:00Z|POR|ESP"
+            storage.write_records(
+                PUBLISHED_PREDICTION_LEDGER,
+                [
+                    {
+                        "record_key": fixture_key,
+                        "fixture_key": fixture_key,
+                        "event_date": "2026-07-06T19:00:00Z",
+                        "home_team": "Portugal",
+                        "away_team": "Spain",
+                        "status": "future",
+                        "prediction_context": "latest_live_prediction",
+                        "most_likely_home": 1,
+                        "most_likely_away": 1,
+                        "prob_home": 0.26,
+                        "prob_draw": 0.27,
+                        "prob_away": 0.47,
+                        "score_matrix": [{"home": 1, "away": 2, "probability": 0.12}],
+                        "srf_tip": "1:2",
+                        "srf_expected_points": 7.231939239561684,
+                        "twenty_min_tip": "Spain",
+                        "twenty_min_expected_points": 6.279744906423018,
+                        "metadata": {"stage": "Round of 16"},
+                    }
+                ],
+                source="test",
+            )
+
+            result = build_site(project_root=root, storage=storage, gtm_container_id="", base_url="https://tippspiel.helga.ch")
+            html = (result.output_dir / "de" / "index.html").read_text(encoding="utf-8")
+            detail = (result.output_dir / "de" / "spiele" / "2026-07-06-por-esp" / "index.html").read_text(encoding="utf-8")
+
+            self.assertIn("2/20 P.", html)
+            self.assertIn("6.3/10 P.", html)
+            self.assertIn('<strong class="numeric">7.2/20</strong>', detail)
+            self.assertIn("6.3/10 P.", detail)
 
     def test_site_counts_unpredicted_fixtures_and_keeps_locked_rows_out_of_upcoming_section(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

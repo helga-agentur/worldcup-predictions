@@ -1,0 +1,6 @@
+{% macro country_name(display, class_name="", flag_class="", label_class="", data_side="") -%}
+{%- if class_name -%}<span class="{{ class_name }}"{% if data_side %} data-side="{{ data_side }}"{% endif %}>{%- endif -%}
+{%- if display.flag -%}<span{% if flag_class %} class="{{ flag_class }}"{% endif %} aria-hidden="true">{{ display.flag }}</span>{{ " " }}{%- endif -%}
+{%- if label_class -%}<span class="{{ label_class }}">{{ display.label }}</span>{%- else -%}{{ display.label }}{%- endif -%}
+{%- if class_name -%}</span>{%- endif -%}
+{%- endmacro %}
