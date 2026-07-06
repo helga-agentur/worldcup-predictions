@@ -35,86 +35,88 @@
 </section>
 
 <section class="section" aria-labelledby="summary-title">
-  <h2 id="summary-title" class="visually-hidden">{{ t("summary.title") }}</h2>
-  <dl class="summary">
-    <div class="summary__card">
-      <dt class="summary__label">{{ t("summary.srf_points") }}</dt>
-      <dd class="summary__value">{{ summary.srf_points_display }}</dd>
-      {% if summary_extras.srf_points_bar.has_progress %}
-      <dd class="summary__bar">
-        <div class="bar bar--series" role="img" aria-label="{{ summary_extras.srf_points_bar.label }}">
-          <span class="bar__segment" data-series="primary" style="width: {{ summary_extras.srf_points_bar.width }}%"></span>
-          <span class="bar__segment" data-series="muted" style="width: {{ summary_extras.srf_points_bar.remaining_width }}%"></span>
-        </div>
-      </dd>
-      <dd class="summary__meta">
-        <div class="bar__legend" aria-hidden="true">
-          <span class="bar__legend-item numeric">{{ summary_extras.srf_points_bar.label }}</span>
-        </div>
-      </dd>
-      {% endif %}
-    </div>
-    <div class="summary__card">
-      <dt class="summary__label">{{ t("summary.twenty_min_points") }}</dt>
-      <dd class="summary__value">{{ summary.twenty_min_points_display }}</dd>
-      {% if summary_extras.twenty_min_points_bar.has_progress %}
-      <dd class="summary__bar">
-        <div class="bar bar--series" role="img" aria-label="{{ summary_extras.twenty_min_points_bar.label }}">
-          <span class="bar__segment" data-series="primary" style="width: {{ summary_extras.twenty_min_points_bar.width }}%"></span>
-          <span class="bar__segment" data-series="muted" style="width: {{ summary_extras.twenty_min_points_bar.remaining_width }}%"></span>
-        </div>
-      </dd>
-      <dd class="summary__meta">
-        <div class="bar__legend" aria-hidden="true">
-          <span class="bar__legend-item numeric">{{ summary_extras.twenty_min_points_bar.label }}</span>
-        </div>
-      </dd>
-      {% endif %}
-    </div>
-    <div class="summary__card">
-      <dt class="summary__label">{{ t("summary.hit_rate") }}</dt>
-      <dd class="summary__value">{{ summary_extras.hit_rate_text }}</dd>
-      {% if summary_extras.has_hits %}
-      <dd class="summary__bar">
-        <div class="bar bar--status" aria-hidden="true">
-          <span class="bar__segment" data-state="strong" style="width: {{ summary_extras.hit_widths.exact }}%"></span>
-          <span class="bar__segment" data-state="good" style="width: {{ summary_extras.hit_widths.trend }}%"></span>
-          <span class="bar__segment" data-state="bad" style="width: {{ summary_extras.hit_widths.miss }}%"></span>
-        </div>
-      </dd>
-      <dd class="summary__meta">
-        <div class="bar__legend" aria-label="{{ summary_extras.hit_breakdown_text }}">
-          <span class="bar__legend-item">
-            <span class="bar__dot" data-state="strong"></span><span class="numeric">{{ summary_extras.hit_counts.exact }}</span> {{ t("summary.exact_short") }}
-          </span>
-          <span class="bar__legend-item">
-            <span class="bar__dot" data-state="good"></span><span class="numeric">{{ summary_extras.hit_counts.trend }}</span> {{ t("summary.correct_short") }}
-          </span>
-          <span class="bar__legend-item">
-            <span class="bar__dot" data-state="bad"></span><span class="numeric">{{ summary_extras.hit_counts.miss }}</span> {{ t("summary.wrong_short") }}
-          </span>
-        </div>
-      </dd>
-      {% endif %}
-    </div>
-    <div class="summary__card">
-      <dt class="summary__label">{{ t("summary.played") }}</dt>
-      <dd class="summary__value">{{ summary_extras.played_matches_display }}</dd>
-      {% if summary_extras.played_matches_bar.has_progress %}
-      <dd class="summary__bar">
-        <div class="bar bar--series" role="img" aria-label="{{ summary_extras.played_matches_bar.label }}">
-          <span class="bar__segment" data-series="primary" style="width: {{ summary_extras.played_matches_bar.width }}%"></span>
-          <span class="bar__segment" data-series="muted" style="width: {{ summary_extras.played_matches_bar.remaining_width }}%"></span>
-        </div>
-      </dd>
-      <dd class="summary__meta">
-        <div class="bar__legend" aria-hidden="true">
-          <span class="bar__legend-item numeric">{{ summary_extras.played_matches_bar.label }}</span>
-        </div>
-      </dd>
-      {% endif %}
-    </div>
-  </dl>
+  <div class="content-width content-width--narrow">
+    <h2 id="summary-title" class="visually-hidden">{{ t("summary.title") }}</h2>
+    <dl class="summary">
+      <div class="summary__card">
+        <dt class="summary__label">{{ t("summary.srf_points") }}</dt>
+        <dd class="summary__value">{{ summary.srf_points_display }}</dd>
+        {% if summary_extras.srf_points_bar.has_progress %}
+        <dd class="summary__bar">
+          <div class="bar bar--series" role="img" aria-label="{{ summary_extras.srf_points_bar.label }}">
+            <span class="bar__segment" data-series="primary" style="width: {{ summary_extras.srf_points_bar.width }}%"></span>
+            <span class="bar__segment" data-series="muted" style="width: {{ summary_extras.srf_points_bar.remaining_width }}%"></span>
+          </div>
+        </dd>
+        <dd class="summary__meta">
+          <div class="bar__legend" aria-hidden="true">
+            <span class="bar__legend-item numeric">{{ summary_extras.srf_points_bar.label }}</span>
+          </div>
+        </dd>
+        {% endif %}
+      </div>
+      <div class="summary__card">
+        <dt class="summary__label">{{ t("summary.twenty_min_points") }}</dt>
+        <dd class="summary__value">{{ summary.twenty_min_points_display }}</dd>
+        {% if summary_extras.twenty_min_points_bar.has_progress %}
+        <dd class="summary__bar">
+          <div class="bar bar--series" role="img" aria-label="{{ summary_extras.twenty_min_points_bar.label }}">
+            <span class="bar__segment" data-series="primary" style="width: {{ summary_extras.twenty_min_points_bar.width }}%"></span>
+            <span class="bar__segment" data-series="muted" style="width: {{ summary_extras.twenty_min_points_bar.remaining_width }}%"></span>
+          </div>
+        </dd>
+        <dd class="summary__meta">
+          <div class="bar__legend" aria-hidden="true">
+            <span class="bar__legend-item numeric">{{ summary_extras.twenty_min_points_bar.label }}</span>
+          </div>
+        </dd>
+        {% endif %}
+      </div>
+      <div class="summary__card">
+        <dt class="summary__label">{{ t("summary.hit_rate") }}</dt>
+        <dd class="summary__value">{{ summary_extras.hit_rate_text }}</dd>
+        {% if summary_extras.has_hits %}
+        <dd class="summary__bar">
+          <div class="bar bar--status" aria-hidden="true">
+            <span class="bar__segment" data-state="strong" style="width: {{ summary_extras.hit_widths.exact }}%"></span>
+            <span class="bar__segment" data-state="good" style="width: {{ summary_extras.hit_widths.trend }}%"></span>
+            <span class="bar__segment" data-state="bad" style="width: {{ summary_extras.hit_widths.miss }}%"></span>
+          </div>
+        </dd>
+        <dd class="summary__meta">
+          <div class="bar__legend" aria-label="{{ summary_extras.hit_breakdown_text }}">
+            <span class="bar__legend-item">
+              <span class="bar__dot" data-state="strong"></span><span class="numeric">{{ summary_extras.hit_counts.exact }}</span> {{ t("summary.exact_short") }}
+            </span>
+            <span class="bar__legend-item">
+              <span class="bar__dot" data-state="good"></span><span class="numeric">{{ summary_extras.hit_counts.trend }}</span> {{ t("summary.correct_short") }}
+            </span>
+            <span class="bar__legend-item">
+              <span class="bar__dot" data-state="bad"></span><span class="numeric">{{ summary_extras.hit_counts.miss }}</span> {{ t("summary.wrong_short") }}
+            </span>
+          </div>
+        </dd>
+        {% endif %}
+      </div>
+      <div class="summary__card">
+        <dt class="summary__label">{{ t("summary.played") }}</dt>
+        <dd class="summary__value">{{ summary_extras.played_matches_display }}</dd>
+        {% if summary_extras.played_matches_bar.has_progress %}
+        <dd class="summary__bar">
+          <div class="bar bar--series" role="img" aria-label="{{ summary_extras.played_matches_bar.label }}">
+            <span class="bar__segment" data-series="primary" style="width: {{ summary_extras.played_matches_bar.width }}%"></span>
+            <span class="bar__segment" data-series="muted" style="width: {{ summary_extras.played_matches_bar.remaining_width }}%"></span>
+          </div>
+        </dd>
+        <dd class="summary__meta">
+          <div class="bar__legend" aria-hidden="true">
+            <span class="bar__legend-item numeric">{{ summary_extras.played_matches_bar.label }}</span>
+          </div>
+        </dd>
+        {% endif %}
+      </div>
+    </dl>
+  </div>
 </section>
 
 <div class="section homepage-grid{% if not champion %} homepage-grid--single{% endif %}">
@@ -132,9 +134,9 @@
       {% else %}
         <p class="empty">{{ t("empty.future") }}</p>
       {% endif %}
-      <p class="section__actions">
+      <div class="section__actions">
         <a class="action-link" href="{{ future_list_path }}"><span>{{ t("section.future.all") }}</span>{{ icon("arrow-right") }}</a>
-      </p>
+      </div>
     </section>
 
     <section class="homepage-panel" aria-labelledby="past-title">
@@ -151,9 +153,9 @@
       {% else %}
         <p class="empty">{{ t("empty.tipped") }}</p>
       {% endif %}
-      <p class="section__actions">
+      <div class="section__actions">
         <a class="action-link" href="{{ past_list_path }}"><span>{{ t("section.tipped.all") }}</span>{{ icon("arrow-right") }}</a>
-      </p>
+      </div>
     </section>
   </div>
 
@@ -167,9 +169,9 @@
         </section>
       </header>
       {{ champion_bars(champion.preview_entries) }}
-      <p class="section__actions">
+      <div class="section__actions">
         <a class="action-link" href="{{ tournament_path }}"><span>{{ t("tournament.all") }}</span>{{ icon("arrow-right") }}</a>
-      </p>
+      </div>
     </section>
   </aside>
   {% endif %}

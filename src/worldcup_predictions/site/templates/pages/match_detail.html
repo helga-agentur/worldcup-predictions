@@ -18,18 +18,15 @@
 <article class="match-detail" aria-labelledby="match-title">
   <header class="detail-hero">
     <div class="detail-hero__main">
-      <p class="detail-hero__kicker">
+      <div class="detail-hero__kicker">
         {{ t("site.kicker") }}{% if row.stage_label %} · {{ row.stage_label }}{% endif %}
         · <time datetime="{{ row.event_date }}">{{ row.kickoff_display }}</time>
-      </p>
+      </div>
       <h1 id="match-title" class="detail-hero__title">
         {{ country_name(row.home_team_display, flag_class="detail-hero__flag") }} – {{ country_name(row.away_team_display, flag_class="detail-hero__flag") }}
       </h1>
       {{ prob_bar(row, full=True) }}
-      {% if row.explain_text %}
-      <p class="detail-hero__explain">{{ row.explain_text }}</p>
-      {% endif %}
-      <p class="detail-hero__tags">
+      <div class="detail-hero__tags">
         <span class="status" data-status="{{ row.status }}">{{ row.status_label }}</span>
         {% if row.status == "final" and row.actual_score %}
         <span class="tag numeric">{{ t("label.result") }}: {{ row.actual_score }}</span>
@@ -50,7 +47,12 @@
           <span class="numeric">{{ row.advancement.percent_text }}</span>
         </span>
         {% endif %}
-      </p>
+      </div>
+      {% if row.explain_text %}
+      <div class="detail-hero__explain">
+        <p>{{ row.explain_text }}</p>
+      </div>
+      {% endif %}
     </div>
   </header>
 
@@ -59,84 +61,86 @@
     <article class="detail-pick">
       <h3 class="detail-pick__label">{{ t("table.srf_tip") }}</h3>
       {% if row.srf_tip_label %}
-      <p class="detail-pick__value numeric">{{ row.srf_tip_label }}</p>
+      <div class="detail-pick__value numeric">{{ row.srf_tip_label }}</div>
       {% if row.status == "final" and row.srf_account_display %}
-      <p class="detail-pick__meta">
+      <div class="detail-pick__meta">
         <span>{{ t("label.points") }}</span>
         <strong class="detail-pick__points numeric"{% if row.srf_match_points|float > 0 %} data-state="positive"{% endif %}>{{ t("chip.points", value="+" ~ row.srf_match_points|float_text(precision=0)) }}</strong>
-      </p>
+      </div>
       {% elif row.srf_expected_points_display %}
-      <p class="detail-pick__meta">
+      <div class="detail-pick__meta">
         <span>{{ t("label.expected_points") }}</span>
         <strong class="detail-pick__points numeric">{{ t("chip.points", value=row.srf_expected_points_display) }}</strong>
-      </p>
+      </div>
       {% endif %}
       {% else %}
-      <p class="detail-pick__value" data-size="text">{{ row.status_label }}</p>
-      <p class="detail-pick__meta">{{ t("card.no_prediction") }}</p>
+      <div class="detail-pick__value" data-size="text">{{ row.status_label }}</div>
+      <div class="detail-pick__meta">{{ t("card.no_prediction") }}</div>
       {% endif %}
     </article>
     <article class="detail-pick">
       <h3 class="detail-pick__label">{{ t("table.twenty_min_tip") }}</h3>
       {% if row.twenty_min_tip_label %}
-      <p class="detail-pick__value">{{ row.twenty_min_tip_plain_label }}</p>
+      <div class="detail-pick__value">{{ row.twenty_min_tip_plain_label }}</div>
       {% if row.status == "final" and row.twenty_min_account_display %}
-      <p class="detail-pick__meta">
+      <div class="detail-pick__meta">
         <span>{{ t("label.points") }}</span>
         <strong class="detail-pick__points numeric"{% if row.twenty_min_match_points|float > 0 %} data-state="positive"{% endif %}>{{ t("chip.points", value="+" ~ row.twenty_min_match_points|float_text(precision=0)) }}</strong>
-      </p>
+      </div>
       {% elif row.twenty_min_expected_points_display %}
-      <p class="detail-pick__meta">
+      <div class="detail-pick__meta">
         <span>{{ t("label.expected_points") }}</span>
         <strong class="detail-pick__points numeric">{{ t("chip.points", value=row.twenty_min_expected_points_display) }}</strong>
-      </p>
+      </div>
       {% endif %}
       {% else %}
-      <p class="detail-pick__value" data-size="text">{{ row.status_label }}</p>
-      <p class="detail-pick__meta">{{ t("card.no_prediction") }}</p>
+      <div class="detail-pick__value" data-size="text">{{ row.status_label }}</div>
+      <div class="detail-pick__meta">{{ t("card.no_prediction") }}</div>
       {% endif %}
     </article>
   </section>
 
   <section class="section" aria-labelledby="matrix-title">
-    <h2 id="matrix-title">{{ t("detail.matrix_title") }}</h2>
-    {% if row.heatmap %}
-    <div class="heatmap">
-      <div class="heatmap__scroll">
-        <table class="heatmap__table">
-          <caption class="visually-hidden">{{ row.heatmap.axis_text }}</caption>
-          <thead>
-            <tr>
-              <th scope="col" class="heatmap__corner"><span aria-hidden="true">{{ row.home_flag }}</span>\<span aria-hidden="true">{{ row.away_flag }}</span></th>
-              {% for column in row.heatmap.columns %}
-              <th scope="col" class="numeric">{{ column }}</th>
+    <div class="content-width content-width--narrow">
+      <h2 id="matrix-title">{{ t("detail.matrix_title") }}</h2>
+      {% if row.heatmap %}
+      <div class="heatmap">
+        <div class="heatmap__scroll">
+          <table class="heatmap__table">
+            <caption class="visually-hidden">{{ row.heatmap.axis_text }}</caption>
+            <thead>
+              <tr>
+                <th scope="col" class="heatmap__corner"><span aria-hidden="true">{{ row.home_flag }}</span>\<span aria-hidden="true">{{ row.away_flag }}</span></th>
+                {% for column in row.heatmap.columns %}
+                <th scope="col" class="numeric">{{ column }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for matrix_row in row.heatmap.rows %}
+              <tr>
+                <th scope="row" class="numeric">{{ matrix_row.home }}</th>
+                {% for cell in matrix_row.cells %}
+                <td class="heatmap__cell"{% if cell.hot %} data-hot="true"{% endif %}{% if cell.most_likely %} data-most-likely="true"{% endif %}{% if cell.actual %} data-actual="true"{% endif %}
+                    style="--heat: {{ cell.weight }}%" title="{{ cell.title }}">{{ cell.label }}</td>
+                {% endfor %}
+              </tr>
               {% endfor %}
-            </tr>
-          </thead>
-          <tbody>
-            {% for matrix_row in row.heatmap.rows %}
-            <tr>
-              <th scope="row" class="numeric">{{ matrix_row.home }}</th>
-              {% for cell in matrix_row.cells %}
-              <td class="heatmap__cell"{% if cell.hot %} data-hot="true"{% endif %}{% if cell.most_likely %} data-most-likely="true"{% endif %}{% if cell.actual %} data-actual="true"{% endif %}
-                  style="--heat: {{ cell.weight }}%" title="{{ cell.title }}">{{ cell.label }}</td>
-              {% endfor %}
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
+        <div class="heatmap__side">
+          <div class="heatmap__axis">{{ row.heatmap.axis_text }}</div>
+          <div class="heatmap__scale" aria-hidden="true"><span>0%</span><span class="heatmap__swatch"></span><span class="numeric">{{ row.most_likely_percent_text }}</span></div>
+          {% for note in row.heatmap.legend %}
+          <p class="heatmap__note">{{ note }}</p>
+          {% endfor %}
+        </div>
       </div>
-      <div class="heatmap__side">
-        <p class="heatmap__axis">{{ row.heatmap.axis_text }}</p>
-        <p class="heatmap__scale" aria-hidden="true"><span>0%</span><span class="heatmap__swatch"></span><span class="numeric">{{ row.most_likely_percent_text }}</span></p>
-        {% for note in row.heatmap.legend %}
-        <p class="heatmap__note">{{ note }}</p>
-        {% endfor %}
-      </div>
+      {% else %}
+      <p class="empty">{{ t("empty.matrix") }}</p>
+      {% endif %}
     </div>
-    {% else %}
-    <p class="empty">{{ t("empty.matrix") }}</p>
-    {% endif %}
   </section>
 
   <footer class="match-detail__actions">

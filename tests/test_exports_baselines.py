@@ -683,6 +683,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn("Der gesamte Code ist öffentlich", html)
             self.assertNotIn("The full code is public", en_html)
             self.assertIn('<section class="section" aria-labelledby="summary-title">', html)
+            self.assertIn('<div class="content-width content-width--narrow">', html)
             self.assertIn('<h2 id="summary-title" class="visually-hidden">Prognosen Übersicht</h2>', html)
             self.assertIn('<dl class="summary">', html)
             self.assertIn('<dt class="summary__label">SRF Punkte</dt>', html)
@@ -754,14 +755,14 @@ class ExportAndBaselineTest(unittest.TestCase):
                 1,
             )[0]
             past_section = html.split('<section class="homepage-panel" aria-labelledby="past-title">', 1)[1]
-            self.assertIn('<p class="section__actions">', future_section)
+            self.assertIn('<div class="section__actions">', future_section)
             self.assertIn(
                 '<a class="action-link" href="/de/spiele/kommende"><span>Alle kommenden Spiele</span>',
                 future_section,
             )
             self.assertIn('<path d="M5 12h14"></path>', future_section)
             self.assertNotIn('data-state="positive" title=', future_section)
-            self.assertIn('<p class="section__actions">', past_section)
+            self.assertIn('<div class="section__actions">', past_section)
             self.assertIn(
                 '<a class="action-link" href="/de/spiele/vergangene"><span>Alle vergangenen Spiele</span>',
                 past_section,
@@ -840,6 +841,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                 en_detail,
             )
             self.assertIn("Der SRF-Tipp entspricht dem wahrscheinlichsten Resultat 1:0 (12%).", detail)
+            self.assertLess(detail.index('<div class="detail-hero__tags">'), detail.index('<div class="detail-hero__explain">'))
             self.assertIn("Fr, 10.07.2026, 20:00", detail)
             self.assertIn("Fri, 10.07.2026, 20:00", en_detail)
             self.assertIn('xG 1.23:0.88', detail)
@@ -848,12 +850,13 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<span class="hit-chip" data-result="trend">Teilweise richtig</span>', detail)
             self.assertIn('<section class="detail-picks" aria-labelledby="detail-picks-title">', detail)
             self.assertIn('<h3 class="detail-pick__label">SRF Tipp</h3>', detail)
-            self.assertIn('<p class="detail-pick__value numeric">1:0</p>', detail)
+            self.assertIn('<div class="detail-pick__value numeric">1:0</div>', detail)
             self.assertIn('<h3 class="detail-pick__label">20min Tipp</h3>', detail)
-            self.assertIn('<p class="detail-pick__value">Brasilien</p>', detail)
+            self.assertIn('<div class="detail-pick__value">Brasilien</div>', detail)
             self.assertIn('<strong class="detail-pick__points numeric" data-state="positive">+6 P.</strong>', detail)
             self.assertIn("+6 P.", detail)
             self.assertIn("Resultat-Matrix", detail)
+            self.assertIn('<section class="section" aria-labelledby="matrix-title">\n    <div class="content-width content-width--narrow">', detail)
             self.assertIn('<table class="heatmap__table">', detail)
             self.assertIn('class="heatmap__cell" data-hot="true" data-most-likely="true"', detail)
             self.assertIn('title="1:0 — 12.3%"', detail)
@@ -877,7 +880,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("--motion-nav-surface: 420ms;", css)
             self.assertIn("--motion-nav-content-opacity: 220ms;", css)
             self.assertIn("--motion-nav-content-transform: 260ms;", css)
-            self.assertIn("--summary-max: calc(var(--max) - (var(--space-lg) * 8));", css)
+            self.assertIn("--content-width-narrow-max: calc(var(--max) - (var(--space-lg) * 8));", css)
             self.assertIn('html[data-theme="dark"]', css)
             self.assertIn("--helga-blue: #8fa2ff;", css)
             self.assertIn("--accent: #399918;", css)
@@ -905,9 +908,12 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn(".site-menu__link .icon", css)
             self.assertIn("color: currentColor;", css)
             self.assertIn('.site-menu__link[aria-current="page"]', css)
+            self.assertIn(".content-width", css)
+            self.assertIn("max-width: var(--content-width-max, var(--max));", css)
+            self.assertIn("margin-inline: auto;", css)
+            self.assertIn(".content-width--narrow", css)
+            self.assertIn("--content-width-max: var(--content-width-narrow-max);", css)
             self.assertIn(".summary", css)
-            self.assertIn("max-width: var(--summary-max);", css)
-            self.assertIn("margin: 0 auto;", css)
             self.assertIn(".summary__card", css)
             self.assertIn(".summary__meta", css)
             self.assertIn(".summary__bar", css)
@@ -952,6 +958,15 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn(".detail-hero", css)
             self.assertIn(".detail-picks", css)
             self.assertIn(".detail-pick", css)
+            self.assertIn(
+                ".detail-pick__label {\n  margin: 0;\n  color: var(--muted);\n  font-size: var(--text-xs);\n  letter-spacing: 0.09em;\n  text-align: center;",
+                css,
+            )
+            self.assertIn(
+                '.detail-pick__value {\n  margin: 0;\n  font-family: "Degular", "Cadiz", system-ui, sans-serif;\n  font-size: clamp(3rem, 6vw, 4.4rem);\n  line-height: 0.95;\n  color: var(--ink);\n  text-align: center;',
+                css,
+            )
+            self.assertIn(".detail-hero__explain > p {\n  margin: 0;\n}", css)
             self.assertIn(".heatmap__table", css)
             self.assertIn("color-mix(in srgb, var(--helga-blue) var(--heat, 0%), var(--mist))", css)
             self.assertIn(".odds__row", css)
@@ -1163,7 +1178,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("10/10 P.", html)
             self.assertNotIn("6.3/10 P.", html)
             self.assertIn('<strong class="detail-pick__points numeric">7.2/20 P.</strong>', detail)
-            self.assertIn('<p class="detail-pick__value">Spanien</p>', detail)
+            self.assertIn('<div class="detail-pick__value">Spanien</div>', detail)
             self.assertIn('<strong class="detail-pick__points numeric">6.3/10 P.</strong>', detail)
 
     def test_site_counts_unpredicted_fixtures_and_keeps_locked_rows_out_of_upcoming_section(self) -> None:
