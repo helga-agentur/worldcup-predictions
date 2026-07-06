@@ -1,6 +1,6 @@
 {
   "card.no_prediction": "Prognose folgt",
-  "chip.points": "{value} P.",
+  "chip.points": "{value} Punkte",
   "confidence.high": "Hoch",
   "confidence.low": "Tief",
   "confidence.medium": "Mittel",
@@ -106,7 +106,7 @@
   "summary.next_kickoff": "Nächstes",
   "summary.open": "Offene Tipps",
   "summary.played": "Gespielte Spiele",
-  "summary.points_progress": "{current}/{max} P.",
+  "summary.points_progress": "{current}/{max} Punkte",
   "summary.srf_points": "SRF Punkte",
   "summary.tipped": "Vergangene Spiele",
   "summary.title": "Prognosen Übersicht",
