@@ -5,12 +5,12 @@
 
 {% block content %}
 <nav class="breadcrumb" aria-label="Breadcrumb">
-  <a class="breadcrumb__link" href="/{{ locale }}/" aria-current="page">{{ t("nav.predictions") }}</a>
+  <a class="breadcrumb__link" href="/{{ locale }}/" aria-current="page">{{ t("nav.home") }}</a>
 </nav>
 
 <section class="section" aria-labelledby="page-title">
   {% set blog_link -%}
-  <a class="content-link" href="https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8" target="_blank" rel="noopener" data-analytics-event="helga_blog_click">{{ t("site.blog_link") }}</a>
+  <a href="https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8" target="_blank" rel="noopener" data-analytics-event="helga_blog_click">{{ t("site.blog_link") }}</a>
   {%- endset %}
   {{ page_intro(
     "page-title",
@@ -115,7 +115,7 @@
         <p class="empty">{{ t("empty.future") }}</p>
       {% endif %}
       <p class="section__actions">
-        <a class="content-link" href="{{ future_list_path }}">{{ t("section.future.all") }}</a>
+        <a class="action-link" href="{{ future_list_path }}"><span>{{ t("section.future.all") }}</span>{{ icon("arrow-right") }}</a>
       </p>
     </section>
 
@@ -134,7 +134,7 @@
         <p class="empty">{{ t("empty.tipped") }}</p>
       {% endif %}
       <p class="section__actions">
-        <a class="content-link" href="{{ past_list_path }}">{{ t("section.tipped.all") }}</a>
+        <a class="action-link" href="{{ past_list_path }}"><span>{{ t("section.tipped.all") }}</span>{{ icon("arrow-right") }}</a>
       </p>
     </section>
   </div>
@@ -150,7 +150,7 @@
       </header>
       {{ champion_bars(champion.preview_entries) }}
       <p class="section__actions">
-        <a class="content-link" href="{{ tournament_path }}">{{ t("tournament.all") }}</a>
+        <a class="action-link" href="{{ tournament_path }}"><span>{{ t("tournament.all") }}</span>{{ icon("arrow-right") }}</a>
       </p>
     </section>
   </aside>

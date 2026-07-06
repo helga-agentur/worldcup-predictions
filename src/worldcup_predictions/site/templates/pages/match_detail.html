@@ -9,7 +9,7 @@
 
 {% block content %}
 <nav class="breadcrumb" aria-label="Breadcrumb">
-  <a class="breadcrumb__link" href="/{{ locale }}/">{{ t("nav.predictions") }}</a>
+  <a class="breadcrumb__link" href="/{{ locale }}/">{{ t("nav.home") }}</a>
   <span aria-hidden="true">/</span>
   <a class="breadcrumb__link" href="{{ row.detail_path }}/" aria-current="page">{{ match_name(row) }}</a>
 </nav>
@@ -124,7 +124,7 @@
   </section>
 
   <footer class="match-detail__actions">
-    <a class="content-link" href="/{{ locale }}/">{{ t("detail.back") }}</a>
+    <a href="/{{ locale }}/">{{ t("detail.back") }}</a>
   </footer>
 </article>
 {% endblock %}

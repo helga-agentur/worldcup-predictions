@@ -661,7 +661,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn("<span>Tippspiel Prognosen</span>", html)
             self.assertIn(
                 '<nav class="breadcrumb" aria-label="Breadcrumb">\n'
-                '  <a class="breadcrumb__link" href="/de/" aria-current="page">Prognosen</a>\n'
+                '  <a class="breadcrumb__link" href="/de/" aria-current="page">Home</a>\n'
                 "</nav>",
                 html,
             )
@@ -669,11 +669,11 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("Die Prognosen bündeln aktuelle Spielplandaten, veröffentlichte Resultate", html)
             self.assertIn("The predictions combine current fixture data, published results", en_html)
             self.assertIn(
-                '<a class="content-link" href="https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8" target="_blank" rel="noopener" data-analytics-event="helga_blog_click">Helga-Blogbeitrag</a>',
+                '<a href="https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8" target="_blank" rel="noopener" data-analytics-event="helga_blog_click">Helga-Blogbeitrag</a>',
                 html,
             )
             self.assertIn(
-                '<a class="content-link" href="https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8" target="_blank" rel="noopener" data-analytics-event="helga_blog_click">Helga blog post</a>',
+                '<a href="https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8" target="_blank" rel="noopener" data-analytics-event="helga_blog_click">Helga blog post</a>',
                 en_html,
             )
             self.assertNotIn("Der gesamte Code ist öffentlich", html)
@@ -743,10 +743,17 @@ class ExportAndBaselineTest(unittest.TestCase):
             )[0]
             past_section = html.split('<section class="homepage-panel" aria-labelledby="past-title">', 1)[1]
             self.assertIn('<p class="section__actions">', future_section)
-            self.assertIn('<a class="content-link" href="/de/spiele/kommende">Alle kommenden Spiele</a>', future_section)
+            self.assertIn(
+                '<a class="action-link" href="/de/spiele/kommende"><span>Alle kommenden Spiele</span>',
+                future_section,
+            )
+            self.assertIn('<path d="M5 12h14"></path>', future_section)
             self.assertNotIn('data-state="positive" title=', future_section)
             self.assertIn('<p class="section__actions">', past_section)
-            self.assertIn('<a class="content-link" href="/de/spiele/vergangene">Alle vergangenen Spiele</a>', past_section)
+            self.assertIn(
+                '<a class="action-link" href="/de/spiele/vergangene"><span>Alle vergangenen Spiele</span>',
+                past_section,
+            )
             self.assertIn(
                 '<a class="match-card" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open" data-variant="past">',
                 past_section,
@@ -763,7 +770,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                 '<a class="match-row" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open">',
                 de_past_html,
             )
-            self.assertNotIn('href="/">Prognosen</a>', html)
+            self.assertNotIn('href="/">Home</a>', html)
             self.assertIn('href="/de/" lang="de"', html)
             self.assertIn('aria-current="true">DE</a>', html)
             self.assertIn('href="/en/" lang="en"', html)
@@ -818,8 +825,8 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("Rows: Brazil goals · Columns: Japan goals", en_detail)
             self.assertIn("Grün markiert: tatsächliches Resultat.", detail)
             self.assertIn("Zurück zur Übersicht", detail)
-            self.assertIn('<a class="content-link" href="/de/">Zurück zur Übersicht</a>', detail)
-            self.assertIn('<a class="breadcrumb__link" href="/de/">Prognosen</a>', detail)
+            self.assertIn('<a href="/de/">Zurück zur Übersicht</a>', detail)
+            self.assertIn('<a class="breadcrumb__link" href="/de/">Home</a>', detail)
             self.assertIn('<a class="breadcrumb__link" href="/de/spiele/2026-07-10-bra-jpn/" aria-current="page"><span class="match-name">', detail)
             self.assertIn('<link rel="canonical" href="http://127.0.0.1:8000/de/spiele/2026-07-10-bra-jpn/">', detail)
             self.assertIn('<link rel="alternate" hreflang="en" href="http://127.0.0.1:8000/en/matches/2026-07-10-bra-jpn/">', detail)
@@ -898,7 +905,10 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("color-mix(in srgb, var(--helga-blue) var(--heat, 0%), var(--mist))", css)
             self.assertIn(".odds__row", css)
             self.assertIn(".breadcrumb__link", css)
-            self.assertIn(".content-link", css)
+            self.assertIn("main p a", css)
+            self.assertNotIn(".content-link", css)
+            self.assertIn(".action-link", css)
+            self.assertIn("transform: translateX(4px);", css)
             self.assertIn(".language-switch", css)
             self.assertIn('.language-switch__link[aria-current="true"]', css)
             self.assertIn("@media (max-width: 900px)", css)
