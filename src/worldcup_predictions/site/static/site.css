@@ -527,7 +527,7 @@ h2 {
   margin-top: var(--space-4);
   font-family: "Degular", "Cadiz", system-ui, sans-serif;
   font-weight: 400;
-  color: var(--helga-blue);
+  color: var(--ink);
   font-size: clamp(1.8rem, 4vw, 3.2rem);
   line-height: 1;
   overflow-wrap: anywhere;
@@ -583,7 +583,7 @@ h2 {
 }
 
 .bar__dot[data-state="good"] {
-  background: var(--accent-soft);
+  background: var(--warning);
 }
 
 .bar__dot[data-state="bad"] {
@@ -626,7 +626,7 @@ h2 {
 }
 
 .bar--status .bar__segment[data-state="good"] {
-  background: var(--accent-soft);
+  background: var(--warning);
 }
 
 .bar--status .bar__segment[data-state="bad"] {
@@ -1010,8 +1010,8 @@ main p a:hover {
 
 .hit-chip[data-result="trend"] {
   color: var(--ink);
-  border-color: var(--accent-soft);
-  background: var(--accent-soft);
+  border-color: var(--warning);
+  background: var(--warning);
 }
 
 .hit-chip[data-result="miss"] {
@@ -1281,7 +1281,7 @@ main p a:hover {
   display: block;
   height: 12px;
   border-radius: 6px;
-  background: var(--mist);
+  background: var(--line);
   overflow: hidden;
 }
 

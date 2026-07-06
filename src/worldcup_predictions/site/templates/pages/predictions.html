@@ -40,10 +40,16 @@
     <div class="summary__card">
       <dt class="summary__label">{{ t("summary.srf_points") }}</dt>
       <dd class="summary__value">{{ summary.srf_points_display }}</dd>
-      {% if summary_extras.srf_avg_text %}
+      {% if summary_extras.srf_points_bar.has_progress %}
+      <dd class="summary__bar">
+        <div class="bar bar--series" role="img" aria-label="{{ summary_extras.srf_points_bar.label }}">
+          <span class="bar__segment" data-series="primary" style="width: {{ summary_extras.srf_points_bar.width }}%"></span>
+          <span class="bar__segment" data-series="muted" style="width: {{ summary_extras.srf_points_bar.remaining_width }}%"></span>
+        </div>
+      </dd>
       <dd class="summary__meta">
-        <div class="bar__legend">
-          <span class="bar__legend-item numeric">{{ summary_extras.srf_avg_text }}</span>
+        <div class="bar__legend" aria-hidden="true">
+          <span class="bar__legend-item numeric">{{ summary_extras.srf_points_bar.label }}</span>
         </div>
       </dd>
       {% endif %}
@@ -51,10 +57,16 @@
     <div class="summary__card">
       <dt class="summary__label">{{ t("summary.twenty_min_points") }}</dt>
       <dd class="summary__value">{{ summary.twenty_min_points_display }}</dd>
-      {% if summary_extras.twenty_min_avg_text %}
+      {% if summary_extras.twenty_min_points_bar.has_progress %}
+      <dd class="summary__bar">
+        <div class="bar bar--series" role="img" aria-label="{{ summary_extras.twenty_min_points_bar.label }}">
+          <span class="bar__segment" data-series="primary" style="width: {{ summary_extras.twenty_min_points_bar.width }}%"></span>
+          <span class="bar__segment" data-series="muted" style="width: {{ summary_extras.twenty_min_points_bar.remaining_width }}%"></span>
+        </div>
+      </dd>
       <dd class="summary__meta">
-        <div class="bar__legend">
-          <span class="bar__legend-item numeric">{{ summary_extras.twenty_min_avg_text }}</span>
+        <div class="bar__legend" aria-hidden="true">
+          <span class="bar__legend-item numeric">{{ summary_extras.twenty_min_points_bar.label }}</span>
         </div>
       </dd>
       {% endif %}
@@ -86,12 +98,18 @@
       {% endif %}
     </div>
     <div class="summary__card">
-      <dt class="summary__label">{{ t("summary.open") }}</dt>
-      <dd class="summary__value">{{ summary.future }}</dd>
-      {% if summary_extras.next_kickoff %}
+      <dt class="summary__label">{{ t("summary.played") }}</dt>
+      <dd class="summary__value">{{ summary_extras.played_matches_display }}</dd>
+      {% if summary_extras.played_matches_bar.has_progress %}
+      <dd class="summary__bar">
+        <div class="bar bar--series" role="img" aria-label="{{ summary_extras.played_matches_bar.label }}">
+          <span class="bar__segment" data-series="primary" style="width: {{ summary_extras.played_matches_bar.width }}%"></span>
+          <span class="bar__segment" data-series="muted" style="width: {{ summary_extras.played_matches_bar.remaining_width }}%"></span>
+        </div>
+      </dd>
       <dd class="summary__meta">
-        <div class="bar__legend">
-          <span class="bar__legend-item numeric">{{ t("summary.next_kickoff") }}: {{ summary_extras.next_kickoff }}</span>
+        <div class="bar__legend" aria-hidden="true">
+          <span class="bar__legend-item numeric">{{ summary_extras.played_matches_bar.label }}</span>
         </div>
       </dd>
       {% endif %}

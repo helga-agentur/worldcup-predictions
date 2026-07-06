@@ -276,6 +276,7 @@ def build_site(
         reverse=True,
     )
     provider_points = _site_provider_point_totals(storage, rows, country_registry=country_registry)
+    provider_max_points = _site_provider_point_max_totals(rows, country_registry=country_registry)
     hit_counts = _hit_counts(rows)
     champion_odds = _champion_odds(storage, country_registry=country_registry)
     data_payload = {
@@ -288,8 +289,12 @@ def build_site(
             "tipped": len(locked_rows) + len(final_rows),
             "srf_points": provider_points["srf.ch"],
             "twenty_min_points": provider_points["20min.ch"],
+            "srf_max_points": provider_max_points["srf.ch"],
+            "twenty_min_max_points": provider_max_points["20min.ch"],
             "srf_points_display": _points_text(provider_points["srf.ch"]),
             "twenty_min_points_display": _points_text(provider_points["20min.ch"]),
+            "srf_max_points_display": _points_text(provider_max_points["srf.ch"]),
+            "twenty_min_max_points_display": _points_text(provider_max_points["20min.ch"]),
             **hit_counts,
         },
         "predictions": _api_rows(source_rows, country_registry=country_registry, base_url=site_base_url),
@@ -456,15 +461,37 @@ def _summary_extras(
     catalog: TranslationCatalog,
 ) -> dict[str, Any]:
     scored = int(summary.get("hit_scored") or 0)
-    srf_avg = _float_value(summary.get("srf_points")) / scored if scored else 0.0
-    twenty_min_avg = _float_value(summary.get("twenty_min_points")) / scored if scored else 0.0
     exact = int(summary.get("hit_exact") or 0)
     trend = int(summary.get("hit_trend") or 0)
     miss = int(summary.get("hit_miss") or 0)
+    played = int(summary.get("final") or 0)
+    total = int(summary.get("rows") or 0)
     next_kickoff = _kickoff_compact_display(future_rows[0].get("event_date"), catalog=catalog) if future_rows else ""
     return {
-        "srf_avg_text": catalog.translate("summary.avg_per_match", value=f"{srf_avg:.1f}") if scored else "",
-        "twenty_min_avg_text": catalog.translate("summary.avg_per_match", value=f"{twenty_min_avg:.1f}") if scored else "",
+        "srf_points_bar": _summary_progress_bar(
+            _float_value(summary.get("srf_points")),
+            _float_value(summary.get("srf_max_points")),
+            label=catalog.translate(
+                "summary.points_progress",
+                current=_points_text(_float_value(summary.get("srf_points"))),
+                max=_points_text(_float_value(summary.get("srf_max_points"))),
+            ),
+        ),
+        "twenty_min_points_bar": _summary_progress_bar(
+            _float_value(summary.get("twenty_min_points")),
+            _float_value(summary.get("twenty_min_max_points")),
+            label=catalog.translate(
+                "summary.points_progress",
+                current=_points_text(_float_value(summary.get("twenty_min_points"))),
+                max=_points_text(_float_value(summary.get("twenty_min_max_points"))),
+            ),
+        ),
+        "played_matches_display": str(played),
+        "played_matches_bar": _summary_progress_bar(
+            float(played),
+            float(total),
+            label=catalog.translate("summary.matches_progress", current=played, max=total),
+        ),
         "hit_rate_text": f"{int(summary.get('hit_rate_percent') or 0)}%",
         "hit_breakdown_text": catalog.translate("summary.hit_breakdown", exact=exact, trend=trend, miss=miss) if scored else "",
         "hit_counts": {
@@ -479,6 +506,19 @@ def _summary_extras(
         },
         "has_hits": scored > 0,
         "next_kickoff": next_kickoff,
+    }
+
+
+def _summary_progress_bar(current: float, maximum: float, *, label: str) -> dict[str, Any]:
+    if maximum <= 0:
+        return {"has_progress": False, "label": "", "width": "0", "remaining_width": "100"}
+    capped = min(max(current, 0.0), maximum)
+    width = 100 * capped / maximum
+    return {
+        "has_progress": True,
+        "label": label,
+        "width": f"{width:.2f}",
+        "remaining_width": f"{100 - width:.2f}",
     }
 
 
@@ -1047,6 +1087,25 @@ def _site_provider_point_totals(
         provider: published_totals[provider] if published_counts[provider] > 0 else stored_totals[provider]
         for provider in published_totals
     }
+
+
+def _site_provider_point_max_totals(
+    rows: list[dict[str, Any]],
+    *,
+    country_registry: CountryRegistry,
+) -> dict[str, float]:
+    totals = {"srf.ch": 0.0, "20min.ch": 0.0}
+    for row in rows:
+        if row.get("status") != "final":
+            continue
+        fixture = _fixture_record_from_site_row(row)
+        if _result_record_from_site_row(row, fixture) is None:
+            continue
+        if _srf_source_row(row) is not None:
+            totals["srf.ch"] += _float_value(_srf_expected_points_max(row))
+        if _twenty_min_source_row(row, fixture, country_registry=country_registry) is not None:
+            totals["20min.ch"] += _float_value(_twenty_min_expected_points_max(row))
+    return totals
 
 
 def _published_provider_point_totals(
