@@ -724,6 +724,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                 '<a class="resources__link" href="https://github.com/helga-agentur/worldcup-predictions">',
                 html,
             )
+            self.assertIn('<path d="M11.5 2.6a.6.6 0 0 1 1 0l2.8 5.7', html)
             self.assertIn("<span>GitHub</span>", html)
             self.assertIn(
                 '<a class="resources__link" href="/api/predictions" target="_blank" rel="noopener" data-analytics-event="helga_api_click">',
