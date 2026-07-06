@@ -694,7 +694,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<dt class="summary__label">Trefferquote</dt>', html)
             self.assertIn('<dd class="summary__value">100%</dd>', html)
             hit_bar_html = '<div class="bar bar--status" aria-hidden="true">'
-            hit_legend_html = '<p class="bar__legend" aria-label="0 exakt · 1 richtig · 0 falsch">'
+            hit_legend_html = '<div class="bar__legend" aria-label="0 exakt · 1 richtig · 0 falsch">'
             self.assertIn(hit_legend_html, html)
             self.assertIn('<span class="bar__dot" data-state="good"></span><span class="numeric">1</span> Richtig', html)
             self.assertIn(hit_bar_html, html)
@@ -705,7 +705,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<dt class="summary__label">Offene Tipps</dt>', html)
             self.assertIn("Ø 6.0/Spiel", html)
             self.assertIn("Hit rate", en_html)
-            self.assertIn('<p class="bar__legend" aria-label="0 exact scores · 1 correct outcomes · 0 wrong outcomes">', en_html)
+            self.assertIn('<div class="bar__legend" aria-label="0 exact scores · 1 correct outcomes · 0 wrong outcomes">', en_html)
             self.assertIn('<span class="bar__dot" data-state="good"></span><span class="numeric">1</span> Correct', en_html)
             self.assertIn("prefers-color-scheme", js)
             self.assertIn("Max-Age=31536000", js)

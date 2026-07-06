@@ -42,9 +42,9 @@
       <dd class="summary__value">{{ summary.srf_points_display }}</dd>
       {% if summary_extras.srf_avg_text %}
       <dd class="summary__meta">
-        <p class="bar__legend">
+        <div class="bar__legend">
           <span class="bar__legend-item numeric">{{ summary_extras.srf_avg_text }}</span>
-        </p>
+        </div>
       </dd>
       {% endif %}
     </div>
@@ -53,9 +53,9 @@
       <dd class="summary__value">{{ summary.twenty_min_points_display }}</dd>
       {% if summary_extras.twenty_min_avg_text %}
       <dd class="summary__meta">
-        <p class="bar__legend">
+        <div class="bar__legend">
           <span class="bar__legend-item numeric">{{ summary_extras.twenty_min_avg_text }}</span>
-        </p>
+        </div>
       </dd>
       {% endif %}
     </div>
@@ -71,7 +71,7 @@
         </div>
       </dd>
       <dd class="summary__meta">
-        <p class="bar__legend" aria-label="{{ summary_extras.hit_breakdown_text }}">
+        <div class="bar__legend" aria-label="{{ summary_extras.hit_breakdown_text }}">
           <span class="bar__legend-item">
             <span class="bar__dot" data-state="strong"></span><span class="numeric">{{ summary_extras.hit_counts.exact }}</span> {{ t("summary.exact_short") }}
           </span>
@@ -81,7 +81,7 @@
           <span class="bar__legend-item">
             <span class="bar__dot" data-state="bad"></span><span class="numeric">{{ summary_extras.hit_counts.miss }}</span> {{ t("summary.wrong_short") }}
           </span>
-        </p>
+        </div>
       </dd>
       {% endif %}
     </div>
@@ -90,9 +90,9 @@
       <dd class="summary__value">{{ summary.future }}</dd>
       {% if summary_extras.next_kickoff %}
       <dd class="summary__meta">
-        <p class="bar__legend">
+        <div class="bar__legend">
           <span class="bar__legend-item numeric">{{ t("summary.next_kickoff") }}: {{ summary_extras.next_kickoff }}</span>
-        </p>
+        </div>
       </dd>
       {% endif %}
     </div>
