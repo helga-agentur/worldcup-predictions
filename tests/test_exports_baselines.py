@@ -926,6 +926,8 @@ class ExportAndBaselineTest(unittest.TestCase):
                 "top_score_matrix",
                 "twenty_min_account_display",
                 "twenty_min_tip_label",
+                "twenty_min_projected_points_display",
+                "twenty_min_projected_points_title_key",
             ):
                 self.assertNotIn(presentation_key, payload["predictions"][0])
             self.assertEqual(payload["summary"]["srf_points"], 6.0)
@@ -1056,7 +1058,8 @@ class ExportAndBaselineTest(unittest.TestCase):
             detail = (result.output_dir / "de" / "spiele" / "2026-07-06-por-esp" / "index.html").read_text(encoding="utf-8")
 
             self.assertIn("2/20 P.", html)
-            self.assertIn("6.3/10 P.", html)
+            self.assertIn("10/10 P.", html)
+            self.assertNotIn("6.3/10 P.", html)
             self.assertIn('<strong class="numeric">7.2/20</strong>', detail)
             self.assertIn("6.3/10 P.", detail)
 

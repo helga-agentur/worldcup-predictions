@@ -28,6 +28,7 @@
   "label.expected_goals": "Expected goals",
   "label.expected_points": "Expected points",
   "label.projected_points": "Points if the most likely result happens",
+  "label.selection_points": "Points if the selected tip is correct",
   "label.probability": "Probability",
   "label.result": "Result",
   "label.srf_game": "SRF tip",

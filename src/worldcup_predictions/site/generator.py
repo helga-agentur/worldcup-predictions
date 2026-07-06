@@ -149,6 +149,8 @@ API_PRESENTATION_KEYS = {
     "top_score_matrix",
     "twenty_min_account_display",
     "twenty_min_expected_points_display",
+    "twenty_min_projected_points_display",
+    "twenty_min_projected_points_title_key",
     "twenty_min_tip_label",
 }
 
@@ -1364,6 +1366,15 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
         prepared.get("twenty_min_expected_points"),
         max_points=_twenty_min_expected_points_max(prepared),
     )
+    twenty_min_projected_points, twenty_min_projected_title_key = _twenty_min_points_for_card(
+        prepared,
+        country_registry=country_registry,
+    )
+    prepared["twenty_min_projected_points_display"] = _projected_points_display(
+        twenty_min_projected_points,
+        max_points=_twenty_min_expected_points_max(prepared),
+    )
+    prepared["twenty_min_projected_points_title_key"] = twenty_min_projected_title_key
     prepared["hit_result"] = _hit_category(prepared)
     prepared["hit_label"] = _hit_label(prepared.get("hit_result"), catalog=catalog)
     prepared["most_likely_percent_text"] = _most_likely_percent_text(prepared)
@@ -1550,6 +1561,48 @@ def _twenty_min_expected_points_max(row: dict[str, Any]) -> float | None:
         return float(points)
     except (TypeError, ValueError):
         return None
+
+
+def _twenty_min_points_for_card(
+    row: dict[str, Any],
+    *,
+    country_registry: CountryRegistry,
+) -> tuple[float | None, str]:
+    tip = str(row.get("twenty_min_tip") or row.get("twenty_min_selection") or "").strip()
+    if not tip:
+        return None, ""
+    try:
+        fixture = _fixture_record_from_site_row(row)
+        phase, points = twenty_min_points_for_fixture(fixture.to_fixture())
+    except (TypeError, ValueError):
+        return None, ""
+
+    selection = _twenty_min_selection(tip, fixture, country_registry=country_registry)
+    most_likely = _most_likely_score_tip(row)
+    if phase == "group_stage":
+        if most_likely is None:
+            return float(points), "label.selection_points"
+        outcome_selection = _twenty_min_group_selection(fixture, most_likely)
+        return _twenty_min_points_for_selection(selection, outcome_selection, points), "label.projected_points"
+
+    if most_likely is None or most_likely.home == most_likely.away:
+        return float(points), "label.selection_points"
+    outcome_selection = fixture.home_team.name if most_likely.home > most_likely.away else fixture.away_team.name
+    return _twenty_min_points_for_selection(selection, outcome_selection, points), "label.projected_points"
+
+
+def _twenty_min_group_selection(fixture: FixtureRecord, score: ScoreTip) -> str:
+    if score.home > score.away:
+        return fixture.home_team.name
+    if score.away > score.home:
+        return fixture.away_team.name
+    return "Draw"
+
+
+def _twenty_min_points_for_selection(selection: str, outcome_selection: str, points: int) -> float:
+    if selection.casefold() == outcome_selection.casefold():
+        return float(points)
+    return 0.0
 
 
 def _srf_points_for_most_likely_score(row: dict[str, Any]) -> float | None:

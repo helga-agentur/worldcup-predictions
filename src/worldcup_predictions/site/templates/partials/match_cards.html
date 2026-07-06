@@ -42,8 +42,9 @@
         <span class="tip-chip">
           <span class="tip-chip__provider">{{ t("table.twenty_min_tip") }}</span>
           <span class="tip-chip__value">{{ row.twenty_min_tip_label }}</span>
-          {% if row.twenty_min_expected_points_display %}
-          <span class="tip-chip__points numeric" title="{{ t('label.expected_points') }}">{{ t("chip.points", value=row.twenty_min_expected_points_display) }}</span>
+          {% set twenty_min_points_display = row.twenty_min_projected_points_display or row.twenty_min_expected_points_display %}
+          {% if twenty_min_points_display %}
+          <span class="tip-chip__points numeric" title="{{ t(row.twenty_min_projected_points_title_key) if row.twenty_min_projected_points_display else t('label.expected_points') }}">{{ t("chip.points", value=twenty_min_points_display) }}</span>
           {% endif %}
         </span>
         {% endif %}
