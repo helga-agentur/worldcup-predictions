@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import html as html_lib
 import json
 import mimetypes
 import shutil
@@ -18,12 +19,20 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from worldcup_predictions.core.contracts import ScoreTip
 from worldcup_predictions.core.constants import ENV_BASE_URL, ENV_GTM_CONTAINER_ID
-from worldcup_predictions.core.datasets import PROVIDER_POINTS, PUBLISHED_PREDICTION_LEDGER
+from worldcup_predictions.core.datasets import (
+    MARKET_OUTRIGHTS,
+    PROVIDER_POINTS,
+    PUBLISHED_PREDICTION_LEDGER,
+    SIMULATION_SUMMARY,
+)
 from worldcup_predictions.core.env import env_value
 from worldcup_predictions.core.i18n import SUPPORTED_LOCALES, TranslationCatalog, load_translation_catalog
 from worldcup_predictions.entities.countries import CountryRegistry, load_country_registry
 from worldcup_predictions.entities.countries import normalize_entity_text
 from worldcup_predictions.evaluation.provider_points import points_for_row
+from worldcup_predictions.plugins.providers.ch_20min.rules import twenty_min_points_for_fixture
+from worldcup_predictions.plugins.providers.ch_srf.rules import srf_rules_for_fixture
+from worldcup_predictions.simulations.worldcup_2026 import ROUND_NAMES, group_letter
 from worldcup_predictions.storage.ledger import normalize_datetime, utc_now
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamRef
 from worldcup_predictions.tournament.repository import load_tournament_state
@@ -53,33 +62,105 @@ LOCALE_DETAIL_PREFIX = {
     "de": "spiele",
     "en": "matches",
 }
+LOCALE_MATCH_LIST_PATHS = {
+    "de": {
+        "future": "/de/spiele/kommende",
+        "past": "/de/spiele/vergangene",
+    },
+    "en": {
+        "future": "/en/matches/future",
+        "past": "/en/matches/past",
+    },
+}
+LOCALE_TOURNAMENT_PATHS = {
+    "de": "/de/turnierprognose",
+    "en": "/en/tournament-forecast",
+}
+LEGACY_TOURNAMENT_PATHS = {
+    "de": "/de/turnier",
+    "en": "/en/tournament",
+}
+HOMEPAGE_MATCH_PREVIEW_LIMIT = 5
+HOMEPAGE_CHAMPION_PREVIEW_LIMIT = 5
+CHAMPION_ODDS_LIMIT = 10
+HEATMAP_MAX_GOALS = 5
+KNOCKOUT_ROUND_STAGE_KEYS = {
+    "Round of 32": "slot.round.round_of_32",
+    "Round of 16": "slot.round.round_of_16",
+    "Quarter-final": "slot.round.quarter_final",
+    "Semi-final": "slot.round.semi_final",
+    "Third-place match": "stage.third_place",
+    "Final": "slot.round.final",
+}
+KNOCKOUT_ROUND_AFTER = {
+    "Round of 32": "Round of 16",
+    "Round of 16": "Quarter-final",
+    "Quarter-final": "Semi-final",
+    "Semi-final": "Final",
+}
+# UTC date boundaries for the fixed 2026 schedule, used when a knockout row
+# carries neither a match number nor slot codes.
+KNOCKOUT_ROUND_DATE_RANGES = (
+    ("2026-06-28", "2026-07-04", "Round of 32"),
+    ("2026-07-05", "2026-07-08", "Round of 16"),
+    ("2026-07-09", "2026-07-12", "Quarter-final"),
+    ("2026-07-13", "2026-07-16", "Semi-final"),
+    ("2026-07-17", "2026-07-18", "Third-place match"),
+    ("2026-07-19", "2026-07-31", "Final"),
+)
 API_PRESENTATION_KEYS = {
     "actual_score",
     "actual_score_label",
+    "advancement",
     "alternate_links",
     "away_flag",
+    "away_team_display",
     "away_team_label",
     "confidence_text",
     "current_url",
     "detail_path",
     "expected_score_display",
     "expected_score_full",
+    "explain_text",
+    "hda_aria",
+    "hda_bar",
     "hda_title",
     "hda_parts",
+    "heatmap",
+    "hit_label",
     "home_flag",
+    "home_team_display",
     "home_team_label",
+    "jsonld",
+    "kickoff_display",
     "language_switch_links",
     "match",
     "match_display",
     "metadata",
+    "most_likely_away_display",
+    "most_likely_home_display",
+    "most_likely_percent_text",
     "most_likely_score",
+    "og_description",
+    "page_title",
     "provider_tips",
     "record_key",
     "srf_account_display",
+    "srf_expected_points_display",
+    "srf_projected_points_display",
+    "srf_tip_points_display",
+    "srf_tip_points_title_key",
     "srf_tip_label",
+    "stage_label",
     "status_label",
     "top_score_matrix",
     "twenty_min_account_display",
+    "twenty_min_expected_points_display",
+    "twenty_min_projected_points_display",
+    "twenty_min_projected_points_title_key",
+    "twenty_min_tip_points_display",
+    "twenty_min_tip_points_title_key",
+    "twenty_min_tip_plain_label",
     "twenty_min_tip_label",
 }
 
@@ -200,6 +281,9 @@ def build_site(
         reverse=True,
     )
     provider_points = _site_provider_point_totals(storage, rows, country_registry=country_registry)
+    provider_max_points = _site_provider_point_max_totals(rows, country_registry=country_registry)
+    hit_counts = _hit_counts(rows)
+    champion_odds = _champion_odds(storage, country_registry=country_registry)
     data_payload = {
         "generated_at_utc": generated_at,
         "summary": {
@@ -210,8 +294,13 @@ def build_site(
             "tipped": len(locked_rows) + len(final_rows),
             "srf_points": provider_points["srf.ch"],
             "twenty_min_points": provider_points["20min.ch"],
+            "srf_max_points": provider_max_points["srf.ch"],
+            "twenty_min_max_points": provider_max_points["20min.ch"],
             "srf_points_display": _points_text(provider_points["srf.ch"]),
             "twenty_min_points_display": _points_text(provider_points["20min.ch"]),
+            "srf_max_points_display": _points_text(provider_max_points["srf.ch"]),
+            "twenty_min_max_points_display": _points_text(provider_max_points["20min.ch"]),
+            **hit_counts,
         },
         "predictions": _api_rows(source_rows, country_registry=country_registry, base_url=site_base_url),
     }
@@ -233,6 +322,8 @@ def build_site(
             gtm_container_id=gtm_container_id,
             summary=data_payload["summary"],
             country_registry=country_registry,
+            champion_odds=champion_odds,
+            base_url=site_base_url,
         )
         for locale in SITE_LOCALES
     }
@@ -300,6 +391,8 @@ def _site_context(
     gtm_container_id: str | None,
     summary: dict[str, Any],
     country_registry: CountryRegistry,
+    champion_odds: dict[str, Any] | None,
+    base_url: str,
 ) -> dict[str, Any]:
     catalog = load_translation_catalog(locale)
     rows = [_prepare_html_row(row, country_registry=country_registry, locale=locale) for row in source_rows]
@@ -314,9 +407,13 @@ def _site_context(
         reverse=True,
     )
     _add_alternate_links(locale, rows)
+    future_list_path = LOCALE_MATCH_LIST_PATHS[locale]["future"]
+    past_list_path = LOCALE_MATCH_LIST_PATHS[locale]["past"]
     return {
         "locale": locale,
         "title": catalog.translate("site.title"),
+        "site_name": catalog.translate("site.title"),
+        "og_locale": {"de": "de_CH", "en": "en_US"}.get(locale, locale),
         "description": catalog.translate("site.description"),
         "generated_at_utc": generated_at,
         "generated_at_display": _date_time_text(generated_at),
@@ -325,16 +422,221 @@ def _site_context(
         "gtm_container_id": (gtm_container_id or "").strip(),
         "rows": rows,
         "future_rows": future_rows,
+        "future_preview_rows": future_rows[:HOMEPAGE_MATCH_PREVIEW_LIMIT],
         "locked_rows": locked_rows,
         "final_rows": final_rows,
         "tipped_rows": tipped_rows,
+        "tipped_preview_rows": tipped_rows[:HOMEPAGE_MATCH_PREVIEW_LIMIT],
+        "preview_limit": HOMEPAGE_MATCH_PREVIEW_LIMIT,
+        "future_list_path": future_list_path,
+        "past_list_path": past_list_path,
         "summary": summary,
+        "summary_extras": _summary_extras(summary, future_rows, catalog=catalog),
+        "champion": _localized_champion_odds(champion_odds, country_registry=country_registry, locale=locale, catalog=catalog),
+        "tournament_path": LOCALE_TOURNAMENT_PATHS[locale],
         "json_feed_path": JSON_FEED_PATH,
         "language_cookie_name": LANGUAGE_COOKIE_NAME,
         "language_switch_links": _language_switch_links(locale, ""),
         "current_url": f"/{locale}/",
         "alternate_links": _alternate_links(""),
+        "base_url": base_url,
         "t": catalog.translate,
+    }
+
+
+def _hit_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    exact = sum(1 for row in rows if row.get("hit_result") == "exact")
+    trend = sum(1 for row in rows if row.get("hit_result") == "trend")
+    miss = sum(1 for row in rows if row.get("hit_result") == "miss")
+    scored = exact + trend + miss
+    hit_rate = round(100 * (exact + trend) / scored) if scored else 0
+    return {
+        "hit_exact": exact,
+        "hit_trend": trend,
+        "hit_miss": miss,
+        "hit_scored": scored,
+        "hit_rate_percent": hit_rate,
+    }
+
+
+def _summary_extras(
+    summary: dict[str, Any],
+    future_rows: list[dict[str, Any]],
+    *,
+    catalog: TranslationCatalog,
+) -> dict[str, Any]:
+    scored = int(summary.get("hit_scored") or 0)
+    exact = int(summary.get("hit_exact") or 0)
+    trend = int(summary.get("hit_trend") or 0)
+    miss = int(summary.get("hit_miss") or 0)
+    played = int(summary.get("final") or 0)
+    total = int(summary.get("rows") or 0)
+    next_kickoff = _kickoff_compact_display(future_rows[0].get("event_date"), catalog=catalog) if future_rows else ""
+    return {
+        "srf_points_bar": _summary_progress_bar(
+            _float_value(summary.get("srf_points")),
+            _float_value(summary.get("srf_max_points")),
+            label=catalog.translate(
+                "summary.points_progress",
+                current=_points_text(_float_value(summary.get("srf_points"))),
+                max=_points_text(_float_value(summary.get("srf_max_points"))),
+            ),
+        ),
+        "twenty_min_points_bar": _summary_progress_bar(
+            _float_value(summary.get("twenty_min_points")),
+            _float_value(summary.get("twenty_min_max_points")),
+            label=catalog.translate(
+                "summary.points_progress",
+                current=_points_text(_float_value(summary.get("twenty_min_points"))),
+                max=_points_text(_float_value(summary.get("twenty_min_max_points"))),
+            ),
+        ),
+        "played_matches_display": str(played),
+        "played_matches_bar": _summary_progress_bar(
+            float(played),
+            float(total),
+            label=catalog.translate("summary.matches_progress", current=played, max=total),
+        ),
+        "hit_rate_text": f"{int(summary.get('hit_rate_percent') or 0)}%",
+        "hit_breakdown_text": catalog.translate("summary.hit_breakdown", exact=exact, trend=trend, miss=miss) if scored else "",
+        "hit_counts": {
+            "exact": exact,
+            "trend": trend,
+            "miss": miss,
+        },
+        "hit_widths": {
+            "exact": f"{100 * exact / scored:.2f}" if scored else "0",
+            "trend": f"{100 * trend / scored:.2f}" if scored else "0",
+            "miss": f"{100 * miss / scored:.2f}" if scored else "0",
+        },
+        "has_hits": scored > 0,
+        "next_kickoff": next_kickoff,
+    }
+
+
+def _summary_progress_bar(current: float, maximum: float, *, label: str) -> dict[str, Any]:
+    if maximum <= 0:
+        return {"has_progress": False, "label": "", "width": "0", "remaining_width": "100"}
+    capped = min(max(current, 0.0), maximum)
+    width = 100 * capped / maximum
+    return {
+        "has_progress": True,
+        "label": label,
+        "width": f"{width:.2f}",
+        "remaining_width": f"{100 - width:.2f}",
+    }
+
+
+def _champion_odds(storage, *, country_registry: CountryRegistry) -> dict[str, Any] | None:
+    simulation = _simulation_champion_odds(storage)
+    if simulation is not None:
+        return simulation
+    return _market_champion_odds(storage)
+
+
+def _simulation_champion_odds(storage) -> dict[str, Any] | None:
+    latest = None
+    for row in storage.read_records(SIMULATION_SUMMARY, latest_only=True):
+        observed = str((row.get("_record") or {}).get("observed_at_utc") or "")
+        if latest is None or observed > latest[0]:
+            latest = (observed, row)
+    if latest is None:
+        return None
+    payload = latest[1]
+    distributions = payload.get("distributions") if isinstance(payload.get("distributions"), dict) else {}
+    champion = distributions.get("champion")
+    if not isinstance(champion, list):
+        return None
+    entries = [
+        {"name": str(entry.get("answer") or ""), "probability": _float_value(entry.get("probability"))}
+        for entry in champion
+        if isinstance(entry, dict) and _float_value(entry.get("probability")) > 0
+    ]
+    entries.sort(key=lambda entry: entry["probability"], reverse=True)
+    if len(entries) < 2:
+        # A single-answer distribution means the simulator output is degenerate
+        # (or the tournament is decided); market odds are more honest then.
+        return None
+    return {
+        "source": "simulation",
+        "iterations": _optional_int(payload.get("iterations")) or 0,
+        "as_of": latest[0],
+        "entries": entries[:CHAMPION_ODDS_LIMIT],
+    }
+
+
+def _market_champion_odds(storage) -> dict[str, Any] | None:
+    latest_by_team: dict[str, tuple[str, float]] = {}
+    for row in storage.read_records(MARKET_OUTRIGHTS, latest_only=True):
+        team = str(row.get("team") or "")
+        probability = _float_value(row.get("fair_probability") or row.get("avg_implied_probability"))
+        observed = str((row.get("_record") or {}).get("observed_at_utc") or row.get("observed_at_utc") or "")
+        if not team or probability <= 0:
+            continue
+        current = latest_by_team.get(team)
+        if current is None or observed > current[0]:
+            latest_by_team[team] = (observed, probability)
+    if not latest_by_team:
+        return None
+    entries = [
+        {"name": team, "probability": probability}
+        for team, (_observed, probability) in latest_by_team.items()
+    ]
+    entries.sort(key=lambda entry: entry["probability"], reverse=True)
+    as_of = max(observed for observed, _probability in latest_by_team.values())
+    return {
+        "source": "market",
+        "iterations": 0,
+        "as_of": as_of,
+        "entries": entries[:CHAMPION_ODDS_LIMIT],
+    }
+
+
+def _localized_champion_odds(
+    champion_odds: dict[str, Any] | None,
+    *,
+    country_registry: CountryRegistry,
+    locale: str,
+    catalog: TranslationCatalog,
+) -> dict[str, Any] | None:
+    if not champion_odds or not champion_odds.get("entries"):
+        return None
+    entries = champion_odds["entries"]
+    peak = max(_float_value(entry.get("probability")) for entry in entries)
+    if peak <= 0:
+        return None
+    localized_entries = []
+    for entry in entries:
+        name = str(entry.get("name") or "")
+        probability = _float_value(entry.get("probability"))
+        code = None
+        resolved = country_registry.resolve(name, locale="en") or country_registry.resolve(name, locale="de")
+        if resolved and resolved.canonical_id in country_registry.countries:
+            code = resolved.canonical_id
+        country = country_registry.countries.get(code) if code else None
+        label = (country.names.get(locale) or country.names.get("en")) if country else name
+        localized_entries.append(
+            {
+                "label": label,
+                "flag": FIFA_FLAG_EMOJIS.get(code or "", ""),
+                "percent_text": _round_percent_text(probability),
+                "width": f"{100 * probability / peak:.2f}",
+            }
+        )
+    as_of_display = _date_text(champion_odds.get("as_of")).split(",")[0]
+    if champion_odds.get("source") == "simulation":
+        source_text = catalog.translate(
+            "tournament.source_simulation",
+            iterations=f"{int(champion_odds.get('iterations') or 0):,}".replace(",", "'"),
+            date=as_of_display,
+        )
+    else:
+        source_text = catalog.translate("tournament.source_market", date=as_of_display)
+    return {
+        "entries": localized_entries,
+        "preview_entries": localized_entries[:HOMEPAGE_CHAMPION_PREVIEW_LIMIT],
+        "source_text": source_text,
+        "source": champion_odds.get("source"),
     }
 
 
@@ -361,6 +663,12 @@ def _alternate_links(default_locale_path: str, *, slug: str | None = None) -> li
     return links
 
 
+def _match_list_alternate_links(kind: str) -> list[dict[str, str]]:
+    links = [{"locale": locale, "href": LOCALE_MATCH_LIST_PATHS[locale][kind]} for locale in SITE_LOCALES]
+    links.append({"locale": "x-default", "href": LOCALE_MATCH_LIST_PATHS[DEFAULT_SITE_LOCALE][kind]})
+    return links
+
+
 def _language_switch_links(current_locale: str, slug: str | None) -> list[dict[str, Any]]:
     return [
         {
@@ -373,10 +681,25 @@ def _language_switch_links(current_locale: str, slug: str | None) -> list[dict[s
     ]
 
 
+def _match_list_language_switch_links(current_locale: str, kind: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "locale": locale,
+            "label": locale.upper(),
+            "href": LOCALE_MATCH_LIST_PATHS[locale][kind],
+            "current": locale == current_locale,
+        }
+        for locale in SITE_LOCALES
+    ]
+
+
 def _html_files(localized_contexts: dict[str, dict[str, Any]]) -> list[str]:
     html_files = ["index.html"]
     for locale, context in localized_contexts.items():
         html_files.append(f"{locale}/index.html")
+        html_files.extend(f"{LOCALE_MATCH_LIST_PATHS[locale][kind].lstrip('/')}/index.html" for kind in ("future", "past"))
+        html_files.append(f"{LOCALE_TOURNAMENT_PATHS[locale].lstrip('/')}/index.html")
+        html_files.append(f"{LEGACY_TOURNAMENT_PATHS[locale].lstrip('/')}/index.html")
         html_files.extend(f"{str(row['detail_path']).lstrip('/')}/index.html" for row in context["rows"])
     return html_files
 
@@ -510,16 +833,48 @@ def _write_site_files(
     env = _template_environment()
     (output_dir / "index.html").write_text(_language_redirect_html(), encoding="utf-8")
     predictions_template = env.get_template("pages/predictions.html")
+    match_list_template = env.get_template("pages/match_list.html")
     detail_template = env.get_template("pages/match_detail.html")
+    tournament_template = env.get_template("pages/tournament.html")
     for locale, context in localized_contexts.items():
         locale_dir = output_dir / locale
         locale_dir.mkdir(parents=True, exist_ok=True)
         locale_dir.joinpath("index.html").write_text(predictions_template.render(**context), encoding="utf-8")
+        _write_match_list_page(
+            output_dir,
+            template=match_list_template,
+            context=context,
+            kind="future",
+            rows=context["future_rows"],
+            title_key="section.future.title",
+            description_key="section.future.description",
+            empty_key="empty.future",
+        )
+        _write_match_list_page(
+            output_dir,
+            template=match_list_template,
+            context=context,
+            kind="past",
+            rows=context["tipped_rows"],
+            title_key="section.tipped.title",
+            description_key="section.tipped.description",
+            empty_key="empty.tipped",
+        )
+        _write_tournament_page(output_dir, template=tournament_template, context=context)
+        _write_redirect_page(
+            output_dir,
+            from_path=LEGACY_TOURNAMENT_PATHS[locale],
+            to_path=LOCALE_TOURNAMENT_PATHS[locale],
+            title=context["t"]("tournament.title"),
+            locale=locale,
+        )
         for row in context["rows"]:
             detail_dir = output_dir / str(row["detail_path"]).lstrip("/")
             detail_dir.mkdir(parents=True, exist_ok=True)
             detail_context = {
                 **context,
+                "title": f"{row['match']} — {context['title']}",
+                "description": row.get("og_description") or context["description"],
                 "current_url": row["current_url"],
                 "alternate_links": row["alternate_links"],
                 "language_switch_links": row["language_switch_links"],
@@ -534,6 +889,79 @@ def _write_site_files(
     )
     (output_dir / "robots.txt").write_text("User-agent: *\nAllow: /\nSitemap: /sitemap.xml\n", encoding="utf-8")
     (output_dir / "sitemap.xml").write_text(_sitemap_xml(localized_contexts), encoding="utf-8")
+
+
+def _write_match_list_page(
+    output_dir: Path,
+    *,
+    template,
+    context: dict[str, Any],
+    kind: str,
+    rows: list[dict[str, Any]],
+    title_key: str,
+    description_key: str,
+    empty_key: str,
+) -> None:
+    locale = str(context["locale"])
+    page_path = LOCALE_MATCH_LIST_PATHS[locale][kind]
+    page_dir = output_dir / page_path.lstrip("/")
+    page_dir.mkdir(parents=True, exist_ok=True)
+    page_context = {
+        **context,
+        "title": f"{context['t'](title_key)} — {context['title']}",
+        "description": context["t"](description_key),
+        "current_url": page_path,
+        "alternate_links": _match_list_alternate_links(kind),
+        "language_switch_links": _match_list_language_switch_links(locale, kind),
+        "rows_to_show": rows,
+        "list_kind": kind,
+        "page_title": context["t"](title_key),
+        "page_description": context["t"](description_key),
+        "empty_text": context["t"](empty_key),
+    }
+    page_dir.joinpath("index.html").write_text(template.render(**page_context), encoding="utf-8")
+
+
+def _write_tournament_page(output_dir: Path, *, template, context: dict[str, Any]) -> None:
+    locale = str(context["locale"])
+    page_path = LOCALE_TOURNAMENT_PATHS[locale]
+    page_dir = output_dir / page_path.lstrip("/")
+    page_dir.mkdir(parents=True, exist_ok=True)
+    page_context = {
+        **context,
+        "title": f"{context['t']('tournament.title')} — {context['title']}",
+        "description": context["t"]("tournament.lead"),
+        "current_url": page_path,
+        "alternate_links": _tournament_alternate_links(),
+        "language_switch_links": _tournament_language_switch_links(locale),
+        "page_title": context["t"]("tournament.title"),
+        "page_description": context["t"]("tournament.lead"),
+    }
+    page_dir.joinpath("index.html").write_text(template.render(**page_context), encoding="utf-8")
+
+
+def _write_redirect_page(output_dir: Path, *, from_path: str, to_path: str, title: str, locale: str) -> None:
+    page_dir = output_dir / from_path.lstrip("/")
+    page_dir.mkdir(parents=True, exist_ok=True)
+    page_dir.joinpath("index.html").write_text(_static_redirect_html(to_path, title=title, locale=locale), encoding="utf-8")
+
+
+def _tournament_alternate_links() -> list[dict[str, str]]:
+    links = [{"locale": locale, "href": LOCALE_TOURNAMENT_PATHS[locale]} for locale in SITE_LOCALES]
+    links.append({"locale": "x-default", "href": LOCALE_TOURNAMENT_PATHS[DEFAULT_SITE_LOCALE]})
+    return links
+
+
+def _tournament_language_switch_links(current_locale: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "locale": locale,
+            "label": locale.upper(),
+            "href": LOCALE_TOURNAMENT_PATHS[locale],
+            "current": locale == current_locale,
+        }
+        for locale in SITE_LOCALES
+    ]
 
 
 def _language_redirect_html() -> str:
@@ -582,6 +1010,26 @@ def _language_redirect_html() -> str:
 </head>
 <body>
   <p><a href="/{fallback}/">{catalog.translate("redirect.continue")}</a></p>
+</body>
+</html>
+"""
+
+
+def _static_redirect_html(target: str, *, title: str, locale: str) -> str:
+    escaped_target = html_lib.escape(target, quote=True)
+    escaped_title = html_lib.escape(title, quote=True)
+    escaped_locale = html_lib.escape(locale, quote=True)
+    return f"""<!doctype html>
+<html lang="{escaped_locale}">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex">
+  <meta http-equiv="refresh" content="0; url={escaped_target}">
+  <title>{escaped_title}</title>
+  <script>window.location.replace({json.dumps(target)});</script>
+</head>
+<body>
+  <p><a href="{escaped_target}">{escaped_title}</a></p>
 </body>
 </html>
 """
@@ -644,6 +1092,25 @@ def _site_provider_point_totals(
         provider: published_totals[provider] if published_counts[provider] > 0 else stored_totals[provider]
         for provider in published_totals
     }
+
+
+def _site_provider_point_max_totals(
+    rows: list[dict[str, Any]],
+    *,
+    country_registry: CountryRegistry,
+) -> dict[str, float]:
+    totals = {"srf.ch": 0.0, "20min.ch": 0.0}
+    for row in rows:
+        if row.get("status") != "final":
+            continue
+        fixture = _fixture_record_from_site_row(row)
+        if _result_record_from_site_row(row, fixture) is None:
+            continue
+        if _srf_source_row(row) is not None:
+            totals["srf.ch"] += _float_value(_srf_expected_points_max(row))
+        if _twenty_min_source_row(row, fixture, country_registry=country_registry) is not None:
+            totals["20min.ch"] += _float_value(_twenty_min_expected_points_max(row))
+    return totals
 
 
 def _published_provider_point_totals(
@@ -717,7 +1184,7 @@ def _fixture_record_from_site_row(row: dict[str, Any]) -> FixtureRecord:
         home_team=TeamRef(str(row.get("home_team") or ""), home_code or None),
         away_team=TeamRef(str(row.get("away_team") or ""), away_code or None),
         stage=_fixture_stage_from_site_row(row, metadata),
-        group=row.get("group"),
+        group=row.get("group") or metadata.get("group"),
         matchday=_optional_int(row.get("matchday")),
         source_id=row.get("source_id"),
         venue=row.get("venue"),
@@ -727,10 +1194,12 @@ def _fixture_record_from_site_row(row: dict[str, Any]) -> FixtureRecord:
 
 
 def _fixture_stage_from_site_row(row: dict[str, Any], metadata: dict[str, Any]) -> str | None:
-    stage = row.get("stage") or metadata.get("phase")
+    stage = row.get("stage") or metadata.get("stage") or metadata.get("phase")
     current_metadata = metadata.get("current_prediction_ledger_metadata")
     if not stage and isinstance(current_metadata, dict):
-        stage = current_metadata.get("phase")
+        stage = current_metadata.get("stage") or current_metadata.get("phase")
+    if not stage:
+        stage = _knockout_round_name(row)
     return str(stage) if stage not in (None, "") else None
 
 
@@ -950,12 +1419,16 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
     away_code = _country_code_from_fixture_key(str(prepared.get("fixture_key") or ""), side="away")
     home_flag = FIFA_FLAG_EMOJIS.get(home_code, "")
     away_flag = FIFA_FLAG_EMOJIS.get(away_code, "")
+    home_display = _country_name_display(home_name, home_flag)
+    away_display = _country_name_display(away_name, away_flag)
     prepared["match"] = f"{home_name} - {away_name}".strip(" -")
     prepared["home_team_label"] = home_name
     prepared["away_team_label"] = away_name
     prepared["home_flag"] = home_flag
     prepared["away_flag"] = away_flag
-    prepared["match_display"] = _match_display(home_name, home_code, away_name, away_code)
+    prepared["home_team_display"] = home_display
+    prepared["away_team_display"] = away_display
+    prepared["match_display"] = _match_display(home_display, away_display)
     prepared["status_label"] = _status_label(prepared.get("status"), catalog=catalog)
     prepared["actual_score_label"] = catalog.translate("label.result") if prepared.get("actual_score") else ""
     prepared["srf_tip_label"] = _tip_display_text(prepared.get("srf_tip"), country_registry=country_registry, locale=locale)
@@ -964,6 +1437,11 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
         country_registry=country_registry,
         locale=locale,
         show_flag=True,
+    )
+    prepared["twenty_min_tip_plain_label"] = _tip_display_text(
+        prepared.get("twenty_min_tip"),
+        country_registry=country_registry,
+        locale=locale,
     )
     prepared["expected_score_full"] = (
         f"{_float_text(prepared.get('predicted_home_goals'))}:{_float_text(prepared.get('predicted_away_goals'))}"
@@ -976,7 +1454,494 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
     prepared["hda_title"] = _hda_title(prepared, catalog=catalog)
     prepared["confidence_text"] = _confidence_text(prepared.get("confidence_label"), prepared.get("confidence_percent"), catalog=catalog)
     prepared["top_score_matrix"] = _top_scores(prepared.get("score_matrix"), limit=10)
+    prepared["stage_label"] = _stage_label(prepared, catalog=catalog)
+    prepared["kickoff_display"] = _kickoff_display(prepared.get("event_date"), catalog=catalog)
+    most_likely_home = _optional_int(prepared.get("most_likely_home"))
+    most_likely_away = _optional_int(prepared.get("most_likely_away"))
+    prepared["most_likely_home_display"] = "" if most_likely_home is None else str(most_likely_home)
+    prepared["most_likely_away_display"] = "" if most_likely_away is None else str(most_likely_away)
+    prepared["hda_bar"] = _hda_bar(prepared, catalog=catalog)
+    prepared["hda_aria"] = _hda_aria(prepared, catalog=catalog)
+    srf_expected_points = prepared.get("srf_expected_points")
+    srf_projected_points = _srf_points_for_most_likely_score(prepared)
+    srf_max_points = _srf_expected_points_max(prepared)
+    prepared["srf_expected_points_display"] = _expected_points_display(srf_expected_points, max_points=srf_max_points)
+    prepared["srf_projected_points_display"] = _projected_points_display(
+        srf_projected_points,
+        max_points=srf_max_points,
+    )
+    prepared["srf_tip_points_display"] = (
+        prepared["srf_projected_points_display"] or prepared["srf_expected_points_display"]
+    )
+    prepared["srf_tip_points_title_key"] = _tip_points_title_key(
+        projected_display=prepared["srf_projected_points_display"],
+        expected_display=prepared["srf_expected_points_display"],
+        projected_title_key="label.projected_points",
+    )
+    twenty_min_expected_points = prepared.get("twenty_min_expected_points")
+    twenty_min_max_points = _twenty_min_expected_points_max(prepared)
+    prepared["twenty_min_expected_points_display"] = _expected_points_display(
+        twenty_min_expected_points,
+        max_points=twenty_min_max_points,
+    )
+    twenty_min_projected_points, twenty_min_projected_title_key = _twenty_min_points_for_card(
+        prepared,
+        country_registry=country_registry,
+    )
+    prepared["twenty_min_projected_points_display"] = _projected_points_display(
+        twenty_min_projected_points,
+        max_points=twenty_min_max_points,
+    )
+    prepared["twenty_min_projected_points_title_key"] = twenty_min_projected_title_key
+    prepared["twenty_min_tip_points_display"] = (
+        prepared["twenty_min_projected_points_display"] or prepared["twenty_min_expected_points_display"]
+    )
+    prepared["twenty_min_tip_points_title_key"] = _tip_points_title_key(
+        projected_display=prepared["twenty_min_projected_points_display"],
+        expected_display=prepared["twenty_min_expected_points_display"],
+        projected_title_key=twenty_min_projected_title_key,
+    )
+    prepared["hit_result"] = _hit_category(prepared)
+    prepared["hit_label"] = _hit_label(prepared.get("hit_result"), catalog=catalog)
+    prepared["most_likely_percent_text"] = _most_likely_percent_text(prepared)
+    prepared["explain_text"] = _explain_text(prepared, catalog=catalog)
+    prepared["advancement"] = _advancement_display(prepared, country_registry=country_registry, locale=locale)
+    prepared["heatmap"] = _heatmap(prepared, catalog=catalog)
+    prepared["og_description"] = _match_og_description(prepared, catalog=catalog)
+    prepared["jsonld"] = _match_jsonld(prepared)
     return prepared
+
+
+def _stage_label(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    stage = str(row.get("stage") or metadata.get("stage") or metadata.get("phase") or "").casefold()
+    if stage == "group_stage" or (not stage and _event_date_text(row) <= "2026-06-27"):
+        letter = group_letter(str(metadata.get("group") or "") or None)
+        if letter and len(letter) == 1:
+            return catalog.translate("stage.group_letter", letter=letter)
+        return catalog.translate("stage.group")
+    round_name = _knockout_round_name(row)
+    if round_name:
+        key = KNOCKOUT_ROUND_STAGE_KEYS.get(round_name)
+        if key:
+            return catalog.translate(key)
+    if stage == "knockout_stage":
+        return catalog.translate("stage.knockout")
+    return ""
+
+
+def _knockout_round_name(row: dict[str, Any]) -> str | None:
+    fixture_key = str(row.get("fixture_key") or "")
+    for side in ("home", "away"):
+        part = _fixture_key_part(fixture_key, side=side)
+        feeder_round = _slot_feeder_round(part)
+        if feeder_round == "Semi-final" and part.startswith("RU"):
+            return "Third-place match"
+        if feeder_round:
+            return KNOCKOUT_ROUND_AFTER.get(feeder_round)
+    event_date = _event_date_text(row)
+    for start, end, round_name in KNOCKOUT_ROUND_DATE_RANGES:
+        if start <= event_date <= end:
+            return round_name
+    return None
+
+
+def _slot_feeder_round(part: str) -> str | None:
+    code = canonical_slot_code(part)
+    if not code:
+        return None
+    number = code.removeprefix("RU").removeprefix("W")
+    return ROUND_NAMES.get(f"M{number}")
+
+
+def _event_date_text(row: dict[str, Any]) -> str:
+    return str(row.get("event_date") or "")[:10]
+
+
+def _kickoff_display(value: Any, *, catalog: TranslationCatalog) -> str:
+    if not value:
+        return "-"
+    try:
+        parsed = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return str(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    zurich = parsed.astimezone(ZoneInfo("Europe/Zurich"))
+    weekday = catalog.translate(f"weekday.{zurich.weekday()}")
+    return f"{weekday}, {zurich.strftime('%d.%m.%Y, %H:%M')}"
+
+
+def _kickoff_compact_display(value: Any, *, catalog: TranslationCatalog) -> str:
+    if not value:
+        return "-"
+    try:
+        parsed = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return str(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    zurich = parsed.astimezone(ZoneInfo("Europe/Zurich"))
+    weekday = catalog.translate(f"weekday.{zurich.weekday()}")
+    return f"{weekday}, {zurich.strftime('%d.%m., %H:%M')}"
+
+
+def _probability_values(row: dict[str, Any]) -> tuple[float, float, float] | None:
+    values = []
+    for key in ("prob_home", "prob_draw", "prob_away"):
+        try:
+            values.append(float(row.get(key)))
+        except (TypeError, ValueError):
+            return None
+    total = sum(values)
+    if total <= 0:
+        return None
+    return values[0], values[1], values[2]
+
+
+def _hda_bar(row: dict[str, Any], *, catalog: TranslationCatalog) -> dict[str, str] | None:
+    values = _probability_values(row)
+    if values is None:
+        return None
+    home, draw, away = values
+    labels = _hda_compact_labels(row, catalog=catalog)
+    return {
+        "home_width": f"{home * 100:.2f}",
+        "draw_width": f"{draw * 100:.2f}",
+        "home_label": labels["home"],
+        "draw_label": labels["draw"],
+        "away_label": labels["away"],
+        "home_text": _round_percent_text(home),
+        "draw_text": _round_percent_text(draw),
+        "away_text": _round_percent_text(away),
+    }
+
+
+def _hda_aria(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
+    values = _probability_values(row)
+    if values is None:
+        return ""
+    parts = _hda_parts(row, catalog=catalog)
+    return ", ".join(f"{part['label']} {_round_percent_text(value)}" for part, value in zip(parts, values))
+
+
+def _round_percent_text(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "-"
+    if 0 < number < 0.005:
+        return "<1%"
+    return f"{round(number * 100)}%"
+
+
+def _expected_points_display(value: Any, *, max_points: Any = None) -> str:
+    try:
+        value_text = f"{float(value):.1f}"
+    except (TypeError, ValueError):
+        return ""
+    max_text = _expected_points_max_display(max_points)
+    if max_text:
+        return f"{value_text}/{max_text}"
+    return value_text
+
+
+def _projected_points_display(value: Any, *, max_points: Any = None) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if number < 0:
+        return ""
+    value_text = str(int(number)) if number.is_integer() else f"{number:g}"
+    max_text = _expected_points_max_display(max_points)
+    if max_text:
+        return f"{value_text}/{max_text}"
+    return value_text
+
+
+def _tip_points_title_key(*, projected_display: str, expected_display: str, projected_title_key: str) -> str:
+    if projected_display:
+        return projected_title_key or "label.projected_points"
+    if expected_display:
+        return "label.expected_points"
+    return ""
+
+
+def _expected_points_max_display(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if number <= 0:
+        return ""
+    if number.is_integer():
+        return str(int(number))
+    return f"{number:g}"
+
+
+def _srf_expected_points_max(row: dict[str, Any]) -> float | None:
+    try:
+        fixture = _fixture_record_from_site_row(row).to_fixture()
+        return float(srf_rules_for_fixture(fixture).ruleset().metadata["exact_score_points"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _twenty_min_expected_points_max(row: dict[str, Any]) -> float | None:
+    try:
+        fixture = _fixture_record_from_site_row(row).to_fixture()
+        _phase, points = twenty_min_points_for_fixture(fixture)
+        return float(points)
+    except (TypeError, ValueError):
+        return None
+
+
+def _twenty_min_points_for_card(
+    row: dict[str, Any],
+    *,
+    country_registry: CountryRegistry,
+) -> tuple[float | None, str]:
+    tip = str(row.get("twenty_min_tip") or row.get("twenty_min_selection") or "").strip()
+    if not tip:
+        return None, ""
+    try:
+        fixture = _fixture_record_from_site_row(row)
+        phase, points = twenty_min_points_for_fixture(fixture.to_fixture())
+    except (TypeError, ValueError):
+        return None, ""
+
+    selection = _twenty_min_selection(tip, fixture, country_registry=country_registry)
+    most_likely = _most_likely_score_tip(row)
+    if phase == "group_stage":
+        if most_likely is None:
+            return float(points), "label.selection_points"
+        outcome_selection = _twenty_min_group_selection(fixture, most_likely)
+        return _twenty_min_points_for_selection(selection, outcome_selection, points), "label.projected_points"
+
+    if most_likely is None or most_likely.home == most_likely.away:
+        return float(points), "label.selection_points"
+    outcome_selection = fixture.home_team.name if most_likely.home > most_likely.away else fixture.away_team.name
+    return _twenty_min_points_for_selection(selection, outcome_selection, points), "label.projected_points"
+
+
+def _twenty_min_group_selection(fixture: FixtureRecord, score: ScoreTip) -> str:
+    if score.home > score.away:
+        return fixture.home_team.name
+    if score.away > score.home:
+        return fixture.away_team.name
+    return "Draw"
+
+
+def _twenty_min_points_for_selection(selection: str, outcome_selection: str, points: int) -> float:
+    if selection.casefold() == outcome_selection.casefold():
+        return float(points)
+    return 0.0
+
+
+def _srf_points_for_most_likely_score(row: dict[str, Any]) -> float | None:
+    tip = _score_tip_from_text(row.get("srf_tip"))
+    most_likely = _most_likely_score_tip(row)
+    if tip is None or most_likely is None:
+        return None
+    try:
+        fixture = _fixture_record_from_site_row(row).to_fixture()
+        return float(srf_rules_for_fixture(fixture).points_for_tip(tip, most_likely))
+    except (TypeError, ValueError):
+        return None
+
+
+def _most_likely_score_tip(row: dict[str, Any]) -> ScoreTip | None:
+    home = _optional_int(row.get("most_likely_home"))
+    away = _optional_int(row.get("most_likely_away"))
+    if home is None or away is None:
+        return _score_tip_from_text(row.get("most_likely_score"))
+    return ScoreTip(home, away)
+
+
+def _score_tip_from_text(value: Any) -> ScoreTip | None:
+    text = str(value or "")
+    if ":" not in text:
+        return None
+    home, away = text.split(":", 1)
+    home_goals = _optional_int(home)
+    away_goals = _optional_int(away)
+    if home_goals is None or away_goals is None:
+        return None
+    return ScoreTip(home_goals, away_goals)
+
+
+def _hit_category(row: dict[str, Any]) -> str | None:
+    if str(row.get("status") or "") != "final":
+        return None
+    tip = str(row.get("srf_tip") or "")
+    if ":" not in tip:
+        return None
+    tip_home = _optional_int(tip.split(":", 1)[0])
+    tip_away = _optional_int(tip.split(":", 1)[1])
+    actual_home = _optional_int(row.get("actual_home"))
+    actual_away = _optional_int(row.get("actual_away"))
+    if None in (tip_home, tip_away, actual_home, actual_away):
+        return None
+    if (tip_home, tip_away) == (actual_home, actual_away):
+        return "exact"
+    tip_sign = (tip_home > tip_away) - (tip_home < tip_away)
+    actual_sign = (actual_home > actual_away) - (actual_home < actual_away)
+    return "trend" if tip_sign == actual_sign else "miss"
+
+
+def _hit_label(category: Any, *, catalog: TranslationCatalog) -> str:
+    return {
+        "exact": catalog.translate("hit.exact"),
+        "trend": catalog.translate("hit.trend"),
+        "miss": catalog.translate("hit.miss"),
+    }.get(str(category or ""), "")
+
+
+def _score_matrix_map(row: dict[str, Any]) -> dict[tuple[int, int], float]:
+    matrix = row.get("score_matrix")
+    if not isinstance(matrix, list):
+        return {}
+    cells: dict[tuple[int, int], float] = {}
+    for entry in matrix:
+        if not isinstance(entry, dict):
+            continue
+        home = _optional_int(entry.get("home"))
+        away = _optional_int(entry.get("away"))
+        if home is None or away is None:
+            continue
+        cells[(home, away)] = _float_value(entry.get("probability"))
+    return cells
+
+
+def _most_likely_percent_text(row: dict[str, Any]) -> str:
+    home = _optional_int(row.get("most_likely_home"))
+    away = _optional_int(row.get("most_likely_away"))
+    if home is None or away is None:
+        return ""
+    probability = _score_matrix_map(row).get((home, away))
+    if probability is None:
+        return ""
+    return _round_percent_text(probability)
+
+
+def _explain_text(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
+    tip = str(row.get("srf_tip") or "")
+    home = _optional_int(row.get("most_likely_home"))
+    away = _optional_int(row.get("most_likely_away"))
+    percent = str(row.get("most_likely_percent_text") or "")
+    if ":" not in tip or home is None or away is None or not percent:
+        return ""
+    most_likely = f"{home}:{away}"
+    if tip == most_likely:
+        return catalog.translate("detail.explain_same", score=most_likely, percent=percent)
+    return catalog.translate("detail.explain_diff", score=most_likely, percent=percent, tip=tip)
+
+
+def _advancement_display(
+    row: dict[str, Any],
+    *,
+    country_registry: CountryRegistry,
+    locale: str,
+) -> dict[str, str] | None:
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    prediction_metadata = metadata.get("prediction_metadata")
+    if not isinstance(prediction_metadata, dict):
+        return None
+    advancement = prediction_metadata.get("advancement_probabilities")
+    if not isinstance(advancement, dict):
+        return None
+    home = _float_value(advancement.get("home"))
+    away = _float_value(advancement.get("away"))
+    if home <= 0 and away <= 0:
+        return None
+    side = "home" if home >= away else "away"
+    return {
+        "team_label": str(row.get(f"{side}_team_label") or ""),
+        "flag": str(row.get(f"{side}_flag") or ""),
+        "percent_text": _round_percent_text(home if side == "home" else away),
+    }
+
+
+def _heatmap(row: dict[str, Any], *, catalog: TranslationCatalog) -> dict[str, Any] | None:
+    cells = _score_matrix_map(row)
+    if not cells:
+        return None
+    peak = max(cells.values())
+    if peak <= 0:
+        return None
+    most_likely = (_optional_int(row.get("most_likely_home")), _optional_int(row.get("most_likely_away")))
+    actual = (_optional_int(row.get("actual_home")), _optional_int(row.get("actual_away")))
+    mark_actual = str(row.get("status") or "") == "final" and None not in actual
+    shown_mass = 0.0
+    rows = []
+    for home in range(HEATMAP_MAX_GOALS + 1):
+        cell_row = []
+        for away in range(HEATMAP_MAX_GOALS + 1):
+            probability = cells.get((home, away), 0.0)
+            shown_mass += probability
+            weight = round(100 * probability / peak)
+            cell_row.append(
+                {
+                    "home": home,
+                    "away": away,
+                    "weight": weight,
+                    "hot": weight > 45,
+                    "most_likely": (home, away) == most_likely,
+                    "actual": mark_actual and (home, away) == actual,
+                    "label": f"{probability * 100:.1f}" if probability >= 0.01 else "",
+                    "title": f"{home}:{away} — {probability * 100:.1f}%",
+                }
+            )
+        rows.append({"home": home, "cells": cell_row})
+    hidden_mass = max(0.0, 1.0 - shown_mass)
+    legend = [
+        catalog.translate(
+            "matrix.legend_most_likely",
+            score=_score_text(most_likely[0], most_likely[1]),
+            percent=str(row.get("most_likely_percent_text") or _round_percent_text(peak)),
+        )
+    ]
+    if mark_actual and None not in actual and max(actual) <= HEATMAP_MAX_GOALS:
+        legend.append(catalog.translate("matrix.legend_actual"))
+    if hidden_mass >= 0.001:
+        legend.append(catalog.translate("matrix.hidden_note", percent=f"{hidden_mass * 100:.1f}%"))
+    return {
+        "columns": list(range(HEATMAP_MAX_GOALS + 1)),
+        "rows": rows,
+        "axis_text": catalog.translate(
+            "matrix.axis",
+            home=str(row.get("home_team_label") or ""),
+            away=str(row.get("away_team_label") or ""),
+        ),
+        "legend": legend,
+    }
+
+
+def _match_og_description(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
+    parts = []
+    values = _probability_values(row)
+    if values is not None:
+        labels = _hda_parts(row, catalog=catalog)
+        parts.append(" · ".join(f"{part['label']} {_round_percent_text(value)}" for part, value in zip(labels, values)))
+    srf_tip_label = str(row.get("srf_tip_label") or "")
+    if srf_tip_label:
+        parts.append(f"{catalog.translate('label.srf_game')}: {srf_tip_label}")
+    if not parts:
+        return catalog.translate("site.description")
+    return " — ".join(parts)
+
+
+def _match_jsonld(row: dict[str, Any]) -> str:
+    payload = {
+        "@context": "https://schema.org",
+        "@type": "SportsEvent",
+        "name": str(row.get("match") or ""),
+        "startDate": str(row.get("event_date") or ""),
+        "homeTeam": {"@type": "SportsTeam", "name": str(row.get("home_team_label") or "")},
+        "awayTeam": {"@type": "SportsTeam", "name": str(row.get("away_team_label") or "")},
+    }
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def _match_slug(row: dict[str, Any]) -> str:
@@ -1004,6 +1969,16 @@ def _hda_parts(row: dict[str, Any], *, catalog: TranslationCatalog) -> list[dict
         {"label": catalog.translate("prob.draw"), "value": _percent_text(row.get("prob_draw"))},
         {"label": _team_win_label(row, side="away", catalog=catalog), "value": _percent_text(row.get("prob_away"))},
     ]
+
+
+def _hda_compact_labels(row: dict[str, Any], *, catalog: TranslationCatalog) -> dict[str, str]:
+    home = str(row.get("home_team_label") or "").strip() or catalog.translate("prob.home")
+    away = str(row.get("away_team_label") or "").strip() or catalog.translate("prob.away")
+    return {
+        "home": home,
+        "draw": catalog.translate("prob.draw_short"),
+        "away": away,
+    }
 
 
 def _hda_title(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
@@ -1089,12 +2064,18 @@ def _country_code_from_fixture_key(fixture_key: str, *, side: str) -> str:
     return value if len(value) == 3 else ""
 
 
-def _match_display(home_name: str, home_code: str, away_name: str, away_code: str) -> str:
-    home_flag = FIFA_FLAG_EMOJIS.get(home_code)
-    away_flag = FIFA_FLAG_EMOJIS.get(away_code)
-    home_display = f"{home_flag} {home_name}" if home_flag else home_name
-    away_display = f"{away_name} {away_flag}" if away_flag else away_name
-    return f"{home_display} - {away_display}".strip(" -")
+def _country_name_display(label: str, flag: Any) -> dict[str, str]:
+    text = str(label or "").strip()
+    emoji = str(flag or "").strip()
+    return {
+        "flag": emoji,
+        "label": text,
+        "text": _flagged_label(emoji, text),
+    }
+
+
+def _match_display(home: dict[str, str], away: dict[str, str]) -> str:
+    return f"{home['text']} - {away['text']}".strip(" -")
 
 
 def _top_scores(score_matrix: Any, limit: int = 3) -> list[dict[str, Any]]:
@@ -1106,9 +2087,11 @@ def _top_scores(score_matrix: Any, limit: int = 3) -> list[dict[str, Any]]:
 
 
 def _score_text(home: Any, away: Any) -> str:
-    if home in (None, "") or away in (None, ""):
+    home_goals = _optional_int(home)
+    away_goals = _optional_int(away)
+    if home_goals is None or away_goals is None:
         return "-"
-    return f"{home}:{away}"
+    return f"{home_goals}:{away_goals}"
 
 
 def _float_text(value: Any, *, precision: int | None = None, decimal_separator: str = ".") -> str:
@@ -1205,12 +2188,18 @@ def _sitemap_xml(localized_contexts: dict[str, dict[str, Any]]) -> str:
     urls = []
     for locale, context in localized_contexts.items():
         generated_at_utc = str(context["generated_at_utc"])
-        urls.append((f"/{locale}/", generated_at_utc))
-        urls.extend((str(row["detail_path"]) + "/", generated_at_utc) for row in context["rows"])
+        base_url = str(context["base_url"])
+        urls.append((_absolute_site_url(f"/{locale}/", base_url=base_url), generated_at_utc))
+        urls.extend(
+            (_absolute_site_url(LOCALE_MATCH_LIST_PATHS[locale][kind], base_url=base_url), generated_at_utc)
+            for kind in ("future", "past")
+        )
+        urls.append((_absolute_site_url(LOCALE_TOURNAMENT_PATHS[locale], base_url=base_url), generated_at_utc))
+        urls.extend((_absolute_site_url(str(row["detail_path"]) + "/", base_url=base_url), generated_at_utc) for row in context["rows"])
     url_nodes = "\n".join(
         f"""  <url>
-    <loc>{loc}</loc>
-    <lastmod>{lastmod}</lastmod>
+    <loc>{html_lib.escape(loc)}</loc>
+    <lastmod>{html_lib.escape(lastmod)}</lastmod>
   </url>"""
         for loc, lastmod in urls
     )

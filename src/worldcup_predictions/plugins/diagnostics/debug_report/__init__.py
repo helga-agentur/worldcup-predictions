@@ -1,0 +1,5 @@
+"""Prediction debug report plugin."""
+
+from worldcup_predictions.plugins.diagnostics.debug_report.plugin import DebugReportPlugin
+
+__all__ = ["DebugReportPlugin"]

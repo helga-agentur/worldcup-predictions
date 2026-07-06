@@ -1,74 +1,179 @@
 {% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
 {% from "partials/page_intro.html" import page_intro %}
+{% from "partials/champion_odds.html" import champion_bars %}
 
 {% block content %}
 <nav class="breadcrumb" aria-label="Breadcrumb">
-  <a href="/{{ locale }}/" aria-current="page">{{ t("nav.predictions") }}</a>
+  <a class="breadcrumb__link" href="/{{ locale }}/" aria-current="page">{{ t("nav.home") }}</a>
 </nav>
 
-<section class="intro" aria-labelledby="page-title">
+<section class="section" aria-labelledby="page-title">
+  {% set blog_link -%}
+  <a href="https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8" target="_blank" rel="noopener" data-analytics-event="helga_blog_click">{{ t("site.blog_link") }}</a>
+  {%- endset %}
   {{ page_intro(
     "page-title",
     t("site.heading"),
-    t("site.lead"),
+    t("site.lead", blog_link=blog_link),
     t("site.kicker")
   ) }}
-  <section class="summary-dashboard" aria-labelledby="summary-title">
+  <nav class="resources" aria-label="{{ t('resources.aria') }}">
+    <a class="resources__link" href="{{ tournament_path }}">
+      {{ icon("trophy") }}
+      <span>{{ t("nav.tournament") }}</span>
+    </a>
+    <a class="resources__link" href="https://github.com/helga-agentur/worldcup-predictions">
+      {{ icon("star") }}
+      <span>{{ t("resources.github") }}</span>
+    </a>
+    <a class="resources__link" href="{{ json_feed_path }}" target="_blank" rel="noopener" data-analytics-event="helga_api_click">
+      {{ icon("braces") }}
+      <span>{{ t("resources.json_api") }}</span>
+    </a>
+  </nav>
+</section>
+
+<section class="section" aria-labelledby="summary-title">
+  <div class="content-width content-width--narrow">
     <h2 id="summary-title" class="visually-hidden">{{ t("summary.title") }}</h2>
-    <dl class="summary-metrics">
-      <div class="summary-card">
-        <dt class="summary-label">{{ t("summary.tipped") }}</dt>
-        <dd class="summary-value">{{ summary.tipped }}</dd>
+    <dl class="summary">
+      <div class="summary__card">
+        <dt class="summary__label">{{ t("summary.srf_points") }}</dt>
+        <dd class="summary__value">{{ summary.srf_points_display }}</dd>
+        {% if summary_extras.srf_points_bar.has_progress %}
+        <dd class="summary__bar">
+          <div class="bar bar--series" role="img" aria-label="{{ summary_extras.srf_points_bar.label }}">
+            <span class="bar__segment" data-series="primary" style="width: {{ summary_extras.srf_points_bar.width }}%"></span>
+            <span class="bar__segment" data-series="muted" style="width: {{ summary_extras.srf_points_bar.remaining_width }}%"></span>
+          </div>
+        </dd>
+        <dd class="summary__meta">
+          <div class="bar__legend" aria-hidden="true">
+            <span class="bar__legend-item numeric">{{ summary_extras.srf_points_bar.label }}</span>
+          </div>
+        </dd>
+        {% endif %}
       </div>
-      <div class="summary-card">
-        <dt class="summary-label">{{ t("summary.open") }}</dt>
-        <dd class="summary-value">{{ summary.future }}</dd>
+      <div class="summary__card">
+        <dt class="summary__label">{{ t("summary.twenty_min_points") }}</dt>
+        <dd class="summary__value">{{ summary.twenty_min_points_display }}</dd>
+        {% if summary_extras.twenty_min_points_bar.has_progress %}
+        <dd class="summary__bar">
+          <div class="bar bar--series" role="img" aria-label="{{ summary_extras.twenty_min_points_bar.label }}">
+            <span class="bar__segment" data-series="primary" style="width: {{ summary_extras.twenty_min_points_bar.width }}%"></span>
+            <span class="bar__segment" data-series="muted" style="width: {{ summary_extras.twenty_min_points_bar.remaining_width }}%"></span>
+          </div>
+        </dd>
+        <dd class="summary__meta">
+          <div class="bar__legend" aria-hidden="true">
+            <span class="bar__legend-item numeric">{{ summary_extras.twenty_min_points_bar.label }}</span>
+          </div>
+        </dd>
+        {% endif %}
       </div>
-      <div class="summary-card">
-        <dt class="summary-label">{{ t("summary.srf_points") }}</dt>
-        <dd class="summary-value">{{ summary.srf_points_display }}</dd>
+      <div class="summary__card">
+        <dt class="summary__label">{{ t("summary.hit_rate") }}</dt>
+        <dd class="summary__value">{{ summary_extras.hit_rate_text }}</dd>
+        {% if summary_extras.has_hits %}
+        <dd class="summary__bar">
+          <div class="bar bar--status" aria-hidden="true">
+            <span class="bar__segment" data-state="strong" style="width: {{ summary_extras.hit_widths.exact }}%"></span>
+            <span class="bar__segment" data-state="good" style="width: {{ summary_extras.hit_widths.trend }}%"></span>
+            <span class="bar__segment" data-state="bad" style="width: {{ summary_extras.hit_widths.miss }}%"></span>
+          </div>
+        </dd>
+        <dd class="summary__meta">
+          <div class="bar__legend" aria-label="{{ summary_extras.hit_breakdown_text }}">
+            <span class="bar__legend-item">
+              <span class="bar__dot" data-state="strong"></span><span class="numeric">{{ summary_extras.hit_counts.exact }}</span> {{ t("summary.exact_short") }}
+            </span>
+            <span class="bar__legend-item">
+              <span class="bar__dot" data-state="good"></span><span class="numeric">{{ summary_extras.hit_counts.trend }}</span> {{ t("summary.correct_short") }}
+            </span>
+            <span class="bar__legend-item">
+              <span class="bar__dot" data-state="bad"></span><span class="numeric">{{ summary_extras.hit_counts.miss }}</span> {{ t("summary.wrong_short") }}
+            </span>
+          </div>
+        </dd>
+        {% endif %}
       </div>
-      <div class="summary-card">
-        <dt class="summary-label">{{ t("summary.twenty_min_points") }}</dt>
-        <dd class="summary-value">{{ summary.twenty_min_points_display }}</dd>
+      <div class="summary__card">
+        <dt class="summary__label">{{ t("summary.played") }}</dt>
+        <dd class="summary__value">{{ summary_extras.played_matches_display }}</dd>
+        {% if summary_extras.played_matches_bar.has_progress %}
+        <dd class="summary__bar">
+          <div class="bar bar--series" role="img" aria-label="{{ summary_extras.played_matches_bar.label }}">
+            <span class="bar__segment" data-series="primary" style="width: {{ summary_extras.played_matches_bar.width }}%"></span>
+            <span class="bar__segment" data-series="muted" style="width: {{ summary_extras.played_matches_bar.remaining_width }}%"></span>
+          </div>
+        </dd>
+        <dd class="summary__meta">
+          <div class="bar__legend" aria-hidden="true">
+            <span class="bar__legend-item numeric">{{ summary_extras.played_matches_bar.label }}</span>
+          </div>
+        </dd>
+        {% endif %}
       </div>
     </dl>
-  </section>
+  </div>
 </section>
 
-<section class="table-section" aria-labelledby="future-title">
-  <header class="section-heading">
-    <section class="section-heading-copy">
-      <h2 id="future-title">{{ t("section.future.title") }}</h2>
-      <p>{{ t("section.future.description") }}</p>
+<div class="section homepage-grid{% if not champion %} homepage-grid--single{% endif %}">
+  <div class="homepage-grid__main">
+    <section class="homepage-panel" aria-labelledby="future-title">
+      <header class="section__heading">
+        <section class="section__heading-copy">
+          <h2 id="future-title">{{ t("section.future.title") }}</h2>
+          <p>{{ t("section.future.description") }}</p>
+        </section>
+      </header>
+      {% if future_preview_rows %}
+        {% set rows_to_show = future_preview_rows %}
+        {% include "partials/match_cards.html" %}
+      {% else %}
+        <p class="empty">{{ t("empty.future") }}</p>
+      {% endif %}
+      <div class="section__actions">
+        <a class="action-link" href="{{ future_list_path }}"><span>{{ t("section.future.all") }}</span>{{ icon("arrow-right") }}</a>
+      </div>
     </section>
-  </header>
-  {% if future_rows %}
-    {% set rows_to_show = future_rows %}
-    {% set show_account_columns = false %}
-    {% set score_column_label = t("table.prediction") %}
-    {% set score_column_source = "prediction" %}
-    {% include "partials/prediction_table.html" %}
-  {% else %}
-    <p class="empty">{{ t("empty.future") }}</p>
-  {% endif %}
-</section>
 
-<section class="table-section" aria-labelledby="past-title">
-  <header class="section-heading">
-    <section class="section-heading-copy">
-      <h2 id="past-title">{{ t("section.tipped.title") }}</h2>
-      <p>{{ t("section.tipped.description") }}</p>
+    <section class="homepage-panel" aria-labelledby="past-title">
+      <header class="section__heading">
+        <section class="section__heading-copy">
+          <h2 id="past-title">{{ t("section.tipped.title") }}</h2>
+          <p>{{ t("section.tipped.description") }}</p>
+        </section>
+      </header>
+      {% if tipped_preview_rows %}
+        {% set rows_to_show = tipped_preview_rows %}
+        {% set match_card_variant = "past" %}
+        {% include "partials/match_cards.html" %}
+      {% else %}
+        <p class="empty">{{ t("empty.tipped") }}</p>
+      {% endif %}
+      <div class="section__actions">
+        <a class="action-link" href="{{ past_list_path }}"><span>{{ t("section.tipped.all") }}</span>{{ icon("arrow-right") }}</a>
+      </div>
     </section>
-  </header>
-  {% if tipped_rows %}
-    {% set rows_to_show = tipped_rows %}
-    {% set show_account_columns = true %}
-    {% set score_column_label = t("label.result") %}
-    {% set score_column_source = "actual" %}
-    {% include "partials/prediction_table.html" %}
-  {% else %}
-    <p class="empty">{{ t("empty.tipped") }}</p>
+  </div>
+
+  {% if champion %}
+  <aside class="homepage-grid__aside">
+    <section class="homepage-panel" aria-labelledby="champion-title">
+      <header class="section__heading">
+        <section class="section__heading-copy">
+          <h2 id="champion-title">{{ t("tournament.title") }}</h2>
+          <p>{{ champion.source_text }}</p>
+        </section>
+      </header>
+      {{ champion_bars(champion.preview_entries) }}
+      <div class="section__actions">
+        <a class="action-link" href="{{ tournament_path }}"><span>{{ t("tournament.all") }}</span>{{ icon("arrow-right") }}</a>
+      </div>
+    </section>
+  </aside>
   {% endif %}
-</section>
+</div>
 {% endblock %}

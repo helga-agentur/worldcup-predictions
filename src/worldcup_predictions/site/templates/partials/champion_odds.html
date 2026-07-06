@@ -1,0 +1,11 @@
+{% macro champion_bars(entries) -%}
+<div class="odds">
+  {% for entry in entries %}
+  <div class="odds__row">
+    <span class="odds__team">{% if entry.flag %}<span aria-hidden="true">{{ entry.flag }}</span> {% endif %}{{ entry.label }}</span>
+    <span class="odds__track" aria-hidden="true"><span class="odds__fill" style="width: {{ entry.width }}%"></span></span>
+    <span class="odds__pct numeric">{{ entry.percent_text }}</span>
+  </div>
+  {% endfor %}
+</div>
+{%- endmacro %}

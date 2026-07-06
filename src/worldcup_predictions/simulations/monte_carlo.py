@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from string import ascii_uppercase
 from typing import Any
 
 from worldcup_predictions.core.contracts import Fixture, ScoreMatrixEntry, ScoreTip
@@ -50,6 +51,7 @@ class SimulationInputs:
 
     fixtures: list[Fixture]
     known_results: dict[str, ScoreTip] = field(default_factory=dict)
+    known_winners: dict[str, str] = field(default_factory=dict)
     score_matrices: dict[str, list[ScoreMatrixEntry]] = field(default_factory=dict)
     team_strengths: dict[str, float] = field(default_factory=dict)
     team_ratings: dict[str, float] = field(default_factory=dict)
@@ -71,6 +73,7 @@ class TournamentSimulator:
         self.inputs = inputs
         self.iterations = iterations
         self.seed = seed
+        self._group_labels_cache: dict[str, str] | None = None
 
     def run(self) -> SimulationSummary:
         rng = random.Random(self.seed)
@@ -129,6 +132,7 @@ class TournamentSimulator:
         metadata = {
             "fixtures": len(self.inputs.fixtures),
             "known_results": len(self.inputs.known_results),
+            "known_winners": len(self.inputs.known_winners),
             "score_matrices": len(self.inputs.score_matrices),
             "sample_results": [result.to_dict() for result in sample_results],
         }
@@ -146,10 +150,11 @@ class TournamentSimulator:
         standings_by_group: dict[str, dict[str, TeamStanding]] = defaultdict(dict)
         nil_nil_count = 0
 
+        group_labels = self._group_labels()
         for fixture in self._group_fixtures():
             home = fixture.home_team
             away = fixture.away_team
-            group = group_letter(fixture.group) or str(fixture.group or "")
+            group = group_labels.get(fixture.key, "")
             team_stage.setdefault(home, STAGE_GROUP)
             team_stage.setdefault(away, STAGE_GROUP)
             score, source = self._score_for_fixture(
@@ -247,12 +252,68 @@ class TournamentSimulator:
 
     def _team_groups(self) -> dict[str, str]:
         team_groups: dict[str, str] = {}
+        group_labels = self._group_labels()
         for fixture in self._group_fixtures():
-            group = group_letter(fixture.group) or str(fixture.group or "")
+            group = group_labels.get(fixture.key, "")
             if group:
                 team_groups.setdefault(fixture.home_team, group)
                 team_groups.setdefault(fixture.away_team, group)
         return dict(sorted(team_groups.items()))
+
+    def _group_labels(self) -> dict[str, str]:
+        """Group label per group-stage fixture key.
+
+        Sources can deliver group fixtures as stage-only rows without group
+        names. Every group is a closed round-robin, so connected components of
+        the "plays against" graph recover group membership for such fixtures;
+        components are lettered deterministically by earliest kickoff. Without
+        this, unlabeled fixtures collapse into a single pseudo-group whose
+        placements can never fill the knockout bracket, and every iteration
+        ends with the same fallback champion.
+        """
+
+        if self._group_labels_cache is None:
+            self._group_labels_cache = self._build_group_labels(self._group_fixtures())
+        return self._group_labels_cache
+
+    def _build_group_labels(self, fixtures: list[Fixture]) -> dict[str, str]:
+        labels: dict[str, str] = {}
+        unlabeled: list[Fixture] = []
+        for fixture in fixtures:
+            label = group_letter(fixture.group) or str(fixture.group or "")
+            if label:
+                labels[fixture.key] = label
+            else:
+                unlabeled.append(fixture)
+        if not unlabeled:
+            return labels
+
+        parent: dict[str, str] = {}
+
+        def find(team: str) -> str:
+            parent.setdefault(team, team)
+            while parent[team] != team:
+                parent[team] = parent[parent[team]]
+                team = parent[team]
+            return team
+
+        for fixture in unlabeled:
+            parent[find(fixture.home_team)] = find(fixture.away_team)
+        components: dict[str, list[Fixture]] = defaultdict(list)
+        for fixture in unlabeled:
+            components[find(fixture.home_team)].append(fixture)
+
+        used_labels = set(labels.values())
+        free_letters = (letter for letter in ascii_uppercase if letter not in used_labels)
+        ordered = sorted(
+            components.values(),
+            key=lambda component: min((fixture.event_date, fixture.home_team) for fixture in component),
+        )
+        for index, component in enumerate(ordered):
+            label = next(free_letters, None) or f"Z{index}"
+            for fixture in component:
+                labels[fixture.key] = label
+        return labels
 
     def _simulate_knockout(
         self,
@@ -322,7 +383,11 @@ class TournamentSimulator:
                 team_stage[winner] = self._next_stage(stage)
             return winner
         score, source = self._score_for_fixture(match_id, home, away, rng)
-        winner = self._winner_from_score(home, away, score, allow_draw=False, rng=rng)
+        winner: str | None = None
+        if source == "fixed" and score.home == score.away:
+            winner = self._known_winner(match_id, home, away)
+        if winner is None:
+            winner = self._winner_from_score(home, away, score, allow_draw=False, rng=rng)
         team_stage.setdefault(home, STAGE_GROUP)
         team_stage.setdefault(away, STAGE_GROUP)
         team_stage[winner] = self._next_stage(stage)
@@ -368,6 +433,24 @@ class TournamentSimulator:
         reverse_score = self.inputs.known_results.get(pair_key(away, home))
         if reverse_score is not None:
             return ScoreTip(reverse_score.away, reverse_score.home)
+        return None
+
+    def _known_winner(self, fixture_key: str, home: str, away: str) -> str | None:
+        """Real advancing team for a fixed knockout tie, when recorded.
+
+        The winner is a team name, so home/away orientation does not matter;
+        values that name neither side are ignored.
+        """
+
+        candidates = [
+            fixture_key,
+            pair_key(home, away),
+            pair_key(away, home),
+        ]
+        for candidate in candidates:
+            winner = self.inputs.known_winners.get(candidate)
+            if winner in (home, away):
+                return winner
         return None
 
     def _score_matrix(self, fixture_key: str, home: str, away: str) -> list[ScoreMatrixEntry]:

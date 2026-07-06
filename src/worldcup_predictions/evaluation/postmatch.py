@@ -15,7 +15,7 @@ from worldcup_predictions.core.datasets import (
     PREDICTION_BACKTEST,
     TOURNAMENT_RESULTS,
 )
-from worldcup_predictions.plugins.provider_optimizers.common import score_outcome
+from worldcup_predictions.plugins.providers.common import score_outcome
 
 
 def build_postmatch_learning_rows(storage) -> list[dict[str, Any]]:

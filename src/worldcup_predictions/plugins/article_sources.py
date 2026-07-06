@@ -6,7 +6,7 @@ import datetime as dt
 import os
 import re
 from functools import lru_cache
-from typing import Any
+from typing import Any, Callable
 
 from worldcup_predictions.core.constants import (
     ENDPOINT_NEWS_API_EVERYTHING,
@@ -29,11 +29,12 @@ def fetch_news_api(
     page_size: int = NEWS_API_DEFAULT_PAGE_SIZE,
     domains: tuple[str, ...] | None = NEWS_API_RELIABLE_DOMAINS,
     http_client: HttpClient | None = None,
+    fetcher: Callable[[str, dict[str, Any]], tuple[Any, dict[str, str]]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, str]]:
     api_key = os.environ.get(ENV_NEWS_API_KEY)
     if not api_key:
         raise OSError(f"{ENV_NEWS_API_KEY} is not configured.")
-    fetch = http_client.get_json if http_client is not None else fetch_json
+    fetch = fetcher or (http_client.get_json if http_client is not None else fetch_json)
     params = {
         "apiKey": api_key,
         "q": query,

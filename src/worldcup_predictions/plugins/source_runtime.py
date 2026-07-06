@@ -11,9 +11,28 @@ from worldcup_predictions.core.events import EventName, event_value
 from worldcup_predictions.core.http import HttpClient
 from worldcup_predictions.core.plugin import BasePlugin, PluginResult
 from worldcup_predictions.plugins.source_utils import load_env_value
-from worldcup_predictions.storage.ledger import SourceLedgerRecord, SourceRequest, normalize_datetime, utc_now
+from worldcup_predictions.storage.ledger import (
+    FetchDecision,
+    SourceLedgerRecord,
+    SourceRequest,
+    normalize_datetime,
+    utc_now,
+)
 from worldcup_predictions.tournament import TournamentState
 from worldcup_predictions.tournament.repository import load_tournament_state
+
+
+# Rate limits without a Retry-After header (NewsAPI's daily quota answers 429
+# with no header) previously retried on every half-hourly run; failed request
+# keys with client errors (invalid ids, blocked clients) retried forever.
+RATE_LIMIT_DEFAULT_BACKOFF = dt.timedelta(hours=6)
+CLIENT_ERROR_BACKOFFS = {
+    400: dt.timedelta(hours=24),
+    403: dt.timedelta(hours=6),
+    404: dt.timedelta(hours=24),
+}
+_RATE_LIMITED_SOURCES_STATE_KEY = "_source_runtime_rate_limited_sources"
+_RATE_LIMITED_QUOTA_SCOPES_STATE_KEY = "_source_runtime_rate_limited_quota_scopes"
 
 
 @dataclass(frozen=True)
@@ -154,7 +173,13 @@ class SourceRuntime:
         return self.storage.read_records(dataset, latest_only=True)
 
     def should_fetch(self, request: SourceRequest):
-        decision = self.storage.should_fetch(request)
+        quota_scope = str(request.quota_scope or "").strip()
+        if quota_scope and quota_scope in self._rate_limited_quota_scopes():
+            decision = FetchDecision(False, "rate_limited_quota_scope_this_run", request.request_key)
+        elif request.source in self._rate_limited_sources():
+            decision = FetchDecision(False, "rate_limited_this_run", request.request_key)
+        else:
+            decision = self.storage.should_fetch(request)
         self.context.state["_source_runtime_last_request"] = request
         if not decision.should_fetch:
             self.storage.record_fetch(
@@ -180,6 +205,7 @@ class SourceRuntime:
         message: str | None = None,
         metadata: Mapping[str, Any] | None = None,
         quota_remaining: int | None = None,
+        next_safe_fetch_at: str | None = None,
     ) -> None:
         response_info = self._response_info(request)
         not_modified = bool(response_info.get("not_modified"))
@@ -192,6 +218,7 @@ class SourceRuntime:
                 status=status,
                 run_id=self.context.run_id,
                 quota_remaining=quota_remaining,
+                next_safe_fetch_at=next_safe_fetch_at,
                 message=message or ("Not modified." if not_modified else None),
                 metadata={
                     **dict(metadata or {}),
@@ -210,8 +237,16 @@ class SourceRuntime:
         metadata: Mapping[str, Any] | None = None,
         quota_remaining: int | None = None,
     ) -> None:
-        status = _error_status(error)
-        next_safe_fetch_at = _retry_after_next_safe_fetch_at(error) if status == "rate_limited" else None
+        metadata_dict = dict(metadata or {})
+        response_body = _error_response_body(error)
+        if response_body:
+            metadata_dict.setdefault("response_body", response_body)
+        status = _error_status(error, metadata_dict)
+        next_safe_fetch_at = _error_next_safe_fetch_at(error, status, request)
+        if status == "rate_limited":
+            self._rate_limited_sources().add(request.source)
+            if request.quota_scope:
+                self._rate_limited_quota_scopes().add(str(request.quota_scope))
         response_headers = _sanitize_response_headers(getattr(error, "headers", None))
         self.storage.record_fetch(
             SourceLedgerRecord(
@@ -222,14 +257,29 @@ class SourceRuntime:
                 next_safe_fetch_at=next_safe_fetch_at,
                 message=str(error),
                 metadata={
-                    **dict(metadata or {}),
+                    **metadata_dict,
                     "error_status": status,
-                    "http_status": _optional_int(getattr(error, "code", None)),
+                    "http_status": _optional_int(getattr(error, "code", None))
+                    or _optional_int(metadata_dict.get("http_status")),
                     "response_headers": response_headers,
                     "cache_validators": _cache_validators_from_headers(response_headers),
                 },
             )
         )
+
+    def _rate_limited_sources(self) -> set[str]:
+        sources = self.context.state.get(_RATE_LIMITED_SOURCES_STATE_KEY)
+        if not isinstance(sources, set):
+            sources = set()
+            self.context.state[_RATE_LIMITED_SOURCES_STATE_KEY] = sources
+        return sources
+
+    def _rate_limited_quota_scopes(self) -> set[str]:
+        scopes = self.context.state.get(_RATE_LIMITED_QUOTA_SCOPES_STATE_KEY)
+        if not isinstance(scopes, set):
+            scopes = set()
+            self.context.state[_RATE_LIMITED_QUOTA_SCOPES_STATE_KEY] = scopes
+        return scopes
 
     def _matching_request(self, endpoint: str, params: Mapping[str, Any] | None) -> SourceRequest | None:
         request = self.context.state.get("_source_runtime_last_request")
@@ -283,11 +333,37 @@ def _optional_int(value: Any) -> int | None:
         return None
 
 
-def _error_status(error: Exception | str) -> str:
+def _error_status(error: Exception | str, metadata: Mapping[str, Any] | None = None) -> str:
     code = _optional_int(getattr(error, "code", None))
-    if code == 429 or "429" in str(error):
+    text = " ".join(
+        str(part or "")
+        for part in (
+            error,
+            (metadata or {}).get("response_body"),
+            (metadata or {}).get("error_code"),
+            (metadata or {}).get("reason"),
+        )
+    ).casefold()
+    quota_exhausted = "quota" in text and any(
+        marker in text
+        for marker in ("reached", "exceeded", "exhausted", "out_of_usage_credits", "usage credits")
+    )
+    if code == 429 or "429" in text or quota_exhausted:
         return "rate_limited"
     return "error"
+
+
+def _error_response_body(error: Exception | str) -> str:
+    reader = getattr(error, "read", None)
+    if not callable(reader):
+        return ""
+    try:
+        body = reader()
+    except Exception:
+        return ""
+    if isinstance(body, bytes):
+        return body.decode("utf-8", errors="replace")[:1000]
+    return str(body or "")[:1000]
 
 
 def _retry_after_next_safe_fetch_at(error: Exception | str) -> str | None:
@@ -298,6 +374,17 @@ def _retry_after_next_safe_fetch_at(error: Exception | str) -> str | None:
     if retry_after is None:
         return None
     return normalize_datetime(utc_now() + dt.timedelta(seconds=max(0, retry_after)))
+
+
+def _error_next_safe_fetch_at(error: Exception | str, status: str, request: SourceRequest) -> str | None:
+    """Backoff for failed request keys so they are not retried every run."""
+
+    if status == "rate_limited":
+        return _retry_after_next_safe_fetch_at(error) or normalize_datetime(utc_now() + (request.rate_limit_backoff or RATE_LIMIT_DEFAULT_BACKOFF))
+    backoff = CLIENT_ERROR_BACKOFFS.get(_optional_int(getattr(error, "code", None)) or 0)
+    if backoff is None:
+        return None
+    return normalize_datetime(utc_now() + backoff)
 
 
 def _params_match(request_params: Mapping[str, Any], fetch_params: Mapping[str, Any]) -> bool:

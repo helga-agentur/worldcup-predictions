@@ -1,0 +1,16 @@
+{% macro prob_bar(row, full=False) -%}
+{% if row.hda_bar %}
+<div class="prob"{% if full %} data-full="true"{% endif %}>
+  <div class="bar bar--series" role="img" aria-label="{{ row.hda_aria }}">
+    <span class="bar__segment" data-series="primary" style="width: {{ row.hda_bar.home_width }}%"></span>
+    <span class="bar__segment" data-series="muted" style="width: {{ row.hda_bar.draw_width }}%"></span>
+    <span class="bar__segment" data-series="contrast"></span>
+  </div>
+  <div class="bar__legend" aria-hidden="true">
+    <span class="bar__legend-item"><span class="bar__dot" data-series="primary"></span>{{ row.hda_bar.home_label }} <span class="numeric">{{ row.hda_bar.home_text }}</span></span>
+    <span class="bar__legend-item"><span class="bar__dot" data-series="muted"></span>{{ row.hda_bar.draw_label }} <span class="numeric">{{ row.hda_bar.draw_text }}</span></span>
+    <span class="bar__legend-item"><span class="bar__dot" data-series="contrast"></span>{{ row.hda_bar.away_label }} <span class="numeric">{{ row.hda_bar.away_text }}</span></span>
+  </div>
+</div>
+{% endif %}
+{%- endmacro %}

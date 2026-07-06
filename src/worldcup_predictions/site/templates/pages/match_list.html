@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+{% from "partials/page_intro.html" import page_intro %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a class="breadcrumb__link" href="/{{ locale }}/">{{ t("nav.home") }}</a>
+  <span aria-hidden="true">/</span>
+  <a class="breadcrumb__link" href="{{ current_url }}" aria-current="page">{{ page_title }}</a>
+</nav>
+
+<section class="section" aria-labelledby="page-title">
+  {{ page_intro(
+    "page-title",
+    page_title,
+    page_description,
+    t("site.kicker")
+  ) }}
+</section>
+
+<section class="section" aria-label="{{ page_title }}">
+  {% if rows_to_show %}
+    {% if list_kind == "future" %}
+      {% include "partials/match_cards.html" %}
+    {% else %}
+      {% set match_card_variant = "past" %}
+      {% include "partials/match_cards.html" %}
+    {% endif %}
+  {% else %}
+    <p class="empty">{{ empty_text }}</p>
+  {% endif %}
+</section>
+
+<footer class="match-detail__actions">
+  <a class="action-link action-link--back" href="/{{ locale }}/">{{ icon("arrow-left") }}<span>{{ t("detail.back") }}</span></a>
+</footer>
+{% endblock %}

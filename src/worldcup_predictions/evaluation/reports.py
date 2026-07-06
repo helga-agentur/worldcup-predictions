@@ -367,14 +367,15 @@ def _source_ledger_markdown(rows: list[dict[str, Any]]) -> str:
                 "",
                 "## Notable Rows",
                 "",
-                "| Source | Purpose | Status | Reason | Next safe fetch |",
-                "| --- | --- | --- | --- | --- |",
+                "| Source | Scope | Purpose | Status | Reason | Next safe fetch |",
+                "| --- | --- | --- | --- | --- | --- |",
             ]
         )
         for row in notable:
             lines.append(
-                "| {source} | {purpose} | {status} | {message} | {next_safe} |".format(
+                "| {source} | {scope} | {purpose} | {status} | {message} | {next_safe} |".format(
                     source=_escape(row.get("source")),
+                    scope=_escape(row.get("quota_scope")),
                     purpose=_escape(row.get("purpose")),
                     status=_escape(row.get("status")),
                     message=_escape(row.get("message")),

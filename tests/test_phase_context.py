@@ -1,39 +1,61 @@
 from __future__ import annotations
 
+import datetime as dt
 import unittest
 
 from worldcup_predictions.core.contracts import ScoreTip
 from worldcup_predictions.core.signals import LIVE_DRAW_ADJUSTMENT, TEAM_EXPECTED_GOALS_FACTOR, TOTAL_GOALS_FACTOR
 from worldcup_predictions.model import BaselineModel, HistoricalResult
-from worldcup_predictions.plugins.phase_context.plugin import phase_context_rows, phase_context_signals
+from worldcup_predictions.plugins.signals.phase_context.plugin import phase_context_rows, phase_context_signals
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamResolver, build_tournament_state
+
+
+def _event_date(days_from_now: int) -> str:
+    """Return a fixture date relative to the test run so open-fixture filtering stays stable."""
+
+    return (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=days_from_now)).strftime("%Y-%m-%dT18:00:00Z")
 
 
 class PhaseContextTest(unittest.TestCase):
     def test_regular_group_fixture_gets_no_phase_context(self) -> None:
         resolver = TeamResolver.default()
+        # Both teams still have a later group match, so this is not a final group fixture.
         fixture = FixtureRecord(
-            event_date="2026-06-13T18:00:00Z",
+            event_date=_event_date(3),
             home_team=resolver.resolve("Brazil"),
             away_team=resolver.resolve("Japan"),
             group="Group A",
             stage="Group Stage",
         )
-        state = build_tournament_state([fixture], [])
+        later_home = FixtureRecord(
+            event_date=_event_date(7),
+            home_team=resolver.resolve("Brazil"),
+            away_team=resolver.resolve("Scotland"),
+            group="Group A",
+            stage="Group Stage",
+        )
+        later_away = FixtureRecord(
+            event_date=_event_date(7),
+            home_team=resolver.resolve("Japan"),
+            away_team=resolver.resolve("Scotland"),
+            group="Group A",
+            stage="Group Stage",
+        )
+        state = build_tournament_state([fixture, later_home, later_away], [])
 
         self.assertEqual(phase_context_rows(state), [])
 
     def test_final_group_fixture_gets_phase_context(self) -> None:
         resolver = TeamResolver.default()
         played = FixtureRecord(
-            event_date="2026-06-13T18:00:00Z",
+            event_date=_event_date(-6),
             home_team=resolver.resolve("Brazil"),
             away_team=resolver.resolve("Scotland"),
             group="Group A",
             stage="Group Stage",
         )
         final = FixtureRecord(
-            event_date="2026-07-19T18:00:00Z",
+            event_date=_event_date(6),
             home_team=resolver.resolve("Brazil"),
             away_team=resolver.resolve("Japan"),
             group="Group A",
@@ -54,22 +76,23 @@ class PhaseContextTest(unittest.TestCase):
 
     def test_knockout_fixture_gets_rest_and_tempo_context(self) -> None:
         resolver = TeamResolver.default()
+        # Keep the original spacing: home rested 4 days, away rested 6 days before the knockout.
         played_home = FixtureRecord(
-            event_date="2026-06-28T18:00:00Z",
+            event_date=_event_date(-2),
             home_team=resolver.resolve("Brazil"),
             away_team=resolver.resolve("Japan"),
             group="Group A",
             stage="Group Stage",
         )
         played_away = FixtureRecord(
-            event_date="2026-06-26T18:00:00Z",
+            event_date=_event_date(-4),
             home_team=resolver.resolve("France"),
             away_team=resolver.resolve("Germany"),
             group="Group B",
             stage="Group Stage",
         )
         knockout = FixtureRecord(
-            event_date="2026-07-02T18:00:00Z",
+            event_date=_event_date(2),
             home_team=resolver.resolve("Brazil"),
             away_team=resolver.resolve("France"),
             stage="Round of 32",

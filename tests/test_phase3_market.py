@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 from collections import Counter
 
-from worldcup_predictions.plugins.market_odds.plugin import market_signals_from_rows
-from worldcup_predictions.plugins.market_trend.plugin import market_trend_rows, market_trend_signals
+from worldcup_predictions.plugins.sources.markets.market_odds.plugin import market_signals_from_rows
+from worldcup_predictions.plugins.signals.market_trend.plugin import market_trend_rows, market_trend_signals
 from worldcup_predictions.simulations.monte_carlo import SimulationInputs, TournamentSimulator
 
 

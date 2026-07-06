@@ -55,12 +55,13 @@ from worldcup_predictions.model import load_historical_results
 from worldcup_predictions.model import BaselineModelConfig, HistoricalResult
 from worldcup_predictions.model.baseline import compute_elo
 from worldcup_predictions.plugins import builtin_plugins
-from worldcup_predictions.plugins.provider_optimizers.ch_srf import best_srf_bonus_answers, evaluate_srf_bonus_questions
-from worldcup_predictions.plugins.provider_optimizers.ch_20min import best_twenty_min_bonus_answers, evaluate_twenty_min_bonus_questions
-from worldcup_predictions.simulations import SimulationInputs, TournamentSimulator
+from worldcup_predictions.plugins.providers.ch_srf import best_srf_bonus_answers, evaluate_srf_bonus_questions
+from worldcup_predictions.plugins.providers.ch_20min import best_twenty_min_bonus_answers, evaluate_twenty_min_bonus_questions
+from worldcup_predictions.simulations import SimulationInputs, TournamentSimulator, pair_key
 from worldcup_predictions.site import build_site, serve_site
 from worldcup_predictions.site.generator import gtm_container_id_from_env
 from worldcup_predictions.tournament.repository import (
+    load_results,
     load_tournament_state,
 )
 
@@ -666,7 +667,7 @@ def _simulation_inputs_from_state(
     known_results: dict[str, ScoreTip],
     include_current_results_in_ratings: bool,
 ) -> SimulationInputs:
-    matrices = {prediction.fixture.key: prediction.score_matrix for prediction in run.predictions}
+    matrices = _simulation_score_matrices(run.predictions)
     team_strengths = _team_strengths_from_outrights(workflow.context.storage.read_records(MARKET_OUTRIGHTS, latest_only=True))
     team_ratings = _team_ratings_for_simulation(
         workflow.context.storage,
@@ -675,11 +676,96 @@ def _simulation_inputs_from_state(
     )
     return SimulationInputs(
         fixtures=[fixture.to_fixture() for fixture in state.fixtures],
-        known_results=known_results,
+        known_results=_simulation_known_results(state, known_results),
+        known_winners=_simulation_known_winners(state, load_results(workflow.context.storage), known_results),
         score_matrices=matrices,
         team_strengths=team_strengths,
         team_ratings=team_ratings,
     )
+
+
+def _simulation_score_matrices(predictions) -> dict:
+    """Score matrices keyed for simulator lookups.
+
+    Group fixtures are looked up by fixture key. Knockout matches are simulated
+    from bracket slots (M73..M104), so the simulator can only find their model
+    matrices through "home|away" team-name pair keys.
+    """
+
+    matrices = {}
+    for prediction in predictions:
+        fixture = prediction.fixture
+        matrices[fixture.key] = prediction.score_matrix
+        if prediction.score_matrix and not fixture.group:
+            matrices.setdefault(pair_key(fixture.home_team, fixture.away_team), prediction.score_matrix)
+    return matrices
+
+
+def _simulation_known_results(state, known_results: dict[str, ScoreTip]) -> dict[str, ScoreTip]:
+    """Known results keyed for simulator lookups.
+
+    Adds "home|away" pair keys for finished knockout matches so simulated
+    bracket matches keep already-played results fixed instead of re-sampling
+    them each iteration.
+    """
+
+    known = dict(known_results)
+    group_fixture_keys = {fixture.key for fixture in state.fixtures if fixture.group}
+    for result in state.results:
+        score = known_results.get(result.fixture_key)
+        if score is None or result.fixture_key in group_fixture_keys:
+            continue
+        known.setdefault(pair_key(result.home_team.name, result.away_team.name), score)
+    return known
+
+
+def _simulation_known_winners(state, results, known_results: dict[str, ScoreTip]) -> dict[str, str]:
+    """Advancing team for finished knockout matches that ended level.
+
+    A fixed knockout draw only pins the full-time score; without the real
+    winner the simulator would re-sample the shootout each iteration. Winner
+    evidence is side-based (penalty scores or an explicit home/away winner
+    flag from source result rows) and only used when every source that
+    reports a side agrees.
+    """
+
+    fixtures_by_key = {fixture.key: fixture for fixture in state.fixtures}
+    sides_by_fixture: dict[str, set[str]] = {}
+    for result in results:
+        side = _result_winner_side(result)
+        if side:
+            sides_by_fixture.setdefault(result.fixture_key, set()).add(side)
+    winners: dict[str, str] = {}
+    for fixture_key, sides in sides_by_fixture.items():
+        score = known_results.get(fixture_key)
+        fixture = fixtures_by_key.get(fixture_key)
+        if score is None or fixture is None or fixture.group:
+            continue
+        if score.home != score.away or len(sides) != 1:
+            continue
+        winner = fixture.home_team.name if "home" in sides else fixture.away_team.name
+        winners[fixture_key] = winner
+        winners.setdefault(pair_key(fixture.home_team.name, fixture.away_team.name), winner)
+    return winners
+
+
+def _result_winner_side(result) -> str | None:
+    """Advancement side ("home"/"away") implied by one source result row."""
+
+    metadata = result.metadata or {}
+    try:
+        home_penalties = int(metadata["home_penalty_score"])
+        away_penalties = int(metadata["away_penalty_score"])
+    except (KeyError, TypeError, ValueError):
+        home_penalties = away_penalties = None
+    if home_penalties is not None and home_penalties != away_penalties:
+        return "home" if home_penalties > away_penalties else "away"
+    winner = str(metadata.get("winner") or "")
+    if winner == "HOME_TEAM":
+        return "home"
+    if winner == "AWAY_TEAM":
+        return "away"
+    return None
 
 
 def command_postmatch_learning(args: argparse.Namespace) -> int:

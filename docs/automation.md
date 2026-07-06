@@ -78,15 +78,21 @@ The daily simulation starts from the current confirmed tournament state. For ana
 
 ## Static Site
 
-The static site reads from `published_prediction_ledger`.
+The static site reads from `published_prediction_ledger`. The tournament page additionally reads the latest `simulation_summary` champion distribution, falling back to `market_outrights` no-vig probabilities (with a source note) when no usable simulation data exists.
 
 Future rows can move until the relevant match locks. Past rows stay frozen as public historical predictions, while final score fields and provider point totals can be added afterward.
+
+Upcoming matches render as link cards with a 1-X-2 probability bar, the most likely score, and both provider tips with expected points. Past matches render as link cards with the final score, per-match provider points, and a hit-quality chip (exact score / partially correct / wrong outcome). Match detail pages lead with the SRF tip and expected points, a one-sentence explanation of how the tip relates to the most likely result, knockout advancement probabilities where available, and a shaded score-matrix heatmap. Every page carries OpenGraph/Twitter metadata; match pages add `SportsEvent` JSON-LD.
 
 Generated files include:
 
 - `public/current/index.html`
 - `public/current/de/index.html`
 - `public/current/en/index.html`
+- `public/current/de/spiele/kommende/index.html` and `.../vergangene/index.html`
+- `public/current/en/matches/future/index.html` and `.../past/index.html`
+- `public/current/de/turnierprognose/index.html`
+- `public/current/en/tournament-forecast/index.html`
 - `public/current/de/spiele/<match-slug>/index.html`
 - `public/current/en/matches/<match-slug>/index.html`
 - `public/current/api/predictions`
@@ -95,6 +101,8 @@ Generated files include:
 - `public/current/assets/favicon.svg`
 - `public/current/sitemap.xml`
 - `public/current/robots.txt`
+
+Legacy redirect pages are also emitted for `public/current/de/turnier/index.html` and `public/current/en/tournament/index.html`.
 
 Build manually:
 
@@ -128,7 +136,7 @@ Recommended cache policy:
 
 Google Tag Manager is rendered only when `GTM_CONTAINER_ID` is set. Leave it empty for local/public builds without GTM.
 
-When GTM is enabled, the static theme script pushes these custom events to `dataLayer`: `helga_api_click` for the JSON API link, `helga_github_click` for the public GitHub repository link, `helga_language_switch` for language-switch clicks, and `helga_scroll_depth` once per page at 25, 50, 75, 90, and 100 percent scroll depth.
+When GTM is enabled, the static theme script pushes these custom events to `dataLayer`: `helga_api_click` for the JSON API link, `helga_blog_click` for the Helga blog post link, `helga_github_click` for the public GitHub repository link, `helga_language_switch` for language-switch clicks, and `helga_scroll_depth` once per page at 25, 50, 75, 90, and 100 percent scroll depth.
 
 ## Suggested Cron Entries
 

@@ -132,6 +132,7 @@ def summarize_source_ledger_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "endpoint": row.get("endpoint"),
             "purpose": row.get("purpose"),
             "fixture_key": row.get("fixture_key"),
+            "quota_scope": row.get("quota_scope"),
             "status": status,
             "message": row.get("message"),
             "fetched_at_utc": row.get("fetched_at_utc"),

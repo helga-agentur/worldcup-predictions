@@ -5,7 +5,7 @@ import json
 import unittest
 
 from worldcup_predictions.core.contracts import ScoreTip
-from worldcup_predictions.plugins.public_score_sources.plugin import _espn_dates_to_fetch, parse_espn_scoreboard_results, public_page_analysis_rows
+from worldcup_predictions.plugins.sources.fixtures.public_score_sources.plugin import _espn_dates_to_fetch, parse_espn_scoreboard_results, public_page_analysis_rows
 from worldcup_predictions.tournament import FixtureRecord, TeamResolver, build_tournament_state
 
 

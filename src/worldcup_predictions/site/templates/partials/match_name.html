@@ -1,7 +1,8 @@
+{% from "partials/country_name.html" import country_name %}
 {% macro match_name(row, class_name="match-name", show_flags=True) -%}
 <span class="{{ class_name }}">
-  <span class="match-name-team match-name-home">{% if show_flags and row.home_flag %}<span class="match-name-flag" aria-hidden="true">{{ row.home_flag }}</span>&nbsp;{% endif %}<span class="match-name-label">{{ row.home_team_label }}</span></span>
-  <span class="match-name-separator">-</span>
-  <span class="match-name-team match-name-away">{% if show_flags and row.away_flag %}<span class="match-name-flag" aria-hidden="true">{{ row.away_flag }}</span>&nbsp;{% endif %}<span class="match-name-label">{{ row.away_team_label }}</span></span>
+  {{ country_name(row.home_team_display if show_flags else {"flag": "", "label": row.home_team_label}, class_name="match-name__team", flag_class="match-name__flag", label_class="match-name__label", data_side="home") }}
+  <span class="match-name__separator">-</span>
+  {{ country_name(row.away_team_display if show_flags else {"flag": "", "label": row.away_team_label}, class_name="match-name__team", flag_class="match-name__flag", label_class="match-name__label", data_side="away") }}
 </span>
 {%- endmacro %}

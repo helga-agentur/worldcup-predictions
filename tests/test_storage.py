@@ -30,11 +30,11 @@ from worldcup_predictions.evaluation.data_hooks import run_data_update_hooks
 from worldcup_predictions.evaluation.provider_points import build_provider_points_rows
 from worldcup_predictions.evaluation.reports import write_standard_reports
 from worldcup_predictions.evaluation.scheduled_update import summarize_source_ledger_rows
-from worldcup_predictions.plugins.debug_report import DebugReportPlugin
-from worldcup_predictions.plugins.debug_report.plugin import signal_impact_rows
+from worldcup_predictions.plugins.diagnostics.debug_report import DebugReportPlugin
+from worldcup_predictions.plugins.diagnostics.debug_report.plugin import signal_impact_rows
 from worldcup_predictions.plugins.source_runtime import SourceRuntime
-from worldcup_predictions.plugins.structured_output import StructuredOutputPlugin
-from worldcup_predictions.plugins.provider_optimizers import SrfChProviderOptimizerPlugin
+from worldcup_predictions.plugins.workflow.structured_output import StructuredOutputPlugin
+from worldcup_predictions.plugins.providers import SrfChProviderOptimizerPlugin
 from worldcup_predictions.storage import DuckDBStorage, SourceLedgerRecord, SourceRequest
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamResolver, TournamentState
 
@@ -351,6 +351,133 @@ class StorageTest(unittest.TestCase):
             self.assertFalse(decision.should_fetch)
             self.assertEqual(decision.reason, "next_safe_fetch_at_not_reached")
 
+    def test_source_ledger_blocks_sibling_requests_in_quota_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            first = SourceRequest(
+                source="news_api",
+                endpoint="/v2/everything",
+                purpose="lineup_news",
+                params={"q": "Brazil Japan"},
+                quota_scope="news_api",
+            )
+            second = SourceRequest(
+                source="news_api",
+                endpoint="/v2/everything",
+                purpose="lineup_news",
+                params={"q": "France Spain"},
+                quota_scope="news_api",
+            )
+            storage.record_fetch(
+                SourceLedgerRecord(
+                    request=first,
+                    status="rate_limited",
+                    fetched_at_utc="2026-06-28T11:00:00Z",
+                    next_safe_fetch_at="2026-06-28T17:00:00Z",
+                    message="429",
+                )
+            )
+
+            decision = storage.should_fetch(second, now=dt.datetime(2026, 6, 28, 12, tzinfo=dt.timezone.utc))
+
+            self.assertFalse(decision.should_fetch)
+            self.assertEqual(decision.reason, "quota_scope_next_safe_fetch_at_not_reached")
+            self.assertEqual(decision.metadata["quota_scope"], "news_api")
+
+    def test_quota_scope_ignores_exact_resource_freshness_skips(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            first = SourceRequest(
+                source="news_api",
+                endpoint="/v2/everything",
+                purpose="lineup_news",
+                params={"q": "Brazil Japan"},
+                quota_scope="news_api",
+            )
+            second = SourceRequest(
+                source="news_api",
+                endpoint="/v2/everything",
+                purpose="lineup_news",
+                params={"q": "France Spain"},
+                quota_scope="news_api",
+            )
+            storage.record_fetch(
+                SourceLedgerRecord(
+                    request=first,
+                    status="skipped",
+                    fetched_at_utc="2026-06-28T11:00:00Z",
+                    next_safe_fetch_at="2026-06-28T17:00:00Z",
+                    message="fresh_enough",
+                    metadata={"decision_reason": "fresh_enough"},
+                )
+            )
+
+            decision = storage.should_fetch(second, now=dt.datetime(2026, 6, 28, 12, tzinfo=dt.timezone.utc))
+
+            self.assertTrue(decision.should_fetch)
+
+    def test_quota_scope_does_not_propagate_broken_resource_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            broken_resource = SourceRequest(
+                source="football_data_org",
+                endpoint="/v4/matches/invalid",
+                purpose="world_cup_match_detail",
+                params={"match_id": "invalid"},
+                quota_scope="football_data_org",
+            )
+            sibling = SourceRequest(
+                source="football_data_org",
+                endpoint="/v4/competitions/WC/matches",
+                purpose="world_cup_matches",
+                quota_scope="football_data_org",
+            )
+            storage.record_fetch(
+                SourceLedgerRecord(
+                    request=broken_resource,
+                    status="error",
+                    fetched_at_utc="2026-06-28T11:00:00Z",
+                    next_safe_fetch_at="2026-06-29T11:00:00Z",
+                    message="HTTP 400",
+                    metadata={"http_status": 400},
+                )
+            )
+
+            decision = storage.should_fetch(sibling, now=dt.datetime(2026, 6, 28, 12, tzinfo=dt.timezone.utc))
+
+            self.assertTrue(decision.should_fetch)
+
+    def test_quota_scope_propagates_source_block_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            blocked_resource = SourceRequest(
+                source="espn_scoreboard",
+                endpoint="/soccer/scoreboard",
+                purpose="espn_worldcup_scoreboard",
+                quota_scope="espn_scoreboard",
+            )
+            sibling = SourceRequest(
+                source="espn_scoreboard",
+                endpoint="/soccer/fixtures",
+                purpose="espn_worldcup_fixtures",
+                quota_scope="espn_scoreboard",
+            )
+            storage.record_fetch(
+                SourceLedgerRecord(
+                    request=blocked_resource,
+                    status="error",
+                    fetched_at_utc="2026-06-28T11:00:00Z",
+                    next_safe_fetch_at="2026-06-28T17:00:00Z",
+                    message="HTTP 403",
+                    metadata={"http_status": 403},
+                )
+            )
+
+            decision = storage.should_fetch(sibling, now=dt.datetime(2026, 6, 28, 12, tzinfo=dt.timezone.utc))
+
+            self.assertFalse(decision.should_fetch)
+            self.assertEqual(decision.reason, "quota_scope_next_safe_fetch_at_not_reached")
+
     def test_source_ledger_is_filterable_by_run_id_and_summarizes_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
@@ -428,6 +555,94 @@ class StorageTest(unittest.TestCase):
             self.assertEqual(summary["calls_made"], 0)
             self.assertEqual(summary["calls_avoided"], 1)
             self.assertEqual(summary["quota_cost_avoided"], 1)
+
+    def test_rate_limited_error_without_retry_after_backs_off_and_opens_run_circuit(self) -> None:
+        import urllib.error
+
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            context = WorkflowContext(project_root=Path(tmp), data_root=Path(tmp) / "data", storage=storage, run_id="run-a")
+            runtime = SourceRuntime(BasePlugin(), EventName.FIXTURES_REQUESTED, context)
+            request = SourceRequest(source="news_api", endpoint="/v2/everything", purpose="pregame", params={"q": "a"})
+
+            error = urllib.error.HTTPError("/v2/everything", 429, "Too Many Requests", None, None)
+            runtime.record_error(request, error)
+
+            rows = storage.read_source_ledger(run_id="run-a")
+            self.assertEqual(rows[0]["status"], "rate_limited")
+            next_safe = dt.datetime.fromisoformat(str(rows[0]["next_safe_fetch_at"]).replace("Z", "+00:00"))
+            hours_out = (next_safe - dt.datetime.now(dt.timezone.utc)).total_seconds() / 3600
+            self.assertGreater(hours_out, 5.5)
+            self.assertLess(hours_out, 6.5)
+            self.assertFalse(storage.should_fetch(request).should_fetch)
+
+            other_key_same_source = SourceRequest(source="news_api", endpoint="/v2/everything", purpose="pregame", params={"q": "b"})
+            decision = runtime.should_fetch(other_key_same_source)
+            self.assertFalse(decision.should_fetch)
+            self.assertEqual(decision.reason, "rate_limited_this_run")
+
+            other_source = SourceRequest(source="open_meteo", endpoint="/v1/forecast", purpose="weather", params={"q": "b"})
+            self.assertTrue(runtime.should_fetch(other_source).should_fetch)
+
+    def test_quota_exhaustion_error_body_backs_off_quota_scope(self) -> None:
+        import io
+        import urllib.error
+
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            context = WorkflowContext(project_root=Path(tmp), data_root=Path(tmp) / "data", storage=storage, run_id="run-a")
+            runtime = SourceRuntime(BasePlugin(), EventName.FIXTURES_REQUESTED, context)
+            request = SourceRequest(
+                source="the_odds_api",
+                endpoint="/v4/sports/soccer/odds",
+                purpose="fixture_odds",
+                params={"markets": "h2h"},
+                quota_scope="the_odds_api",
+            )
+
+            error = urllib.error.HTTPError(
+                "/v4/sports/soccer/odds",
+                401,
+                "Unauthorized",
+                None,
+                io.BytesIO(b'{"error_code":"OUT_OF_USAGE_CREDITS","message":"Usage quota has been reached."}'),
+            )
+            runtime.record_error(request, error)
+            error.close()
+
+            rows = storage.read_source_ledger(run_id="run-a")
+            self.assertEqual(rows[0]["status"], "rate_limited")
+            self.assertIn("OUT_OF_USAGE_CREDITS", rows[0]["metadata"]["response_body"])
+            sibling = SourceRequest(
+                source="the_odds_api",
+                endpoint="/v4/sports/soccer/events",
+                purpose="event_discovery",
+                quota_scope="the_odds_api",
+            )
+            decision = runtime.should_fetch(sibling)
+            self.assertFalse(decision.should_fetch)
+            self.assertEqual(decision.reason, "rate_limited_quota_scope_this_run")
+
+    def test_client_error_codes_back_off_broken_request_keys(self) -> None:
+        import urllib.error
+
+        expectations = {400: (20.0, 28.0), 403: (5.5, 6.5), 404: (20.0, 28.0)}
+        for code, (low, high) in expectations.items():
+            with tempfile.TemporaryDirectory() as tmp:
+                storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+                context = WorkflowContext(project_root=Path(tmp), data_root=Path(tmp) / "data", storage=storage, run_id="run-a")
+                runtime = SourceRuntime(BasePlugin(), EventName.FIXTURES_REQUESTED, context)
+                request = SourceRequest(source="espn_scoreboard", endpoint="/scoreboard", purpose="scores", params={"code": code})
+
+                runtime.record_error(request, urllib.error.HTTPError("/scoreboard", code, "blocked", None, None))
+
+                rows = storage.read_source_ledger(run_id="run-a")
+                self.assertEqual(rows[0]["status"], "error")
+                next_safe = dt.datetime.fromisoformat(str(rows[0]["next_safe_fetch_at"]).replace("Z", "+00:00"))
+                hours_out = (next_safe - dt.datetime.now(dt.timezone.utc)).total_seconds() / 3600
+                self.assertGreater(hours_out, low, f"code {code}")
+                self.assertLess(hours_out, high, f"code {code}")
+                self.assertFalse(storage.should_fetch(request).should_fetch)
 
     def test_structured_records_are_append_only_and_latest_reads_reuse_last_available_row(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

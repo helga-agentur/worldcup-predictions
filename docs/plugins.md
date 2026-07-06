@@ -13,20 +13,21 @@ Generated from plugin metadata declared in the codebase.
 | `wikipedia_squads` | source | 126 | `feature_signals_requested` | `wikipedia_squads`, `squad_players` | - | no |
 | `transfermarkt_source` | source | 127 | `feature_signals_requested` | `transfermarkt_search_results` | - | no |
 | `public_score_sources` | source | 130 | `fixtures_requested` | `tournament_results`, `public_match_analysis`, `extraction_diagnostics` | - | no |
+| `dynamic_public_sources` | source | 132 | `fixtures_requested` | `tournament_results`, `public_source_pages`, `public_source_claims`, `public_claim_consensus`, `public_source_reputation`, `public_market_observations`, `public_match_analysis`, `extraction_diagnostics` | - | no |
 | `historical_results_source` | source | 135 | `feature_signals_requested` | `historical_results`, `shootouts` | - | no |
 | `result_monitoring` | output | 145 | `results_updated` | `result_update_audit` | - | no |
 | `market_odds` | source | 250 | `feature_signals_requested` | `market_odds`, `market_outrights` | `market_hda_probabilities`, `market_total_goals`, `market_goal_diff` | yes |
 | `market_trend` | signal | 255 | `feature_signals_requested` | `market_trends` | `total_goals_factor` | no |
 | `phase_context` | signal | 258 | `feature_signals_requested` | `phase_context_signals` | `total_goals_factor`, `live_draw_adjustment`, `team_expected_goals_factor` | no |
 | `weather` | source | 260 | `feature_signals_requested` | `weather_observations` | `total_goals_factor` | no |
+| `lineup_availability` | source | 265 | `feature_signals_requested` | `lineup_availability`, `lineup_consensus`, `extraction_diagnostics` | `team_expected_goals_factor` | yes |
 | `public_analysis` | source | 270 | `feature_signals_requested` | `public_match_analysis`, `match_analysis_causes`, `match_analysis_team_adjustments`, `extraction_diagnostics` | `total_goals_factor` | yes |
-| `lineup_availability` | source | 280 | `feature_signals_requested` | `lineup_availability`, `lineup_consensus`, `extraction_diagnostics` | `team_expected_goals_factor` | yes |
 | `postmatch_stats` | signal | 300 | `feature_signals_requested` | `postmatch_stats`, `postmatch_team_performance`, `extraction_diagnostics` | - | no |
 | `automatic_match_notes` | signal | 310 | `feature_signals_requested` | `automatic_match_notes`, `extraction_diagnostics` | `total_goals_factor`, `team_expected_goals_factor` | no |
 | `player_impact` | signal | 310 | `feature_signals_requested` | `squad_values`, `player_impact` | `team_expected_goals_factor`, `total_goals_factor` | no |
 | `ml_outcome` | signal | 320 | `feature_signals_requested` | `ml_outcome_models` | `ml_hda_probabilities` | no |
 | `live_calibration` | signal | 330 | `results_updated`, `feature_signals_requested` | `team_calibration`, `live_global_calibration`, `calibration_decisions` | `team_expected_goals_factor`, `total_goals_factor`, `live_draw_adjustment`, `live_score_tail_factor`, `live_favorite_outcome_factor` | no |
-| `srf_experts` | source | 340 | `feature_signals_requested` | `srf_expert_predictions`, `srf_expert_performance` | `expert_hda_probabilities` | no |
+| `srf_experts` | source | 340 | `feature_signals_requested` | `srf_expert_predictions`, `srf_expert_performance`, `extraction_diagnostics` | `expert_hda_probabilities` | no |
 | `baseline_model` | model | 400 | `predictions_requested` | - | - | no |
 | `provider_optimizer_srf_ch` | provider_optimizer | 700 | `provider_optimization_requested` | - | - | no |
 | `provider_optimizer_20min_ch` | provider_optimizer | 710 | `provider_optimization_requested` | - | - | no |
@@ -175,6 +176,21 @@ Fetch robots-aware FIFA, ESPN, FotMob, SofaScore, and 20min public pages for res
 - Quota: not limited and ledger-required - Public pages are robots-gated and source-ledgered; private/disallowed APIs are not fetched.
 - Confidence policy: Only finished score rows with canonical team-code matches are stored; page analysis rows require recognized pre/postgame signals or stat snippets.
 
+### `dynamic_public_sources`
+
+Discover robots-aware public pages, extract fixture/result/market claims, and score domain reputation over time.
+
+- Version: `0.1.0`
+- Kind: `source`
+- Priority: `132`
+- Events: `fixtures_requested`
+- Reads: `public_source_claims`, `public_source_reputation`, `tournament_results`
+- Writes: `tournament_results`, `public_source_pages`, `public_source_claims`, `public_claim_consensus`, `public_source_reputation`, `public_market_observations`, `public_match_analysis`, `extraction_diagnostics`
+- Signals: -
+- Locales: `en`, `de`
+- Quota: not limited and ledger-required - Every page fetch is robots-gated, source-ledgered, cache-validator aware, and rate-limit backed off per domain.
+- Confidence policy: Dynamic public results require multi-domain weighted consensus before becoming raw result observations; market rows need a confidence floor before trend use.
+
 ### `historical_results_source`
 
 Fetch martj42 international_results CSVs and write normalized historical results and shootouts.
@@ -228,7 +244,7 @@ Derive market movement (totals-line drift, disagreement, favorite move) from the
 - Kind: `signal`
 - Priority: `255`
 - Events: `feature_signals_requested`
-- Reads: `market_odds`
+- Reads: `market_odds`, `public_market_observations`
 - Writes: `market_trends`
 - Signals: `total_goals_factor`
 - Locales: `en`, `de`
@@ -263,6 +279,23 @@ Fetch Open-Meteo match-window weather and emit total-goal factors.
 - Quota: not limited and ledger-required - Ledger avoids unnecessary repeated weather requests even though Open-Meteo has no project API key.
 - Confidence policy: Weather signals are capped and require material heat, wind, rain, or storm risk.
 
+### `lineup_availability`
+
+Fetch reliable public lineup/availability reports and emit side-specific xG factors.
+
+- Version: `0.1.0`
+- Kind: `source`
+- Priority: `265`
+- Events: `feature_signals_requested`
+- Reads: `lineup_availability`, `football_data_match_details`
+- Writes: `lineup_availability`, `lineup_consensus`, `extraction_diagnostics`
+- Signals: `team_expected_goals_factor`
+- Locales: `en`, `de`
+- Environment:
+  - `NEWS_API_KEY` (optional): NewsAPI key for bounded availability discovery.
+- Quota: limited and ledger-required - Fixture-specific NewsAPI calls are skipped while fresh or near the quota floor.
+- Confidence policy: Reliable articles are aggregated per fixture/side and capped before model use.
+
 ### `public_analysis`
 
 Fetch reliable public pre/postgame articles and emit conservative tempo signals.
@@ -279,23 +312,6 @@ Fetch reliable public pre/postgame articles and emit conservative tempo signals.
   - `NEWS_API_KEY` (optional): NewsAPI key for bounded article discovery.
 - Quota: limited and ledger-required - Fixture-specific NewsAPI calls are skipped while fresh or near the quota floor.
 - Confidence policy: Only reliable domains above threshold are aggregated into capped total-goal factors.
-
-### `lineup_availability`
-
-Fetch reliable public lineup/availability reports and emit side-specific xG factors.
-
-- Version: `0.1.0`
-- Kind: `source`
-- Priority: `280`
-- Events: `feature_signals_requested`
-- Reads: `lineup_availability`, `football_data_match_details`
-- Writes: `lineup_availability`, `lineup_consensus`, `extraction_diagnostics`
-- Signals: `team_expected_goals_factor`
-- Locales: `en`, `de`
-- Environment:
-  - `NEWS_API_KEY` (optional): NewsAPI key for bounded availability discovery.
-- Quota: limited and ledger-required - Fixture-specific NewsAPI calls are skipped while fresh or near the quota floor.
-- Confidence policy: Reliable articles are aggregated per fixture/side and capped before model use.
 
 ### `postmatch_stats`
 
@@ -376,10 +392,10 @@ Fetch SRF public expert pages and emit conservative expert consensus signals.
 - Priority: `340`
 - Events: `feature_signals_requested`
 - Reads: `srf_expert_predictions`
-- Writes: `srf_expert_predictions`, `srf_expert_performance`
+- Writes: `srf_expert_predictions`, `srf_expert_performance`, `extraction_diagnostics`
 - Signals: `expert_hda_probabilities`
 - Locales: `en`, `de`
-- Quota: not limited and ledger-required - Public expert pages are refetched at most every 15 minutes while fixtures are open.
+- Quota: not limited and ledger-required - Public expert pages are refetched at most every 15 minutes while fixtures are open; pages without extractable picks back off for six hours because SRF hides tips until kickoff.
 - Confidence policy: Expert consensus confidence rises with extracted expert count and is capped below market weight.
 
 ### `baseline_model`
