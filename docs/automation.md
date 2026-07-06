@@ -134,7 +134,7 @@ Recommended cache policy:
 
 Google Tag Manager is rendered only when `GTM_CONTAINER_ID` is set. Leave it empty for local/public builds without GTM.
 
-When GTM is enabled, the static theme script pushes these custom events to `dataLayer`: `helga_api_click` for the JSON API link, `helga_github_click` for the public GitHub repository link, `helga_language_switch` for language-switch clicks, and `helga_scroll_depth` once per page at 25, 50, 75, 90, and 100 percent scroll depth.
+When GTM is enabled, the static theme script pushes these custom events to `dataLayer`: `helga_api_click` for the JSON API link, `helga_blog_click` for the Helga blog post link, `helga_github_click` for the public GitHub repository link, `helga_language_switch` for language-switch clicks, and `helga_scroll_depth` once per page at 25, 50, 75, 90, and 100 percent scroll depth.
 
 ## Suggested Cron Entries
 

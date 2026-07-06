@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
 {% from "partials/page_intro.html" import page_intro %}
 {% from "partials/champion_odds.html" import champion_bars %}
 
@@ -8,18 +9,28 @@
 </nav>
 
 <section class="section" aria-labelledby="page-title">
+  {% set blog_link -%}
+  <a class="content-link" href="https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8" target="_blank" rel="noopener" data-analytics-event="helga_blog_click">{{ t("site.blog_link") }}</a>
+  {%- endset %}
   {{ page_intro(
     "page-title",
     t("site.heading"),
-    t("site.lead"),
+    t("site.lead", blog_link=blog_link),
     t("site.kicker")
   ) }}
   <nav class="resources" aria-label="{{ t('resources.aria') }}">
-    <a class="resources__link" href="{{ tournament_path }}">{{ t("nav.tournament") }}</a>
-    <span class="resources__separator" aria-hidden="true">·</span>
-    <a class="resources__link" href="https://github.com/helga-agentur/worldcup-predictions">{{ t("resources.github") }}</a>
-    <span class="resources__separator" aria-hidden="true">·</span>
-    <a class="resources__link" href="{{ json_feed_path }}" target="_blank" rel="noopener" data-analytics-event="helga_api_click">{{ t("resources.json_api") }}</a>
+    <a class="resources__link" href="{{ tournament_path }}">
+      {{ icon("trophy") }}
+      <span>{{ t("nav.tournament") }}</span>
+    </a>
+    <a class="resources__link" href="https://github.com/helga-agentur/worldcup-predictions">
+      {{ icon("git-branch") }}
+      <span>{{ t("resources.github") }}</span>
+    </a>
+    <a class="resources__link" href="{{ json_feed_path }}" target="_blank" rel="noopener" data-analytics-event="helga_api_click">
+      {{ icon("braces") }}
+      <span>{{ t("resources.json_api") }}</span>
+    </a>
   </nav>
 </section>
 

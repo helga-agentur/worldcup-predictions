@@ -638,6 +638,8 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("helga_language=de", html)
             self.assertIn('document.documentElement.dataset.js = "true";', html)
             self.assertIn('data-menu-toggle', html)
+            self.assertIn('<span class="brand__text">WM 2026</span>', html)
+            self.assertIn('<span class="brand__text">World Cup 2026</span>', en_html)
             self.assertIn('<nav id="site-menu" class="site-menu" data-site-menu data-state="closed" aria-label="Hauptnavigation">', html)
             self.assertIn('<div class="site-menu__surface" data-site-menu-surface>', html)
             self.assertIn('<a class="site-menu__link" href="/de/" aria-current="page">', html)
@@ -662,9 +664,15 @@ class ExportAndBaselineTest(unittest.TestCase):
                 html,
             )
             self.assertIn('<header class="page-intro" aria-labelledby="page-title">', html)
+            self.assertIn("Die Prognosen bündeln aktuelle Spielplandaten, veröffentlichte Resultate", html)
+            self.assertIn("The predictions combine current fixture data, published results", en_html)
             self.assertIn(
-                '<p class="page-intro__lead">Provider-neutrale Score-Prognosen, SRF-Optimierung und 20min-Optimierung aus dem aktuellen Datenlauf.</p>',
+                '<a class="content-link" href="https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8" target="_blank" rel="noopener" data-analytics-event="helga_blog_click">Helga-Blogbeitrag</a>',
                 html,
+            )
+            self.assertIn(
+                '<a class="content-link" href="https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8" target="_blank" rel="noopener" data-analytics-event="helga_blog_click">Helga blog post</a>',
+                en_html,
             )
             self.assertNotIn("Der gesamte Code ist öffentlich", html)
             self.assertNotIn("The full code is public", en_html)
@@ -701,11 +709,20 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn("language-switch", rendered_header)
             self.assertNotIn("data-theme-toggle", rendered_header)
             self.assertIn('<nav class="resources" aria-label="Ressourcen">', html)
-            self.assertIn('<a class="resources__link" href="/de/turnier">Turnierprognose</a>', html)
+            self.assertIn('<a class="resources__link" href="/de/turnier">', html)
+            self.assertIn("<span>Turnierprognose</span>", html)
             self.assertIn(
-                '<a class="resources__link" href="/api/predictions" target="_blank" rel="noopener" data-analytics-event="helga_api_click">JSON API</a>',
+                '<a class="resources__link" href="https://github.com/helga-agentur/worldcup-predictions">',
                 html,
             )
+            self.assertIn("<span>GitHub</span>", html)
+            self.assertIn(
+                '<a class="resources__link" href="/api/predictions" target="_blank" rel="noopener" data-analytics-event="helga_api_click">',
+                html,
+            )
+            self.assertIn("<span>JSON API</span>", html)
+            self.assertNotIn("resources__separator", html)
+            self.assertIn(".resources__link .icon", css)
             future_section = html.split(
                 '<section class="section" aria-labelledby="future-title">', 1
             )[1].split(
@@ -788,6 +805,8 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("--danger-soft: #ff9b2f;", css)
             self.assertIn(".section", css)
             self.assertIn(".page-intro", css)
+            self.assertIn(".brand__text", css)
+            self.assertIn("margin-left: var(--space-lg);", css)
             self.assertIn("font-size: clamp(2rem, 5.4vw, 5rem);", css)
             self.assertIn("overflow-y: scroll;", css)
             self.assertIn("scrollbar-gutter: stable;", css)

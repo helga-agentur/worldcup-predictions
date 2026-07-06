@@ -2,6 +2,7 @@
 <header class="site-header">
   <a class="brand" href="/{{ locale }}/" aria-label="{{ t('site.heading') }}">
     {% include "partials/logo.html" %}
+    <span class="brand__text">{{ t("site.brand_label") }}</span>
   </a>
   <button class="menu-toggle" type="button" data-menu-toggle aria-controls="site-menu" aria-expanded="false" aria-label="{{ t('nav.open_menu') }}" data-open-label="{{ t('nav.open_menu') }}" data-close-label="{{ t('nav.close_menu') }}">
     <span class="menu-toggle__icon menu-toggle__icon--open">{{ icon("menu") }}</span>
