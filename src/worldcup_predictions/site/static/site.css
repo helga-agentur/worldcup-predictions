@@ -561,7 +561,7 @@ h2 {
 .bar__legend-item {
   min-width: 0;
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-4);
 }
 
@@ -575,7 +575,6 @@ h2 {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  transform: translateY(1px);
 }
 
 .bar__dot[data-state="strong"] {
@@ -924,6 +923,10 @@ h2 {
 .tip-chip__points {
   color: var(--helga-blue);
   font-size: var(--text-sm);
+}
+
+.tip-chip__points[data-state="positive"] {
+  color: var(--accent);
 }
 
 /* ---------- probability bar ---------- */
@@ -1336,7 +1339,8 @@ h2 {
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  padding: 28px 0 40px;
+  margin-top: var(--space-xl);
+  padding: 28px 0;
   color: var(--muted);
   border-top: 1px solid var(--line);
   font-size: var(--text-sm);

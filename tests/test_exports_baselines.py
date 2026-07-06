@@ -744,6 +744,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             past_section = html.split('<section class="homepage-panel" aria-labelledby="past-title">', 1)[1]
             self.assertIn('<p class="section__actions">', future_section)
             self.assertIn('<a class="content-link" href="/de/spiele/kommende">Alle kommenden Spiele</a>', future_section)
+            self.assertNotIn('data-state="positive" title=', future_section)
             self.assertIn('<p class="section__actions">', past_section)
             self.assertIn('<a class="content-link" href="/de/spiele/vergangene">Alle vergangenen Spiele</a>', past_section)
             self.assertIn(
@@ -754,8 +755,8 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("<span>2:0</span>", past_section)
             self.assertIn('<span class="tip-chip__provider">SRF Tipp</span>', past_section)
             self.assertIn('<span class="tip-chip__value numeric">1:0</span>', past_section)
-            self.assertIn('<span class="tip-chip__points numeric">+6 P.</span>', past_section)
-            self.assertIn('<span class="tip-chip__points numeric">+5 P.</span>', past_section)
+            self.assertIn('<span class="tip-chip__points numeric" data-state="positive">+6 P.</span>', past_section)
+            self.assertIn('<span class="tip-chip__points numeric" data-state="positive">+5 P.</span>', past_section)
             self.assertIn('<span class="hit-chip" data-result="trend">Richtig</span>', past_section)
             self.assertIn("🇧🇷", past_section)
             self.assertIn(
@@ -887,6 +888,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn(".match-card__score", css)
             self.assertIn(".match-card__teams", css)
             self.assertIn(".tip-chip", css)
+            self.assertIn('.tip-chip__points[data-state="positive"]', css)
             self.assertIn(".match-rows", css)
             self.assertIn(".status,\n.hit-chip", css)
             self.assertIn(".hit-chip", css)

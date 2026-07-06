@@ -55,7 +55,7 @@
           <span class="tip-chip__provider">{{ t("table.srf_tip") }}</span>
           <span class="tip-chip__value numeric">{{ row.srf_tip_label }}</span>
           {% if card_variant == "past" and row.status == "final" and row.srf_account_display %}
-          <span class="tip-chip__points numeric">{{ t("chip.points", value="+" ~ row.srf_match_points|float_text(precision=0)) }}</span>
+          <span class="tip-chip__points numeric"{% if row.srf_match_points|float > 0 %} data-state="positive"{% endif %}>{{ t("chip.points", value="+" ~ row.srf_match_points|float_text(precision=0)) }}</span>
           {% elif card_variant != "past" %}
           {% set srf_points_display = row.srf_projected_points_display or row.srf_expected_points_display %}
           {% if srf_points_display %}
@@ -69,7 +69,7 @@
           <span class="tip-chip__provider">{{ t("table.twenty_min_tip") }}</span>
           <span class="tip-chip__value">{{ row.twenty_min_tip_label }}</span>
           {% if card_variant == "past" and row.status == "final" and row.twenty_min_account_display %}
-          <span class="tip-chip__points numeric">{{ t("chip.points", value="+" ~ row.twenty_min_match_points|float_text(precision=0)) }}</span>
+          <span class="tip-chip__points numeric"{% if row.twenty_min_match_points|float > 0 %} data-state="positive"{% endif %}>{{ t("chip.points", value="+" ~ row.twenty_min_match_points|float_text(precision=0)) }}</span>
           {% elif card_variant != "past" %}
           {% set twenty_min_points_display = row.twenty_min_projected_points_display or row.twenty_min_expected_points_display %}
           {% if twenty_min_points_display %}

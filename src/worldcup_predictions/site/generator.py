@@ -1393,25 +1393,24 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
     prepared["most_likely_away_display"] = "" if most_likely_away is None else str(most_likely_away)
     prepared["hda_bar"] = _hda_bar(prepared, catalog=catalog)
     prepared["hda_aria"] = _hda_aria(prepared, catalog=catalog)
-    prepared["srf_expected_points_display"] = _expected_points_display(
-        prepared.get("srf_expected_points"),
-        max_points=_srf_expected_points_max(prepared),
-    )
+    srf_expected_points = prepared.get("srf_expected_points")
+    srf_projected_points = _srf_points_for_most_likely_score(prepared)
+    srf_max_points = _srf_expected_points_max(prepared)
+    prepared["srf_expected_points_display"] = _expected_points_display(srf_expected_points, max_points=srf_max_points)
     prepared["srf_projected_points_display"] = _projected_points_display(
-        _srf_points_for_most_likely_score(prepared),
-        max_points=_srf_expected_points_max(prepared),
+        srf_projected_points,
+        max_points=srf_max_points,
     )
-    prepared["twenty_min_expected_points_display"] = _expected_points_display(
-        prepared.get("twenty_min_expected_points"),
-        max_points=_twenty_min_expected_points_max(prepared),
-    )
+    twenty_min_expected_points = prepared.get("twenty_min_expected_points")
+    twenty_min_max_points = _twenty_min_expected_points_max(prepared)
+    prepared["twenty_min_expected_points_display"] = _expected_points_display(twenty_min_expected_points, max_points=twenty_min_max_points)
     twenty_min_projected_points, twenty_min_projected_title_key = _twenty_min_points_for_card(
         prepared,
         country_registry=country_registry,
     )
     prepared["twenty_min_projected_points_display"] = _projected_points_display(
         twenty_min_projected_points,
-        max_points=_twenty_min_expected_points_max(prepared),
+        max_points=twenty_min_max_points,
     )
     prepared["twenty_min_projected_points_title_key"] = twenty_min_projected_title_key
     prepared["hit_result"] = _hit_category(prepared)
