@@ -450,6 +450,7 @@ h1 {
 #match-title {
   margin-top: 0;
   padding-top: var(--space-sm);
+  text-align: center;
 }
 
 h2 {
@@ -553,6 +554,7 @@ h2 {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-xs) var(--space-md);
+  justify-content: center;
   margin: 0;
   margin-top: var(--space-8);
   color: var(--muted);
@@ -1049,10 +1051,10 @@ main p a:hover {
 
 .detail-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
-  gap: var(--space-xl);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-lg);
   align-items: start;
-  padding: 36px 0 46px;
+  padding: 36px 0 0;
 }
 
 .detail-hero__main {
@@ -1102,59 +1104,61 @@ main p a:hover {
   white-space: nowrap;
 }
 
-.verdict {
+.detail-picks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+
+.detail-pick {
   display: grid;
   gap: var(--space-sm);
-  justify-items: start;
+  align-content: start;
+  min-width: 0;
   padding: 22px 24px;
-  border: 1px solid var(--helga-blue);
+  border: 1px solid var(--line);
   background: var(--paper);
 }
 
-.verdict__label {
-  color: var(--helga-blue);
+.detail-pick__label {
+  margin: 0;
+  color: var(--muted);
   font-size: var(--text-xs);
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
-.verdict__score {
+.detail-pick__value {
+  margin: 0;
   font-family: "Degular", "Cadiz", system-ui, sans-serif;
   font-size: clamp(3rem, 6vw, 4.4rem);
   line-height: 0.95;
   color: var(--ink);
 }
 
-.verdict__score[data-size="text"] {
+.detail-pick__value[data-size="text"] {
   font-size: clamp(1.4rem, 3vw, 2rem);
 }
 
-.verdict__points {
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-
-.verdict__points strong {
-  color: var(--ink);
-  font-weight: 400;
-}
-
-.verdict__row {
+.detail-pick__meta {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: var(--space-10);
-  width: 100%;
+  margin: 0;
   padding-top: var(--space-sm);
   border-top: 1px solid var(--line);
-  font-size: var(--text-md);
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
-.verdict__provider {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.detail-pick__points {
+  color: var(--helga-blue);
+}
+
+.detail-pick__points[data-state="positive"] {
+  color: var(--accent);
 }
 
 /* ---------- score matrix heatmap ---------- */
@@ -1355,11 +1359,6 @@ main p a:hover {
     grid-auto-columns: minmax(0, 1fr);
   }
 
-  .detail-hero {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-lg);
-  }
-
   .heatmap {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1430,6 +1429,10 @@ main p a:hover {
   .match-card__tips {
     grid-auto-flow: row;
     grid-auto-columns: unset;
+  }
+
+  .detail-picks {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -774,6 +774,9 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("<span>2:0</span>", past_section)
             self.assertIn('<span class="tip-chip__provider">SRF Tipp</span>', past_section)
             self.assertIn('<span class="tip-chip__value numeric">1:0</span>', past_section)
+            self.assertIn('<span class="tip-chip__provider">20min Tipp</span>', past_section)
+            self.assertIn('<span class="tip-chip__value">Brasilien</span>', past_section)
+            self.assertNotIn('<span class="tip-chip__value">🇧🇷 Brasilien</span>', past_section)
             self.assertIn('<span class="tip-chip__points numeric" data-state="positive">+6 P.</span>', past_section)
             self.assertIn('<span class="tip-chip__points numeric" data-state="positive">+5 P.</span>', past_section)
             self.assertIn('<span class="hit-chip" data-result="trend">Teilweise richtig</span>', past_section)
@@ -818,16 +821,37 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("Brazil –", en_h1_match_name)
             self.assertIn('<span class="detail-hero__flag" aria-hidden="true">🇯🇵</span> Japan', en_h1_match_name)
             self.assertIn('<div class="bar bar--series" role="img"', detail)
-            self.assertIn("Sieg Brasilien 🇧🇷 52%", detail)
-            self.assertIn("Unentschieden 27%", detail)
-            self.assertIn("Brazil win 🇧🇷 52%", en_detail)
+            self.assertIn('aria-label="Sieg Brasilien 🇧🇷 52%, Unentschieden 27%, Sieg Japan 🇯🇵 21%"', detail)
+            self.assertIn('aria-label="Brazil win 🇧🇷 52%, Draw 27%, Japan win 🇯🇵 21%"', en_detail)
+            self.assertIn(
+                '<span class="bar__legend-item"><span class="bar__dot" data-series="primary"></span>Brasilien <span class="numeric">52%</span></span>',
+                detail,
+            )
+            self.assertIn(
+                '<span class="bar__legend-item"><span class="bar__dot" data-series="muted"></span>Remis <span class="numeric">27%</span></span>',
+                detail,
+            )
+            self.assertIn(
+                '<span class="bar__legend-item"><span class="bar__dot" data-series="contrast"></span>Japan <span class="numeric">21%</span></span>',
+                detail,
+            )
+            self.assertIn(
+                '<span class="bar__legend-item"><span class="bar__dot" data-series="primary"></span>Brazil <span class="numeric">52%</span></span>',
+                en_detail,
+            )
             self.assertIn("Der SRF-Tipp entspricht dem wahrscheinlichsten Resultat 1:0 (12%).", detail)
             self.assertIn("Fr, 10.07.2026, 20:00", detail)
             self.assertIn("Fri, 10.07.2026, 20:00", en_detail)
             self.assertIn('xG 1.23:0.88', detail)
             self.assertIn('Sicherheit: <span class="numeric">Mittel (52.0%)</span>', detail)
-            self.assertIn('<span class="verdict__score numeric">2:0</span>', detail)
+            self.assertIn('<span class="tag numeric">Resultat: 2:0</span>', detail)
             self.assertIn('<span class="hit-chip" data-result="trend">Teilweise richtig</span>', detail)
+            self.assertIn('<section class="detail-picks" aria-labelledby="detail-picks-title">', detail)
+            self.assertIn('<h3 class="detail-pick__label">SRF Tipp</h3>', detail)
+            self.assertIn('<p class="detail-pick__value numeric">1:0</p>', detail)
+            self.assertIn('<h3 class="detail-pick__label">20min Tipp</h3>', detail)
+            self.assertIn('<p class="detail-pick__value">Brasilien</p>', detail)
+            self.assertIn('<strong class="detail-pick__points numeric" data-state="positive">+6 P.</strong>', detail)
             self.assertIn("+6 P.", detail)
             self.assertIn("Resultat-Matrix", detail)
             self.assertIn('<table class="heatmap__table">', detail)
@@ -842,6 +866,10 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<path d="M19 12H5"></path>', detail)
             self.assertIn('<a class="breadcrumb__link" href="/de/">Home</a>', detail)
             self.assertIn('<a class="breadcrumb__link" href="/de/spiele/2026-07-10-bra-jpn/" aria-current="page"><span class="match-name">', detail)
+            detail_breadcrumb = detail.split('<nav class="breadcrumb" aria-label="Breadcrumb">', 1)[1].split("</nav>", 1)[0]
+            self.assertIn('<span class="match-name__label">Brasilien</span>', detail_breadcrumb)
+            self.assertIn('<span class="match-name__label">Japan</span>', detail_breadcrumb)
+            self.assertNotIn("match-name__flag", detail_breadcrumb)
             self.assertIn('<link rel="canonical" href="http://127.0.0.1:8000/de/spiele/2026-07-10-bra-jpn/">', detail)
             self.assertIn('<link rel="alternate" hreflang="en" href="http://127.0.0.1:8000/en/matches/2026-07-10-bra-jpn/">', detail)
             self.assertIn("--space-lg: 24px;", css)
@@ -868,6 +896,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("visibility: hidden;", css)
             self.assertIn('body[data-menu-open="true"] .site-header', css)
             self.assertIn("padding-top: var(--header-height);", css)
+            self.assertIn("#match-title {\n  margin-top: 0;\n  padding-top: var(--space-sm);\n  text-align: center;", css)
             self.assertIn("transform: translateX(-50%);", css)
             self.assertIn('html[data-js="true"] .site-menu[data-state="closing"]', css)
             self.assertIn('html[data-js="true"] .site-menu__surface {\n  width: min(100% - 32px, var(--max));', css)
@@ -885,6 +914,10 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn(".bar", css)
             self.assertIn(".bar__segment", css)
             self.assertIn(".bar__legend", css)
+            self.assertIn(
+                ".bar__legend {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--space-xs) var(--space-md);\n  justify-content: center;",
+                css,
+            )
             self.assertIn(".bar__legend-item", css)
             self.assertIn(".bar__dot", css)
             self.assertIn('.bar__dot[data-state="good"]', css)
@@ -917,7 +950,8 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn(".status,\n.hit-chip", css)
             self.assertIn(".hit-chip", css)
             self.assertIn(".detail-hero", css)
-            self.assertIn(".verdict", css)
+            self.assertIn(".detail-picks", css)
+            self.assertIn(".detail-pick", css)
             self.assertIn(".heatmap__table", css)
             self.assertIn("color-mix(in srgb, var(--helga-blue) var(--heat, 0%), var(--mist))", css)
             self.assertIn(".odds__row", css)
@@ -989,6 +1023,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                 "top_score_matrix",
                 "twenty_min_account_display",
                 "twenty_min_tip_label",
+                "twenty_min_tip_plain_label",
                 "twenty_min_projected_points_display",
                 "twenty_min_projected_points_title_key",
             ):
@@ -1127,8 +1162,9 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("2/20 P.", html)
             self.assertIn("10/10 P.", html)
             self.assertNotIn("6.3/10 P.", html)
-            self.assertIn('<strong class="numeric">7.2/20</strong>', detail)
-            self.assertIn("6.3/10 P.", detail)
+            self.assertIn('<strong class="detail-pick__points numeric">7.2/20 P.</strong>', detail)
+            self.assertIn('<p class="detail-pick__value">Spanien</p>', detail)
+            self.assertIn('<strong class="detail-pick__points numeric">6.3/10 P.</strong>', detail)
 
     def test_site_counts_unpredicted_fixtures_and_keeps_locked_rows_out_of_upcoming_section(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

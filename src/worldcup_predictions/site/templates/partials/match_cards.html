@@ -67,7 +67,7 @@
         {% if row.twenty_min_tip_label %}
         <span class="tip-chip">
           <span class="tip-chip__provider">{{ t("table.twenty_min_tip") }}</span>
-          <span class="tip-chip__value">{{ row.twenty_min_tip_label }}</span>
+          <span class="tip-chip__value">{{ row.twenty_min_tip_plain_label }}</span>
           {% if card_variant == "past" and row.status == "final" and row.twenty_min_account_display %}
           <span class="tip-chip__points numeric"{% if row.twenty_min_match_points|float > 0 %} data-state="positive"{% endif %}>{{ t("chip.points", value="+" ~ row.twenty_min_match_points|float_text(precision=0)) }}</span>
           {% elif card_variant != "past" %}

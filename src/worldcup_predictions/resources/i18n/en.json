@@ -27,6 +27,7 @@
   "label.confidence": "Confidence",
   "label.expected_goals": "Expected goals",
   "label.expected_points": "Expected points",
+  "label.points": "Points",
   "label.projected_points": "Points if the most likely result happens",
   "label.selection_points": "Points if the selected tip is correct",
   "label.probability": "Probability",

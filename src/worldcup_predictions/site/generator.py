@@ -156,6 +156,7 @@ API_PRESENTATION_KEYS = {
     "twenty_min_expected_points_display",
     "twenty_min_projected_points_display",
     "twenty_min_projected_points_title_key",
+    "twenty_min_tip_plain_label",
     "twenty_min_tip_label",
 }
 
@@ -1432,6 +1433,11 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
         country_registry=country_registry,
         locale=locale,
         show_flag=True,
+    )
+    prepared["twenty_min_tip_plain_label"] = _tip_display_text(
+        prepared.get("twenty_min_tip"),
+        country_registry=country_registry,
+        locale=locale,
     )
     prepared["expected_score_full"] = (
         f"{_float_text(prepared.get('predicted_home_goals'))}:{_float_text(prepared.get('predicted_away_goals'))}"
