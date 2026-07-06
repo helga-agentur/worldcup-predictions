@@ -255,6 +255,78 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn("Germany", en_tournament_html)
             self.assertNotIn("Brazil", en_tournament_html)
 
+    def test_tournament_forecast_includes_bracketry_knockout_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            storage = DuckDBStorage.at_data_root(root / "data")
+            storage.write_records(
+                TOURNAMENT_FIXTURES,
+                [
+                    {
+                        "record_key": "2026-07-06T19:00:00Z|POR|ESP",
+                        "fixture_key": "2026-07-06T19:00:00Z|POR|ESP",
+                        "event_date": "2026-07-06T19:00:00Z",
+                        "home_team": "Portugal",
+                        "away_team": "Spain",
+                        "home_fifa_code": "POR",
+                        "away_fifa_code": "ESP",
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 93},
+                    },
+                    {
+                        "record_key": "2026-07-06T17:00:00Z|POR|ESP",
+                        "fixture_key": "2026-07-06T17:00:00Z|POR|ESP",
+                        "event_date": "2026-07-06T17:00:00Z",
+                        "home_team": "Portugal",
+                        "away_team": "Spain",
+                        "home_fifa_code": "POR",
+                        "away_fifa_code": "ESP",
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "metadata": {"source": "openfootball", "match_number": 93},
+                    },
+                    {
+                        "record_key": "2026-07-07T00:00:00Z|USA|BEL",
+                        "fixture_key": "2026-07-07T00:00:00Z|USA|BEL",
+                        "event_date": "2026-07-07T00:00:00Z",
+                        "home_team": "United States",
+                        "away_team": "Belgium",
+                        "home_fifa_code": "USA",
+                        "away_fifa_code": "BEL",
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 94},
+                    },
+                    {
+                        "record_key": "2026-07-10T19:00:00Z|W93|W94",
+                        "fixture_key": "2026-07-10T19:00:00Z|W93|W94",
+                        "event_date": "2026-07-10T19:00:00Z",
+                        "home_team": "W93",
+                        "away_team": "W94",
+                        "home_fifa_code": None,
+                        "away_fifa_code": None,
+                        "stage": "Quarter-final",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 98},
+                    },
+                ],
+                source="fifa_match_centre",
+            )
+
+            result = build_site(project_root=root, storage=storage, gtm_container_id="", base_url="http://127.0.0.1:8000/")
+            tournament_html = (result.output_dir / "en" / "tournament-forecast" / "index.html").read_text(encoding="utf-8")
+
+            self.assertTrue((result.output_dir / "assets" / "vendor" / "bracketry-1.1.3.esm.js").exists())
+            self.assertIn('import { createBracket } from "/assets/vendor/bracketry-1.1.3.esm.js";', tournament_html)
+            self.assertIn('class="bracket-tree" data-bracketry-root', tournament_html)
+            self.assertEqual(tournament_html.count('"matchLabel": "M93"'), 1)
+            self.assertIn('"matchStatus": "Mon, 06.07., 21:00"', tournament_html)
+            self.assertIn('"matchLabel": "M93"', tournament_html)
+            self.assertIn("🇵🇹 Portugal", tournament_html)
+            self.assertIn("🇪🇸 Spain", tournament_html)
+            self.assertIn("Winner Round of 16 match 5", tournament_html)
+
     def test_published_ledger_replaces_stale_shifted_fixture_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

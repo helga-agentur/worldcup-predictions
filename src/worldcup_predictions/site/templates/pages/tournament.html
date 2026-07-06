@@ -28,6 +28,94 @@
   {% endif %}
 </section>
 
+{% if tournament_bracket %}
+<section class="section" aria-labelledby="bracket-title">
+  <header class="section__heading">
+    <section class="section__heading-copy">
+      <h2 id="bracket-title">{{ t("tournament.bracket.title") }}</h2>
+      <p>{{ t("tournament.bracket.description") }}</p>
+    </section>
+  </header>
+  <div class="bracket-tree" data-bracketry-root aria-label="{{ t("tournament.bracket.title") }}"></div>
+  <div class="bracket-tree__fallback" data-bracket-fallback>
+    {% for row in tournament_bracket.fallback_rows %}
+    <div class="bracket-fallback">
+      <span class="bracket-fallback__round">{{ row.round }}</span>
+      <span class="bracket-fallback__match">{{ row.match }}</span>
+      <span class="bracket-fallback__status numeric">{% if row.score %}{{ row.score }}{% else %}{{ row.status }}{% endif %}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <script type="application/json" id="tournament-bracket-data">{{ tournament_bracket.data_json|safe }}</script>
+  <script type="module">
+    import { createBracket } from {{ bracketry_asset|tojson }};
+
+    const wrapper = document.querySelector("[data-bracketry-root]");
+    const fallback = document.querySelector("[data-bracket-fallback]");
+    const dataElement = document.getElementById("tournament-bracket-data");
+    const escapeHtml = (value) => String(value || "").replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;"
+    })[char]);
+    const responsiveOptions = () => ({
+      visibleRoundsCount: window.matchMedia("(max-width: 760px)").matches ? 1 : window.matchMedia("(max-width: 1100px)").matches ? 2 : 3,
+      matchMaxWidth: window.matchMedia("(max-width: 760px)").matches ? 230 : 270
+    });
+
+    if (wrapper && dataElement) {
+      try {
+        const bracketData = JSON.parse(dataElement.textContent || "{}");
+        const bracket = createBracket(bracketData, wrapper, {
+          ...responsiveOptions(),
+          width: "100%",
+          height: "100%",
+          rootBgColor: "transparent",
+          rootBorderColor: "var(--line)",
+          wrapperBorderColor: "var(--line)",
+          roundTitlesBorderColor: "var(--line)",
+          roundTitleColor: "var(--muted)",
+          connectionLinesColor: "var(--line)",
+          highlightedConnectionLinesColor: "var(--helga-blue)",
+          hoveredMatchBorderColor: "var(--helga-blue)",
+          liveMatchBorderColor: "var(--helga-blue)",
+          liveMatchBgColor: "var(--hover-row)",
+          matchStatusBgColor: "var(--mist)",
+          matchTextColor: "var(--ink)",
+          highlightedPlayerTitleColor: "var(--helga-blue)",
+          rootFontFamily: "\"Cadiz\", system-ui, sans-serif",
+          roundTitlesFontFamily: "\"Cadiz\", system-ui, sans-serif",
+          playerTitleFontFamily: "\"Cadiz\", system-ui, sans-serif",
+          scoreFontFamily: "\"Degular\", ui-monospace, monospace",
+          matchFontSize: 14,
+          matchMinVerticalGap: 18,
+          matchHorMargin: 20,
+          navButtonsPosition: "overTitles",
+          verticalScrollMode: "mixed",
+          showScrollbar: true,
+          getPlayerTitleHTML: (player) => escapeHtml(player.title),
+          getMatchTopHTML: (match) => match.matchLabel ? `<span class="bracket-tree__match-label">${escapeHtml(match.matchLabel)}</span>` : ""
+        });
+        wrapper.dataset.ready = "true";
+        if (fallback) {
+          fallback.hidden = true;
+        }
+        const refreshBracket = () => bracket.applyNewOptions(responsiveOptions());
+        window.matchMedia("(max-width: 760px)").addEventListener("change", refreshBracket);
+        window.matchMedia("(max-width: 1100px)").addEventListener("change", refreshBracket);
+      } catch (error) {
+        wrapper.hidden = true;
+        if (fallback) {
+          fallback.hidden = false;
+        }
+      }
+    }
+  </script>
+</section>
+{% endif %}
+
 <footer class="match-detail__actions">
   <a class="action-link action-link--back" href="/{{ locale }}/">{{ icon("arrow-left") }}<span>{{ t("detail.back") }}</span></a>
 </footer>

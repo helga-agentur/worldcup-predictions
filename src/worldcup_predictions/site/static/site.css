@@ -1349,6 +1349,76 @@ html[data-theme="dark"] .tag[data-result="trend"] {
   font-size: var(--text-sm);
 }
 
+/* ---------- tournament bracket ---------- */
+
+.bracket-tree {
+  height: clamp(560px, 72vh, 880px);
+  margin-top: var(--space-md);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.bracket-tree[hidden] {
+  display: none;
+}
+
+.bracket-tree .bracket-root {
+  border: 0;
+}
+
+.bracket-tree .match-body {
+  background: var(--paper);
+}
+
+.bracket-tree .match-status {
+  color: var(--muted);
+}
+
+.bracket-tree__match-label {
+  color: var(--muted);
+  font-family: "Degular", ui-monospace, monospace;
+  font-size: var(--text-xs);
+}
+
+.bracket-tree__fallback {
+  display: grid;
+  gap: var(--space-8);
+  margin-top: var(--space-md);
+}
+
+.bracket-tree__fallback[hidden] {
+  display: none;
+}
+
+.bracket-fallback {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr) max-content;
+  gap: var(--space-md);
+  align-items: center;
+  padding: var(--space-sm) 0;
+  border-top: 1px solid var(--line);
+}
+
+.bracket-fallback__round {
+  color: var(--muted);
+  font-family: "Degular", ui-monospace, monospace;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+}
+
+.bracket-fallback__match {
+  min-width: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.bracket-fallback__status {
+  color: var(--helga-blue);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .site-footer {
   display: flex;
   justify-content: space-between;
@@ -1446,6 +1516,15 @@ html[data-theme="dark"] .tag[data-result="trend"] {
 
   .odds__row {
     display: contents;
+  }
+
+  .bracket-tree {
+    height: 640px;
+  }
+
+  .bracket-fallback {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
   }
 }
 
