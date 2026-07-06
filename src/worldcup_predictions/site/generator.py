@@ -148,6 +148,8 @@ API_PRESENTATION_KEYS = {
     "srf_account_display",
     "srf_expected_points_display",
     "srf_projected_points_display",
+    "srf_tip_points_display",
+    "srf_tip_points_title_key",
     "srf_tip_label",
     "stage_label",
     "status_label",
@@ -156,6 +158,8 @@ API_PRESENTATION_KEYS = {
     "twenty_min_expected_points_display",
     "twenty_min_projected_points_display",
     "twenty_min_projected_points_title_key",
+    "twenty_min_tip_points_display",
+    "twenty_min_tip_points_title_key",
     "twenty_min_tip_plain_label",
     "twenty_min_tip_label",
 }
@@ -1466,9 +1470,20 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
         srf_projected_points,
         max_points=srf_max_points,
     )
+    prepared["srf_tip_points_display"] = (
+        prepared["srf_projected_points_display"] or prepared["srf_expected_points_display"]
+    )
+    prepared["srf_tip_points_title_key"] = _tip_points_title_key(
+        projected_display=prepared["srf_projected_points_display"],
+        expected_display=prepared["srf_expected_points_display"],
+        projected_title_key="label.projected_points",
+    )
     twenty_min_expected_points = prepared.get("twenty_min_expected_points")
     twenty_min_max_points = _twenty_min_expected_points_max(prepared)
-    prepared["twenty_min_expected_points_display"] = _expected_points_display(twenty_min_expected_points, max_points=twenty_min_max_points)
+    prepared["twenty_min_expected_points_display"] = _expected_points_display(
+        twenty_min_expected_points,
+        max_points=twenty_min_max_points,
+    )
     twenty_min_projected_points, twenty_min_projected_title_key = _twenty_min_points_for_card(
         prepared,
         country_registry=country_registry,
@@ -1478,6 +1493,14 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
         max_points=twenty_min_max_points,
     )
     prepared["twenty_min_projected_points_title_key"] = twenty_min_projected_title_key
+    prepared["twenty_min_tip_points_display"] = (
+        prepared["twenty_min_projected_points_display"] or prepared["twenty_min_expected_points_display"]
+    )
+    prepared["twenty_min_tip_points_title_key"] = _tip_points_title_key(
+        projected_display=prepared["twenty_min_projected_points_display"],
+        expected_display=prepared["twenty_min_expected_points_display"],
+        projected_title_key=twenty_min_projected_title_key,
+    )
     prepared["hit_result"] = _hit_category(prepared)
     prepared["hit_label"] = _hit_label(prepared.get("hit_result"), catalog=catalog)
     prepared["most_likely_percent_text"] = _most_likely_percent_text(prepared)
@@ -1635,6 +1658,14 @@ def _projected_points_display(value: Any, *, max_points: Any = None) -> str:
     if max_text:
         return f"{value_text}/{max_text}"
     return value_text
+
+
+def _tip_points_title_key(*, projected_display: str, expected_display: str, projected_title_key: str) -> str:
+    if projected_display:
+        return projected_title_key or "label.projected_points"
+    if expected_display:
+        return "label.expected_points"
+    return ""
 
 
 def _expected_points_max_display(value: Any) -> str:

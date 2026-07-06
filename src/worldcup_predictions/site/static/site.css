@@ -48,6 +48,8 @@
   --text-sm: 0.9375rem;
   --text-md: 1rem;
   --text-lg: 1.125rem;
+  --text-value: clamp(1.8rem, 4vw, 3.2rem);
+  --detail-pick-padding: var(--space-lg);
 }
 
 html[data-theme="dark"] {
@@ -517,6 +519,8 @@ h2 {
 }
 
 .summary__card {
+  display: grid;
+  gap: var(--space-4);
   min-width: 0;
   padding: 18px;
   background: var(--paper);
@@ -533,11 +537,10 @@ h2 {
   display: block;
   max-width: 100%;
   margin: 0;
-  margin-top: var(--space-4);
   font-family: "Degular", "Cadiz", system-ui, sans-serif;
   font-weight: 400;
   color: var(--ink);
-  font-size: clamp(1.8rem, 4vw, 3.2rem);
+  font-size: var(--text-value);
   line-height: 1;
   overflow-wrap: anywhere;
 }
@@ -1073,8 +1076,6 @@ main p a:hover {
 
 .detail-hero__title {
   margin-top: 0;
-  font-size: clamp(1.9rem, 4.2vw, 3.4rem);
-  line-height: 1.05;
   text-wrap: balance;
 }
 
@@ -1101,6 +1102,7 @@ main p a:hover {
   gap: var(--space-8);
   margin: 0;
   align-items: center;
+  justify-content: center;
 }
 
 .tag {
@@ -1110,7 +1112,6 @@ main p a:hover {
   min-height: 26px;
   padding: 3px 11px;
   border: 1px solid var(--line);
-  border-radius: 999px;
   color: var(--muted);
   font-size: var(--text-sm);
   white-space: nowrap;
@@ -1128,7 +1129,7 @@ main p a:hover {
   gap: var(--space-sm);
   align-content: start;
   min-width: 0;
-  padding: 22px 24px;
+  padding: var(--detail-pick-padding);
   border: 1px solid var(--line);
   background: var(--paper);
 }
@@ -1145,7 +1146,7 @@ main p a:hover {
 .detail-pick__value {
   margin: 0;
   font-family: "Degular", "Cadiz", system-ui, sans-serif;
-  font-size: clamp(3rem, 6vw, 4.4rem);
+  font-size: var(--text-value);
   line-height: 0.95;
   color: var(--ink);
   text-align: center;
@@ -1161,7 +1162,7 @@ main p a:hover {
   align-items: baseline;
   gap: var(--space-10);
   margin: 0;
-  padding-top: var(--space-sm);
+  padding-top: var(--detail-pick-padding);
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: var(--text-sm);

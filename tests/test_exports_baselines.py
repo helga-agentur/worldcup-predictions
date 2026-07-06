@@ -881,6 +881,8 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("--motion-nav-content-opacity: 220ms;", css)
             self.assertIn("--motion-nav-content-transform: 260ms;", css)
             self.assertIn("--content-width-narrow-max: calc(var(--max) - (var(--space-lg) * 8));", css)
+            self.assertIn("--text-value: clamp(1.8rem, 4vw, 3.2rem);", css)
+            self.assertIn("--detail-pick-padding: var(--space-lg);", css)
             self.assertIn('html[data-theme="dark"]', css)
             self.assertIn("--helga-blue: #8fa2ff;", css)
             self.assertIn("--accent: #399918;", css)
@@ -915,6 +917,10 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("--content-width-max: var(--content-width-narrow-max);", css)
             self.assertIn(".summary", css)
             self.assertIn(".summary__card", css)
+            self.assertIn(".summary__card {\n  display: grid;\n  gap: var(--space-4);", css)
+            self.assertIn(".summary__value {\n  display: block;\n  max-width: 100%;\n  margin: 0;", css)
+            self.assertIn("font-size: var(--text-value);", css)
+            self.assertNotIn(".summary__value {\n  display: block;\n  max-width: 100%;\n  margin: 0;\n  margin-top:", css)
             self.assertIn(".summary__meta", css)
             self.assertIn(".summary__bar", css)
             self.assertIn(".bar", css)
@@ -956,16 +962,24 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn(".status,\n.hit-chip", css)
             self.assertIn(".hit-chip", css)
             self.assertIn(".detail-hero", css)
+            self.assertIn(".detail-hero__title", css)
+            self.assertNotIn("font-size: clamp(1.9rem, 4.2vw, 3.4rem);", css)
+            self.assertIn(".detail-hero__tags {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--space-8);\n  margin: 0;\n  align-items: center;\n  justify-content: center;", css)
+            self.assertIn(".tag {\n  display: inline-flex;", css)
+            self.assertNotIn(".tag {\n  display: inline-flex;\n  align-items: center;\n  gap: var(--space-xs);\n  min-height: 26px;\n  padding: 3px 11px;\n  border: 1px solid var(--line);\n  border-radius:", css)
             self.assertIn(".detail-picks", css)
             self.assertIn(".detail-pick", css)
+            self.assertIn(".detail-pick {\n  display: grid;\n  gap: var(--space-sm);\n  align-content: start;\n  min-width: 0;\n  padding: var(--detail-pick-padding);", css)
             self.assertIn(
                 ".detail-pick__label {\n  margin: 0;\n  color: var(--muted);\n  font-size: var(--text-xs);\n  letter-spacing: 0.09em;\n  text-align: center;",
                 css,
             )
             self.assertIn(
-                '.detail-pick__value {\n  margin: 0;\n  font-family: "Degular", "Cadiz", system-ui, sans-serif;\n  font-size: clamp(3rem, 6vw, 4.4rem);\n  line-height: 0.95;\n  color: var(--ink);\n  text-align: center;',
+                '.detail-pick__value {\n  margin: 0;\n  font-family: "Degular", "Cadiz", system-ui, sans-serif;\n  font-size: var(--text-value);\n  line-height: 0.95;\n  color: var(--ink);\n  text-align: center;',
                 css,
             )
+            self.assertNotIn(".detail-pick__value.numeric", css)
+            self.assertIn(".detail-pick__meta {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: var(--space-10);\n  margin: 0;\n  padding-top: var(--detail-pick-padding);", css)
             self.assertIn(".detail-hero__explain > p {\n  margin: 0;\n}", css)
             self.assertIn(".heatmap__table", css)
             self.assertIn("color-mix(in srgb, var(--helga-blue) var(--heat, 0%), var(--mist))", css)
@@ -1034,6 +1048,8 @@ class ExportAndBaselineTest(unittest.TestCase):
                 "srf_account_display",
                 "srf_tip_label",
                 "srf_projected_points_display",
+                "srf_tip_points_display",
+                "srf_tip_points_title_key",
                 "status_label",
                 "top_score_matrix",
                 "twenty_min_account_display",
@@ -1041,6 +1057,8 @@ class ExportAndBaselineTest(unittest.TestCase):
                 "twenty_min_tip_plain_label",
                 "twenty_min_projected_points_display",
                 "twenty_min_projected_points_title_key",
+                "twenty_min_tip_points_display",
+                "twenty_min_tip_points_title_key",
             ):
                 self.assertNotIn(presentation_key, payload["predictions"][0])
             self.assertEqual(payload["summary"]["srf_points"], 6.0)
@@ -1138,7 +1156,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertEqual(payload["summary"]["srf_points"], 20.0)
             self.assertEqual(payload["summary"]["srf_points_display"], "20")
 
-    def test_site_shows_expected_points_against_provider_round_max(self) -> None:
+    def test_site_uses_same_tip_points_on_cards_and_detail_pages(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             storage = DuckDBStorage.at_data_root(root / "data")
@@ -1164,7 +1182,10 @@ class ExportAndBaselineTest(unittest.TestCase):
                         "srf_expected_points": 7.231939239561684,
                         "twenty_min_tip": "Spain",
                         "twenty_min_expected_points": 6.279744906423018,
-                        "metadata": {"stage": "Round of 16"},
+                        "metadata": {
+                            "stage": "Round of 16",
+                            "prediction_metadata": {"advancement_probabilities": {"home": 0.37, "away": 0.63}},
+                        },
                     }
                 ],
                 source="test",
@@ -1177,9 +1198,15 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("2/20 P.", html)
             self.assertIn("10/10 P.", html)
             self.assertNotIn("6.3/10 P.", html)
-            self.assertIn('<strong class="detail-pick__points numeric">7.2/20 P.</strong>', detail)
+            self.assertIn('<strong class="detail-pick__points numeric">2/20 P.</strong>', detail)
             self.assertIn('<div class="detail-pick__value">Spanien</div>', detail)
-            self.assertIn('<strong class="detail-pick__points numeric">6.3/10 P.</strong>', detail)
+            self.assertIn("Weiterkommen:", detail)
+            self.assertIn("<span>Spanien</span>", detail)
+            self.assertIn('<span class="numeric">63%</span>', detail)
+            self.assertNotIn('aria-hidden="true">🇪🇸</span> Spanien</span>\n          <span class="numeric">63%</span>', detail)
+            self.assertIn('<strong class="detail-pick__points numeric">10/10 P.</strong>', detail)
+            self.assertNotIn("7.2/20 P.", detail)
+            self.assertNotIn("6.3/10 P.", detail)
 
     def test_site_counts_unpredicted_fixtures_and_keeps_locked_rows_out_of_upcoming_section(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

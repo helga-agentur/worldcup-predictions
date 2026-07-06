@@ -57,9 +57,8 @@
           {% if card_variant == "past" and row.status == "final" and row.srf_account_display %}
           <span class="tip-chip__points numeric"{% if row.srf_match_points|float > 0 %} data-state="positive"{% endif %}>{{ t("chip.points", value="+" ~ row.srf_match_points|float_text(precision=0)) }}</span>
           {% elif card_variant != "past" %}
-          {% set srf_points_display = row.srf_projected_points_display or row.srf_expected_points_display %}
-          {% if srf_points_display %}
-          <span class="tip-chip__points numeric" title="{{ t('label.projected_points') if row.srf_projected_points_display else t('label.expected_points') }}">{{ t("chip.points", value=srf_points_display) }}</span>
+          {% if row.srf_tip_points_display %}
+          <span class="tip-chip__points numeric" title="{{ t(row.srf_tip_points_title_key) }}">{{ t("chip.points", value=row.srf_tip_points_display) }}</span>
           {% endif %}
           {% endif %}
         </span>
@@ -71,9 +70,8 @@
           {% if card_variant == "past" and row.status == "final" and row.twenty_min_account_display %}
           <span class="tip-chip__points numeric"{% if row.twenty_min_match_points|float > 0 %} data-state="positive"{% endif %}>{{ t("chip.points", value="+" ~ row.twenty_min_match_points|float_text(precision=0)) }}</span>
           {% elif card_variant != "past" %}
-          {% set twenty_min_points_display = row.twenty_min_projected_points_display or row.twenty_min_expected_points_display %}
-          {% if twenty_min_points_display %}
-          <span class="tip-chip__points numeric" title="{{ t(row.twenty_min_projected_points_title_key) if row.twenty_min_projected_points_display else t('label.expected_points') }}">{{ t("chip.points", value=twenty_min_points_display) }}</span>
+          {% if row.twenty_min_tip_points_display %}
+          <span class="tip-chip__points numeric" title="{{ t(row.twenty_min_tip_points_title_key) }}">{{ t("chip.points", value=row.twenty_min_tip_points_display) }}</span>
           {% endif %}
           {% endif %}
         </span>

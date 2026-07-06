@@ -43,7 +43,7 @@
         {% if row.advancement %}
         <span class="tag">
           {{ t("detail.advancement") }}:
-          <span>{% if row.advancement.flag %}<span aria-hidden="true">{{ row.advancement.flag }}</span> {% endif %}{{ row.advancement.team_label }}</span>
+          <span>{{ row.advancement.team_label }}</span>
           <span class="numeric">{{ row.advancement.percent_text }}</span>
         </span>
         {% endif %}
@@ -67,10 +67,10 @@
         <span>{{ t("label.points") }}</span>
         <strong class="detail-pick__points numeric"{% if row.srf_match_points|float > 0 %} data-state="positive"{% endif %}>{{ t("chip.points", value="+" ~ row.srf_match_points|float_text(precision=0)) }}</strong>
       </div>
-      {% elif row.srf_expected_points_display %}
+      {% elif row.srf_tip_points_display %}
       <div class="detail-pick__meta">
-        <span>{{ t("label.expected_points") }}</span>
-        <strong class="detail-pick__points numeric">{{ t("chip.points", value=row.srf_expected_points_display) }}</strong>
+        <span>{{ t(row.srf_tip_points_title_key) }}</span>
+        <strong class="detail-pick__points numeric">{{ t("chip.points", value=row.srf_tip_points_display) }}</strong>
       </div>
       {% endif %}
       {% else %}
@@ -87,10 +87,10 @@
         <span>{{ t("label.points") }}</span>
         <strong class="detail-pick__points numeric"{% if row.twenty_min_match_points|float > 0 %} data-state="positive"{% endif %}>{{ t("chip.points", value="+" ~ row.twenty_min_match_points|float_text(precision=0)) }}</strong>
       </div>
-      {% elif row.twenty_min_expected_points_display %}
+      {% elif row.twenty_min_tip_points_display %}
       <div class="detail-pick__meta">
-        <span>{{ t("label.expected_points") }}</span>
-        <strong class="detail-pick__points numeric">{{ t("chip.points", value=row.twenty_min_expected_points_display) }}</strong>
+        <span>{{ t(row.twenty_min_tip_points_title_key) }}</span>
+        <strong class="detail-pick__points numeric">{{ t("chip.points", value=row.twenty_min_tip_points_display) }}</strong>
       </div>
       {% endif %}
       {% else %}
