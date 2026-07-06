@@ -243,6 +243,16 @@ html[data-js="true"] .site-menu[data-state="open"] .site-menu__surface {
 
 body[data-menu-open="true"] {
   overflow: hidden;
+  padding-top: var(--header-height);
+}
+
+body[data-menu-open="true"] .site-header {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  width: min(100% - 32px, var(--max));
+  margin-inline: 0;
+  transform: translateX(-50%);
 }
 
 .site-menu__inner {
