@@ -455,6 +455,11 @@ def _summary_extras(
         "twenty_min_avg_text": catalog.translate("summary.avg_per_match", value=f"{twenty_min_avg:.1f}") if scored else "",
         "hit_rate_text": f"{int(summary.get('hit_rate_percent') or 0)}%",
         "hit_breakdown_text": catalog.translate("summary.hit_breakdown", exact=exact, trend=trend, miss=miss) if scored else "",
+        "hit_counts": {
+            "exact": exact,
+            "trend": trend,
+            "miss": miss,
+        },
         "hit_widths": {
             "exact": f"{100 * exact / scored:.2f}" if scored else "0",
             "trend": f"{100 * trend / scored:.2f}" if scored else "0",

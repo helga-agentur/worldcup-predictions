@@ -51,7 +51,20 @@
       <dt class="summary__label">{{ t("summary.hit_rate") }}</dt>
       <dd class="summary__value">{{ summary_extras.hit_rate_text }}</dd>
       {% if summary_extras.has_hits %}
-      <dd class="summary__sub numeric">{{ summary_extras.hit_breakdown_text }}</dd>
+      <dd class="summary__segments" aria-label="{{ summary_extras.hit_breakdown_text }}">
+        <span class="summary__segment" data-result="exact">
+          <span class="summary__segment-value">{{ summary_extras.hit_counts.exact }}</span>
+          <span class="summary__segment-label">{{ t("summary.exact_short") }}</span>
+        </span>
+        <span class="summary__segment" data-result="trend">
+          <span class="summary__segment-value">{{ summary_extras.hit_counts.trend }}</span>
+          <span class="summary__segment-label">{{ t("summary.correct_short") }}</span>
+        </span>
+        <span class="summary__segment" data-result="miss">
+          <span class="summary__segment-value">{{ summary_extras.hit_counts.miss }}</span>
+          <span class="summary__segment-label">{{ t("summary.wrong_short") }}</span>
+        </span>
+      </dd>
       <dd class="summary__hitbar" aria-hidden="true">
         <span class="summary__hitbar-fill" data-result="exact" style="width: {{ summary_extras.hit_widths.exact }}%"></span>
         <span class="summary__hitbar-fill" data-result="trend" style="width: {{ summary_extras.hit_widths.trend }}%"></span>
