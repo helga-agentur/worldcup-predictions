@@ -25,6 +25,7 @@ from worldcup_predictions.core.datasets import (
     PROVIDER_POINTS,
     PUBLISHED_PREDICTION_LEDGER,
     PREDICTIONS,
+    SIMULATION_SUMMARY,
     TOURNAMENT_FIXTURES,
 )
 from worldcup_predictions.core.events import EventName, event_value
@@ -122,6 +123,63 @@ class ExportAndBaselineTest(unittest.TestCase):
     def test_site_base_url_normalization_accepts_trailing_slash(self) -> None:
         self.assertEqual(normalized_base_url("http://127.0.0.1:8000/"), "http://127.0.0.1:8000")
         self.assertEqual(normalized_base_url("https://tippspiel.helga.ch"), "https://tippspiel.helga.ch")
+
+    def test_tournament_forecast_filters_eliminated_teams_and_formats_percentages(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            storage = DuckDBStorage.at_data_root(root / "data")
+            storage.write_records(
+                TOURNAMENT_FIXTURES,
+                [
+                    {
+                        "record_key": "2026-07-14T20:00:00Z|ESP|FRA",
+                        "fixture_key": "2026-07-14T20:00:00Z|ESP|FRA",
+                        "event_date": "2026-07-14T20:00:00Z",
+                        "home_team": "Spain",
+                        "away_team": "France",
+                        "home_fifa_code": "ESP",
+                        "away_fifa_code": "FRA",
+                        "stage": "Semi-final",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre"},
+                    }
+                ],
+                source="fifa_match_centre",
+            )
+            storage.write_records(
+                SIMULATION_SUMMARY,
+                [
+                    {
+                        "record_key": "sim-1",
+                        "simulation_id": "sim-1",
+                        "iterations": 20000,
+                        "distributions": {
+                            "champion": [
+                                {"answer": "Germany", "probability": 0.60},
+                                {"answer": "Spain", "probability": 0.123456},
+                                {"answer": "France", "probability": 0.04},
+                                {"answer": "Brazil", "probability": 0.01},
+                            ]
+                        },
+                    }
+                ],
+                source="simulate_tournament",
+            )
+
+            result = build_site(project_root=root, storage=storage, gtm_container_id="", base_url="http://127.0.0.1:8000/")
+            tournament_html = (result.output_dir / "de" / "turnierprognose" / "index.html").read_text(encoding="utf-8")
+            en_tournament_html = (result.output_dir / "en" / "tournament-forecast" / "index.html").read_text(encoding="utf-8")
+
+            self.assertIn("Spanien", tournament_html)
+            self.assertIn("Frankreich", tournament_html)
+            self.assertIn("12.35%", tournament_html)
+            self.assertIn("4.00%", tournament_html)
+            self.assertNotIn("Deutschland", tournament_html)
+            self.assertNotIn("Brasilien", tournament_html)
+            self.assertIn("Spain", en_tournament_html)
+            self.assertIn("France", en_tournament_html)
+            self.assertNotIn("Germany", en_tournament_html)
+            self.assertNotIn("Brazil", en_tournament_html)
 
     def test_published_ledger_replaces_stale_shifted_fixture_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

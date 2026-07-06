@@ -528,13 +528,19 @@ def _summary_progress_bar(current: float, maximum: float, *, label: str) -> dict
 
 
 def _champion_odds(storage, *, country_registry: CountryRegistry) -> dict[str, Any] | None:
-    simulation = _simulation_champion_odds(storage)
+    active_team_codes = _active_champion_team_codes(storage, country_registry=country_registry)
+    simulation = _simulation_champion_odds(storage, country_registry=country_registry, active_team_codes=active_team_codes)
     if simulation is not None:
         return simulation
-    return _market_champion_odds(storage)
+    return _market_champion_odds(storage, country_registry=country_registry, active_team_codes=active_team_codes)
 
 
-def _simulation_champion_odds(storage) -> dict[str, Any] | None:
+def _simulation_champion_odds(
+    storage,
+    *,
+    country_registry: CountryRegistry,
+    active_team_codes: set[str],
+) -> dict[str, Any] | None:
     latest = None
     for row in storage.read_records(SIMULATION_SUMMARY, latest_only=True):
         observed = str((row.get("_record") or {}).get("observed_at_utc") or "")
@@ -553,6 +559,7 @@ def _simulation_champion_odds(storage) -> dict[str, Any] | None:
         if isinstance(entry, dict) and _float_value(entry.get("probability")) > 0
     ]
     entries.sort(key=lambda entry: entry["probability"], reverse=True)
+    entries = _active_champion_entries(entries, country_registry=country_registry, active_team_codes=active_team_codes)
     if len(entries) < 2:
         # A single-answer distribution means the simulator output is degenerate
         # (or the tournament is decided); market odds are more honest then.
@@ -565,7 +572,12 @@ def _simulation_champion_odds(storage) -> dict[str, Any] | None:
     }
 
 
-def _market_champion_odds(storage) -> dict[str, Any] | None:
+def _market_champion_odds(
+    storage,
+    *,
+    country_registry: CountryRegistry,
+    active_team_codes: set[str],
+) -> dict[str, Any] | None:
     latest_by_team: dict[str, tuple[str, float]] = {}
     for row in storage.read_records(MARKET_OUTRIGHTS, latest_only=True):
         team = str(row.get("team") or "")
@@ -583,6 +595,9 @@ def _market_champion_odds(storage) -> dict[str, Any] | None:
         for team, (_observed, probability) in latest_by_team.items()
     ]
     entries.sort(key=lambda entry: entry["probability"], reverse=True)
+    entries = _active_champion_entries(entries, country_registry=country_registry, active_team_codes=active_team_codes)
+    if not entries:
+        return None
     as_of = max(observed for observed, _probability in latest_by_team.values())
     return {
         "source": "market",
@@ -590,6 +605,51 @@ def _market_champion_odds(storage) -> dict[str, Any] | None:
         "as_of": as_of,
         "entries": entries[:CHAMPION_ODDS_LIMIT],
     }
+
+
+def _active_champion_team_codes(storage, *, country_registry: CountryRegistry) -> set[str]:
+    state = load_tournament_state(storage)
+    codes: set[str] = set()
+    for fixture in state.fixtures_without_results():
+        for team in (fixture.home_team, fixture.away_team):
+            code = _team_country_code(team, country_registry=country_registry)
+            if code:
+                codes.add(code)
+    return codes
+
+
+def _active_champion_entries(
+    entries: list[dict[str, Any]],
+    *,
+    country_registry: CountryRegistry,
+    active_team_codes: set[str],
+) -> list[dict[str, Any]]:
+    if not active_team_codes:
+        return entries
+    return [
+        entry
+        for entry in entries
+        if _champion_entry_country_code(entry, country_registry=country_registry) in active_team_codes
+    ]
+
+
+def _champion_entry_country_code(entry: dict[str, Any], *, country_registry: CountryRegistry) -> str | None:
+    name = str(entry.get("name") or "")
+    resolved = country_registry.resolve(name, locale="en") or country_registry.resolve(name, locale="de")
+    if resolved and resolved.canonical_id in country_registry.countries:
+        return resolved.canonical_id
+    return None
+
+
+def _team_country_code(team: TeamRef, *, country_registry: CountryRegistry) -> str | None:
+    if canonical_slot_code(team.fifa_code) or canonical_slot_code(team.key) or canonical_slot_code(team.name):
+        return None
+    if team.fifa_code and team.fifa_code in country_registry.countries:
+        return team.fifa_code
+    resolved = country_registry.resolve(team.name, locale="en") or country_registry.resolve(team.name, locale="de")
+    if resolved and resolved.canonical_id in country_registry.countries:
+        return resolved.canonical_id
+    return None
 
 
 def _localized_champion_odds(
@@ -619,7 +679,7 @@ def _localized_champion_odds(
             {
                 "label": label,
                 "flag": FIFA_FLAG_EMOJIS.get(code or "", ""),
-                "percent_text": _round_percent_text(probability),
+                "percent_text": _champion_percent_text(probability),
                 "width": f"{100 * probability / peak:.2f}",
             }
         )
@@ -1633,6 +1693,13 @@ def _round_percent_text(value: Any) -> str:
     if 0 < number < 0.005:
         return "<1%"
     return f"{round(number * 100)}%"
+
+
+def _champion_percent_text(value: Any) -> str:
+    try:
+        return f"{float(value) * 100:.2f}%"
+    except (TypeError, ValueError):
+        return "-"
 
 
 def _expected_points_display(value: Any, *, max_points: Any = None) -> str:
