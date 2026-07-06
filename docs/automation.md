@@ -271,7 +271,9 @@ git reset --hard origin/main
 docker compose -f compose.prod.yaml pull predictions
 ```
 
-The deploy command waits up to 10 minutes for `/tmp/worldcup-predictions-scheduled.lock`, so it does not reset the checkout or pull a new image while the hourly cron job is running. The next `scheduled-update` cron run applies any pending data update hooks and publishes the regenerated site with the newly pulled image.
+The deploy job has a 30-minute GitHub Actions timeout. The remote deploy command waits up to 10 minutes for `/tmp/worldcup-predictions-scheduled.lock`, so it does not reset the checkout or pull a new image while live automation is running. The next `scheduled-update` cron run applies any pending data update hooks and publishes the regenerated site with the newly pulled image.
+
+Deploy logs include the GitHub run context, image tags, remote host and Docker Compose version, current live commit, visible lock holder snapshot, lock wait start/acquire/release timestamps, reset target, and pulled image digest. If a deploy is cancelled or times out, check whether the log reached `acquired scheduled-update lock`; if not, it was still waiting behind live automation.
 
 ## Failure Behavior
 

@@ -22,7 +22,7 @@ jobs:
   deploy:
     name: Deploy to Hetzner
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     environment:
       name: production
       url: https://tippspiel.helga.ch
@@ -80,12 +80,66 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
           set -euo pipefail
+          echo "::group::Deploy context"
+          echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} attempt ${GITHUB_RUN_ATTEMPT}"
+          echo "Event: ${GITHUB_EVENT_NAME}"
+          echo "Ref: ${GITHUB_REF}"
+          echo "SHA: ${GITHUB_SHA}"
+          echo "Image tags:"
+          printf '%s\n' "${DOCKER_METADATA_OUTPUT_TAGS:-unknown}"
+          echo "Started at: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          echo "::endgroup::"
+
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" <<'REMOTE'
           set -euo pipefail
+          timestamp() {
+            date -u +'%Y-%m-%dT%H:%M:%SZ'
+          }
+          log() {
+            printf '[%s] %s\n' "$(timestamp)" "$*"
+          }
+
+          LOCK=/tmp/worldcup-predictions-scheduled.lock
+          LOCK_TIMEOUT_SECONDS=600
+
           cd /opt/worldcup-predictions
-          flock -w 600 /tmp/worldcup-predictions-scheduled.lock bash -lc '
+          log "deploy started on $(hostname) as $(whoami)"
+          log "working directory: $(pwd)"
+          log "current live commit: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+          log "origin/main before fetch: $(git rev-parse --short origin/main 2>/dev/null || echo unknown)"
+          log "docker compose version: $(docker compose version --short 2>/dev/null || docker compose version)"
+          log "checking for current scheduled-update lock holder"
+          if command -v lslocks >/dev/null 2>&1; then
+            lslocks | grep -F "$LOCK" || log "no scheduled-update lock holder visible"
+          else
+            log "lslocks unavailable; skipping lock-holder snapshot"
+          fi
+          log "waiting up to ${LOCK_TIMEOUT_SECONDS}s for $LOCK"
+
+          if flock -w "$LOCK_TIMEOUT_SECONDS" "$LOCK" bash -lc '
+            set -euo pipefail
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] acquired scheduled-update lock"
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] fetching origin/main"
             git fetch origin main
+            before="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+            target="$(git rev-parse --short origin/main)"
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] resetting worktree from ${before} to ${target}"
             git reset --hard origin/main
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] pulling predictions image"
             docker compose -f compose.prod.yaml pull predictions
-          '
+            image="$(docker image inspect ghcr.io/helga-agentur/worldcup-predictions:main --format "{{.Id}} {{index .RepoDigests 0}}" 2>/dev/null || true)"
+            if [ -n "$image" ]; then
+              echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] local image after pull: $image"
+            else
+              echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] local image after pull: unavailable"
+            fi
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] deploy update completed inside lock"
+          '; then
+            log "released $LOCK after successful deploy update"
+          else
+            status=$?
+            log "deploy update failed or $LOCK was not acquired within ${LOCK_TIMEOUT_SECONDS}s (status=${status})"
+            exit "$status"
+          fi
+          log "deploy finished"
           REMOTE
