@@ -715,9 +715,8 @@ h2 {
   font-size: var(--text-sm);
 }
 
-.homepage-grid__aside .odds__row {
-  grid-template-columns: minmax(0, 1.2fr) minmax(70px, 0.8fr) 52px;
-  gap: var(--space-8);
+.homepage-grid__aside .odds {
+  column-gap: var(--space-md);
 }
 
 .homepage-grid__aside .odds__team {
@@ -1292,21 +1291,21 @@ main p a:hover {
 
 .odds {
   display: grid;
-  gap: var(--space-10);
+  grid-template-columns: minmax(0, max-content) minmax(70px, 1fr) max-content;
+  gap: var(--space-md) var(--space-xl);
   margin-top: var(--space-md);
   padding: 18px;
   border: 1px solid var(--line);
   background: var(--paper);
-}
-
-.odds__row {
-  display: grid;
-  grid-template-columns: 188px minmax(0, 1fr) 64px;
-  gap: var(--space-md);
   align-items: center;
 }
 
+.odds__row {
+  display: contents;
+}
+
 .odds__team {
+  min-width: 0;
   font-size: var(--text-md);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1315,6 +1314,8 @@ main p a:hover {
 
 .odds__track {
   display: block;
+  width: 100%;
+  min-width: 0;
   height: 12px;
   border-radius: 6px;
   background: var(--line);
@@ -1329,6 +1330,7 @@ main p a:hover {
 }
 
 .odds__pct {
+  justify-self: end;
   font-family: "Degular", "Cadiz", system-ui, sans-serif;
   font-size: 1.15rem;
   text-align: right;
@@ -1382,8 +1384,11 @@ main p a:hover {
   }
 
   .homepage-grid__aside .odds__row {
-    grid-template-columns: 120px minmax(0, 1fr) 56px;
-    gap: var(--space-10);
+    display: contents;
+  }
+
+  .homepage-grid__aside .odds {
+    column-gap: var(--space-lg);
   }
 
   .homepage-grid__aside .odds__team {
@@ -1435,8 +1440,7 @@ main p a:hover {
   }
 
   .odds__row {
-    grid-template-columns: 120px minmax(0, 1fr) 56px;
-    gap: var(--space-10);
+    display: contents;
   }
 }
 

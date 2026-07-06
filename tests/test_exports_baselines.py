@@ -174,6 +174,10 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("Frankreich", tournament_html)
             self.assertIn("12.35%", tournament_html)
             self.assertIn("4.00%", tournament_html)
+            self.assertRegex(
+                tournament_html,
+                r"Turniersimulation mit 20(?:'|&#39;)000 Durchläufen, Stand \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}\.",
+            )
             self.assertNotIn("Deutschland", tournament_html)
             self.assertNotIn("Brasilien", tournament_html)
             self.assertIn("Spain", en_tournament_html)
@@ -1013,8 +1017,13 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn(".homepage-grid", css)
             self.assertIn("grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);", css)
             self.assertIn(".homepage-grid__main", css)
-            self.assertIn(".homepage-grid__aside .odds__row", css)
-            self.assertIn(".odds {\n  display: grid;\n  gap: var(--space-10);\n  margin-top: var(--space-md);\n  padding: 18px;\n  border: 1px solid var(--line);\n  background: var(--paper);", css)
+            self.assertIn(".homepage-grid__aside .odds", css)
+            self.assertIn(
+                ".odds {\n  display: grid;\n  grid-template-columns: minmax(0, max-content) minmax(70px, 1fr) max-content;",
+                css,
+            )
+            self.assertIn(".odds__row {\n  display: contents;", css)
+            self.assertIn(".odds__track {\n  display: block;\n  width: 100%;\n  min-width: 0;", css)
             self.assertIn(".match-card", css)
             self.assertIn(".match-card__details", css)
             self.assertIn(".match-card__team-identity", css)

@@ -5,6 +5,8 @@ import math
 import unittest
 
 from worldcup_predictions.cli import (
+    _latest_current_state_simulation_fixture_fingerprint,
+    _simulation_fixture_metadata,
     _simulation_known_results,
     _simulation_known_winners,
     _simulation_score_matrices,
@@ -309,6 +311,66 @@ class SimulationInputWiringTest(unittest.TestCase):
         decided_score = {group_fixture.key: ScoreTip(3, 3), knockout_fixture.key: ScoreTip(2, 1)}
         self.assertEqual(_simulation_known_winners(state, [penalty_result], decided_score), {})
         self.assertEqual(_simulation_known_winners(state, [penalty_result], {}), {})
+
+    def test_fixture_state_fingerprint_tracks_unresolved_fixture_participants(self) -> None:
+        fixture = FixtureRecord(
+            event_date="2026-07-14T20:00:00Z",
+            home_team=TeamRef("Spain", "ESP"),
+            away_team=TeamRef("France", "FRA"),
+            stage="Semi-final",
+        )
+        changed_fixture = FixtureRecord(
+            event_date=fixture.event_date,
+            home_team=TeamRef("Spain", "ESP"),
+            away_team=TeamRef("Morocco", "MAR"),
+            stage=fixture.stage,
+        )
+
+        current = _simulation_fixture_metadata(TournamentState(fixtures=[fixture], results=[], standings={}))
+        changed = _simulation_fixture_metadata(TournamentState(fixtures=[changed_fixture], results=[], standings={}))
+        finished = _simulation_fixture_metadata(
+            TournamentState(
+                fixtures=[fixture],
+                results=[
+                    ResultRecord(
+                        event_date=fixture.event_date,
+                        home_team=fixture.home_team,
+                        away_team=fixture.away_team,
+                        score=ScoreTip(2, 1),
+                    )
+                ],
+                standings={},
+            )
+        )
+
+        self.assertEqual(current["active_fixture_count"], 1)
+        self.assertEqual(finished["active_fixture_count"], 0)
+        self.assertNotEqual(current["active_fixture_fingerprint"], changed["active_fixture_fingerprint"])
+        self.assertNotEqual(current["active_fixture_fingerprint"], finished["active_fixture_fingerprint"])
+
+    def test_latest_fixture_fingerprint_uses_current_state_simulations_only(self) -> None:
+        class FakeStorage:
+            def read_records(self, dataset: str, *, latest_only: bool = False) -> list[dict]:
+                self.request = (dataset, latest_only)
+                return [
+                    {
+                        "mode": "current_state",
+                        "metadata": {"active_fixture_fingerprint": "older"},
+                        "_record": {"observed_at_utc": "2026-07-06T07:00:00Z"},
+                    },
+                    {
+                        "mode": "from_day_one",
+                        "metadata": {"active_fixture_fingerprint": "ignored-newer"},
+                        "_record": {"observed_at_utc": "2026-07-06T09:00:00Z"},
+                    },
+                    {
+                        "mode": "current_state",
+                        "metadata": {"active_fixture_fingerprint": "newer"},
+                        "_record": {"observed_at_utc": "2026-07-06T08:00:00Z"},
+                    },
+                ]
+
+        self.assertEqual(_latest_current_state_simulation_fixture_fingerprint(FakeStorage()), "newer")
 
 
 if __name__ == "__main__":

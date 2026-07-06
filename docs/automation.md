@@ -72,7 +72,9 @@ Responsibilities:
 - regenerate simulation-derived provider bonus views
 - refresh entity alias candidates and entity validation where needed
 
-The daily job is intentionally separate from the hourly job because tournament simulation and maintenance work can be slower and changes less frequently.
+The daily job is intentionally separate from the half-hourly job because tournament simulation and maintenance work can be slower and changes less frequently.
+
+The half-hourly `scheduled-update` command also checks whether the unresolved fixture state has changed since the latest current-state simulation. If a result removes an open fixture or resolves a future knockout participant, it immediately runs the same current-state 20,000-iteration simulation before rebuilding the static site. If the fixture fingerprint is unchanged, it skips this simulation refresh.
 
 The daily simulation starts from the current confirmed tournament state. For analysis or retrospective comparison, run `worldcup-predictions simulate-tournament --from-day-one` to ignore stored final scores and simulate from the initial fixture plan.
 

@@ -683,7 +683,7 @@ def _localized_champion_odds(
                 "width": f"{100 * probability / peak:.2f}",
             }
         )
-    as_of_display = _date_text(champion_odds.get("as_of")).split(",")[0]
+    as_of_display = _date_text(champion_odds.get("as_of"))
     if champion_odds.get("source") == "simulation":
         source_text = catalog.translate(
             "tournament.source_simulation",

@@ -60,6 +60,7 @@ from worldcup_predictions.plugins.providers.ch_20min import best_twenty_min_bonu
 from worldcup_predictions.simulations import SimulationInputs, TournamentSimulator, pair_key
 from worldcup_predictions.site import build_site, serve_site
 from worldcup_predictions.site.generator import gtm_container_id_from_env
+from worldcup_predictions.storage.ledger import stable_hash
 from worldcup_predictions.tournament.repository import (
     load_results,
     load_tournament_state,
@@ -258,6 +259,7 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
         export_id=f"{snapshot_id}:export",
         run_id=workflow.context.run_id,
     )
+    simulation_refresh = _run_simulation_if_fixture_state_changed(workflow, refreshed_state, run)
     site_build = build_site(
         project_root=project_root,
         storage=workflow.context.storage,
@@ -292,6 +294,7 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
         "prediction_ledger_rows": ledger_count,
         "published_prediction_ledger_rows": published_ledger_count,
         "prediction_export": export_manifest,
+        "simulation_refresh": simulation_refresh,
         "site_build": site_build.to_dict(),
         "diagnostics_completeness_rows": len(diagnostics_completeness_rows),
         "reports": [report["path"] for report in reports],
@@ -313,6 +316,12 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
         "{prediction_ledger_rows} prediction-ledger row(s), "
         "{published_prediction_ledger_rows} published row(s).".format(**maintenance)
     )
+    if simulation_refresh.get("ran"):
+        print(
+            "Simulation refresh: {iterations} run(s) ({simulation_id}) after fixture-state change.".format(
+                **simulation_refresh
+            )
+        )
     return 0
 
 
@@ -321,6 +330,134 @@ def _workflow_signals(workflow) -> list:
     for result in workflow.context.event_results:
         signals.extend(result.signals)
     return signals
+
+
+def _run_simulation_if_fixture_state_changed(workflow: PredictionWorkflow, state, run) -> dict:
+    current = _simulation_fixture_metadata(state)
+    previous_fingerprint = _latest_current_state_simulation_fixture_fingerprint(workflow.context.storage)
+    if previous_fingerprint == current["active_fixture_fingerprint"]:
+        return {
+            "ran": False,
+            "reason": "fixture_state_unchanged",
+            "active_fixture_count": current["active_fixture_count"],
+            "active_fixture_fingerprint": current["active_fixture_fingerprint"],
+        }
+
+    simulation_inputs = _simulation_inputs_from_state(
+        workflow,
+        state,
+        run,
+        known_results={result.fixture_key: result.score for result in state.results},
+        include_current_results_in_ratings=True,
+    )
+    summary = TournamentSimulator(simulation_inputs).run()
+    simulation_id = f"simulation_{utc_label()}"
+    result = _write_simulation_outputs(
+        workflow,
+        summary,
+        simulation_id=simulation_id,
+        mode="current_state",
+        state=state,
+        trigger="scheduled_fixture_state_change",
+    )
+    result["previous_active_fixture_fingerprint"] = previous_fingerprint
+    return result
+
+
+def _latest_current_state_simulation_fixture_fingerprint(storage) -> str:
+    latest = None
+    for row in storage.read_records(SIMULATION_SUMMARY, latest_only=True):
+        if str(row.get("mode") or "") != "current_state":
+            continue
+        observed = str((row.get("_record") or {}).get("observed_at_utc") or row.get("simulation_id") or "")
+        if latest is None or observed > latest[0]:
+            latest = (observed, row)
+    if latest is None:
+        return ""
+    metadata = latest[1].get("metadata") if isinstance(latest[1].get("metadata"), dict) else {}
+    return str(metadata.get("active_fixture_fingerprint") or "")
+
+
+def _simulation_fixture_metadata(state) -> dict:
+    entries = _simulation_fixture_state_entries(state)
+    return {
+        "active_fixture_count": len(entries),
+        "active_fixture_fingerprint": stable_hash(entries),
+    }
+
+
+def _simulation_fixture_state_entries(state) -> list[dict]:
+    rows = []
+    for fixture in state.fixtures_without_results():
+        rows.append(
+            {
+                "event_date": fixture.event_date,
+                "source_id": fixture.source_id or "",
+                "stage": fixture.stage or "",
+                "status": fixture.status,
+                "home": fixture.home_team.key,
+                "away": fixture.away_team.key,
+            }
+        )
+    return sorted(rows, key=lambda item: (item["event_date"], item["source_id"], item["home"], item["away"]))
+
+
+def _write_simulation_outputs(
+    workflow: PredictionWorkflow,
+    summary,
+    *,
+    simulation_id: str,
+    mode: str,
+    state,
+    trigger: str,
+) -> dict:
+    metadata = {
+        **summary.metadata,
+        **_simulation_fixture_metadata(state),
+        "trigger": trigger,
+    }
+    summary_row = {
+        "record_key": simulation_id,
+        "simulation_id": simulation_id,
+        "mode": mode,
+        "iterations": summary.iterations,
+        "seed": summary.seed,
+        "distributions": summary.distributions,
+        "metadata": metadata,
+        "srf_bonus": evaluate_srf_bonus_questions(summary),
+        "srf_best_answers": best_srf_bonus_answers(summary),
+        "twenty_min_bonus": evaluate_twenty_min_bonus_questions(summary),
+        "twenty_min_best_answers": best_twenty_min_bonus_answers(summary),
+    }
+    workflow.context.storage.write_records(
+        SIMULATION_SUMMARY,
+        [summary_row],
+        source="simulate_tournament",
+        run_id=workflow.context.run_id,
+    )
+    sample_rows = [
+        {
+            "record_key": f"{simulation_id}:{index}:{row.get('match_id')}",
+            "simulation_id": simulation_id,
+            **row,
+        }
+        for index, row in enumerate(summary.metadata.get("sample_results") or [])
+    ]
+    workflow.context.storage.write_records(
+        SIMULATION_RUNS,
+        sample_rows,
+        source="simulate_tournament",
+        run_id=workflow.context.run_id,
+    )
+    return {
+        "ran": True,
+        "simulation_id": simulation_id,
+        "mode": mode,
+        "iterations": summary.iterations,
+        "active_fixture_count": metadata["active_fixture_count"],
+        "active_fixture_fingerprint": metadata["active_fixture_fingerprint"],
+        "trigger": trigger,
+    }
 
 
 def command_build_site(args: argparse.Namespace) -> int:
@@ -586,30 +723,16 @@ def command_simulate_tournament(args: argparse.Namespace) -> int:
         simulation_inputs = _simulation_inputs_from_current_state(workflow)
         mode = "current_state"
     summary = TournamentSimulator(simulation_inputs).run()
+    state = load_tournament_state(workflow.context.storage)
     simulation_id = f"simulation_{utc_label()}"
-    summary_row = {
-        "record_key": simulation_id,
-        "simulation_id": simulation_id,
-        "mode": mode,
-        "iterations": summary.iterations,
-        "seed": summary.seed,
-        "distributions": summary.distributions,
-        "metadata": summary.metadata,
-        "srf_bonus": evaluate_srf_bonus_questions(summary),
-        "srf_best_answers": best_srf_bonus_answers(summary),
-        "twenty_min_bonus": evaluate_twenty_min_bonus_questions(summary),
-        "twenty_min_best_answers": best_twenty_min_bonus_answers(summary),
-    }
-    workflow.context.storage.write_records(SIMULATION_SUMMARY, [summary_row], source="simulate_tournament", run_id=workflow.context.run_id)
-    sample_rows = [
-        {
-            "record_key": f"{simulation_id}:{index}:{row.get('match_id')}",
-            "simulation_id": simulation_id,
-            **row,
-        }
-        for index, row in enumerate(summary.metadata.get("sample_results") or [])
-    ]
-    workflow.context.storage.write_records(SIMULATION_RUNS, sample_rows, source="simulate_tournament", run_id=workflow.context.run_id)
+    _write_simulation_outputs(
+        workflow,
+        summary,
+        simulation_id=simulation_id,
+        mode=mode,
+        state=state,
+        trigger="manual",
+    )
 
     # Daily maintenance: regenerate entity-alias candidates and revalidate stored team
     # labels. These change rarely (squads are fixed during the tournament), so daily
