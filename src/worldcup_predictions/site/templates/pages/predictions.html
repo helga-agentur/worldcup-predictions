@@ -40,29 +40,37 @@
     <div class="summary__card">
       <dt class="summary__label">{{ t("summary.srf_points") }}</dt>
       <dd class="summary__value">{{ summary.srf_points_display }}</dd>
-      {% if summary_extras.srf_avg_text %}<dd class="summary__sub numeric">{{ summary_extras.srf_avg_text }}</dd>{% endif %}
+      {% if summary_extras.srf_avg_text %}
+      <dd class="summary__chips">
+        <span class="summary__chip numeric">{{ summary_extras.srf_avg_text }}</span>
+      </dd>
+      {% endif %}
     </div>
     <div class="summary__card">
       <dt class="summary__label">{{ t("summary.twenty_min_points") }}</dt>
       <dd class="summary__value">{{ summary.twenty_min_points_display }}</dd>
-      {% if summary_extras.twenty_min_avg_text %}<dd class="summary__sub numeric">{{ summary_extras.twenty_min_avg_text }}</dd>{% endif %}
+      {% if summary_extras.twenty_min_avg_text %}
+      <dd class="summary__chips">
+        <span class="summary__chip numeric">{{ summary_extras.twenty_min_avg_text }}</span>
+      </dd>
+      {% endif %}
     </div>
     <div class="summary__card">
       <dt class="summary__label">{{ t("summary.hit_rate") }}</dt>
       <dd class="summary__value">{{ summary_extras.hit_rate_text }}</dd>
       {% if summary_extras.has_hits %}
-      <dd class="summary__segments" aria-label="{{ summary_extras.hit_breakdown_text }}">
-        <span class="summary__segment" data-result="exact">
-          <span class="summary__segment-value">{{ summary_extras.hit_counts.exact }}</span>
-          <span class="summary__segment-label">{{ t("summary.exact_short") }}</span>
+      <dd class="summary__chips" aria-label="{{ summary_extras.hit_breakdown_text }}">
+        <span class="summary__chip" data-result="exact">
+          <span class="summary__chip-value">{{ summary_extras.hit_counts.exact }}</span>
+          <span class="summary__chip-label">{{ t("summary.exact_short") }}</span>
         </span>
-        <span class="summary__segment" data-result="trend">
-          <span class="summary__segment-value">{{ summary_extras.hit_counts.trend }}</span>
-          <span class="summary__segment-label">{{ t("summary.correct_short") }}</span>
+        <span class="summary__chip" data-result="trend">
+          <span class="summary__chip-value">{{ summary_extras.hit_counts.trend }}</span>
+          <span class="summary__chip-label">{{ t("summary.correct_short") }}</span>
         </span>
-        <span class="summary__segment" data-result="miss">
-          <span class="summary__segment-value">{{ summary_extras.hit_counts.miss }}</span>
-          <span class="summary__segment-label">{{ t("summary.wrong_short") }}</span>
+        <span class="summary__chip" data-result="miss">
+          <span class="summary__chip-value">{{ summary_extras.hit_counts.miss }}</span>
+          <span class="summary__chip-label">{{ t("summary.wrong_short") }}</span>
         </span>
       </dd>
       <dd class="summary__hitbar" aria-hidden="true">
@@ -75,7 +83,11 @@
     <div class="summary__card">
       <dt class="summary__label">{{ t("summary.open") }}</dt>
       <dd class="summary__value">{{ summary.future }}</dd>
-      {% if summary_extras.next_kickoff %}<dd class="summary__sub numeric">{{ t("summary.next_kickoff") }}: {{ summary_extras.next_kickoff }}</dd>{% endif %}
+      {% if summary_extras.next_kickoff %}
+      <dd class="summary__chips">
+        <span class="summary__chip numeric">{{ t("summary.next_kickoff") }}: {{ summary_extras.next_kickoff }}</span>
+      </dd>
+      {% endif %}
     </div>
   </dl>
 </section>
