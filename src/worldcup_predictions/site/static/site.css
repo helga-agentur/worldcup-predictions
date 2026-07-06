@@ -522,10 +522,10 @@ h2 {
 .summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
+  gap: var(--space-sm);
   padding: 0;
-  background: var(--line);
-  border: 1px solid var(--line);
+  background: transparent;
+  border: 0;
 }
 
 .summary__card {
@@ -533,6 +533,7 @@ h2 {
   gap: var(--space-4);
   min-width: 0;
   padding: 18px;
+  border: 1px solid var(--line);
   background: var(--paper);
   text-align: center;
 }
@@ -1293,6 +1294,9 @@ main p a:hover {
   display: grid;
   gap: var(--space-10);
   margin-top: var(--space-md);
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: var(--paper);
 }
 
 .odds__row {
@@ -1366,12 +1370,14 @@ main p a:hover {
   text-decoration: none;
 }
 
-@media (max-width: 900px) {
-  .summary {
+@media (max-width: 1272px) {
+  .homepage-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+}
 
-  .homepage-grid {
+@media (max-width: 900px) {
+  .summary {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1388,16 +1394,40 @@ main p a:hover {
     font-size: 1.15rem;
   }
 
+  .match-card__details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .match-card__when {
-    grid-auto-flow: column;
-    justify-content: start;
-    align-items: baseline;
-    gap: var(--space-10);
+    width: 100%;
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: center;
+    justify-items: center;
+    align-items: start;
+    gap: var(--space-2);
+    text-align: center;
+  }
+
+  .match-card__matchup {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: var(--space-8);
+  }
+
+  .match-card__team[data-side="home"],
+  .match-card__team[data-side="away"] {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .match-card__team[data-side="home"] .match-card__team-identity {
+    justify-content: center;
   }
 
   .match-card__tips {
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: row;
+    grid-auto-columns: unset;
   }
 
   .heatmap {
@@ -1447,31 +1477,6 @@ main p a:hover {
     flex-direction: row;
     flex-wrap: nowrap;
     gap: var(--space-sm);
-  }
-
-  .match-card__details {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .match-card__matchup {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: center;
-    gap: var(--space-8);
-  }
-
-  .match-card__team[data-side="home"],
-  .match-card__team[data-side="away"] {
-    justify-content: center;
-    text-align: center;
-  }
-
-  .match-card__team[data-side="home"] .match-card__team-identity {
-    justify-content: center;
-  }
-
-  .match-card__tips {
-    grid-auto-flow: row;
-    grid-auto-columns: unset;
   }
 
   .detail-picks {
