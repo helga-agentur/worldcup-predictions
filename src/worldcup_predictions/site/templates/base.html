@@ -30,6 +30,7 @@
   {% endif %}
   <script>
     (function () {
+      document.documentElement.dataset.js = "true";
       var match = document.cookie.match(/(?:^|; )helga_theme=(dark|light)/);
       var theme = match ? match[1] : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       document.documentElement.dataset.theme = theme;

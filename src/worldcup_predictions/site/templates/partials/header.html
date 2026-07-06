@@ -1,19 +1,53 @@
+{% from "partials/icons.html" import icon %}
 <header class="site-header">
   <a class="brand" href="/{{ locale }}/" aria-label="{{ t('site.heading') }}">
     {% include "partials/logo.html" %}
   </a>
-  <nav class="site-header__nav" aria-label="{{ t('nav.main') }}">
-    <label class="theme-switch">
-      <span class="theme-switch__label">{{ t("theme.label") }}</span>
-      <input class="theme-switch__input" type="checkbox" data-theme-toggle aria-label="{{ t('theme.toggle') }}">
-      <span class="theme-switch__track" aria-hidden="true">
-        <span class="theme-switch__thumb"></span>
-      </span>
-    </label>
-    <div class="language-switch" aria-label="{{ t('nav.language') }}">
-      {% for item in language_switch_links %}
-      <a class="language-switch__link" href="{{ item.href }}" lang="{{ item.locale }}" data-analytics-event="helga_language_switch" data-analytics-language="{{ item.locale }}"{% if item.current %} aria-current="true"{% endif %}>{{ item.label }}</a>
-      {% endfor %}
-    </div>
-  </nav>
+  <button class="menu-toggle" type="button" data-menu-toggle aria-controls="site-menu" aria-expanded="false" aria-label="{{ t('nav.open_menu') }}" data-open-label="{{ t('nav.open_menu') }}" data-close-label="{{ t('nav.close_menu') }}">
+    <span class="menu-toggle__icon menu-toggle__icon--open">{{ icon("menu") }}</span>
+    <span class="menu-toggle__icon menu-toggle__icon--close">{{ icon("x") }}</span>
+  </button>
 </header>
+<nav id="site-menu" class="site-menu" data-site-menu data-state="closed" aria-label="{{ t('nav.main') }}">
+  <div class="site-menu__surface" data-site-menu-surface>
+    <div class="site-menu__inner">
+      <ul class="site-menu__list">
+        <li class="site-menu__item">
+          <a class="site-menu__link" href="/{{ locale }}/"{% if current_url == "/" ~ locale ~ "/" %} aria-current="page"{% endif %}>
+            {{ icon("home") }}
+            <span>{{ t("nav.home") }}</span>
+          </a>
+        </li>
+        <li class="site-menu__item">
+          <a class="site-menu__link" href="{{ future_list_path }}"{% if current_url == future_list_path %} aria-current="page"{% endif %}>
+            {{ icon("calendar") }}
+            <span>{{ t("nav.upcoming") }}</span>
+          </a>
+        </li>
+        <li class="site-menu__item">
+          <a class="site-menu__link" href="{{ past_list_path }}"{% if current_url == past_list_path %} aria-current="page"{% endif %}>
+            {{ icon("history") }}
+            <span>{{ t("nav.past") }}</span>
+          </a>
+        </li>
+        <li class="site-menu__item">
+          <a class="site-menu__link" href="{{ tournament_path }}"{% if current_url == tournament_path %} aria-current="page"{% endif %}>
+            {{ icon("trophy") }}
+            <span>{{ t("nav.tournament") }}</span>
+          </a>
+        </li>
+      </ul>
+      <div class="site-menu__footer">
+        <div class="language-switch" aria-label="{{ t('nav.language') }}">
+          {% for item in language_switch_links %}
+          <a class="language-switch__link" href="{{ item.href }}" lang="{{ item.locale }}" data-analytics-event="helga_language_switch" data-analytics-language="{{ item.locale }}"{% if item.current %} aria-current="true"{% endif %}>{{ item.label }}</a>
+          {% endfor %}
+        </div>
+        <button class="theme-button" type="button" data-theme-toggle aria-label="{{ t('theme.toggle') }}">
+          {{ icon("moon") }}
+          <span>{{ t("theme.label") }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</nav>
