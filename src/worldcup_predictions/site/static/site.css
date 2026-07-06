@@ -647,7 +647,6 @@ h2 {
 }
 
 .section__heading + .match-cards,
-.section__heading + .match-rows,
 .section__heading + .odds {
   margin-top: var(--space-md);
 }
@@ -992,74 +991,6 @@ main p a:hover {
 .prob[data-full="true"] .bar__legend {
   font-size: var(--text-md);
   margin-top: var(--space-8);
-}
-
-/* ---------- past match rows ---------- */
-
-.match-rows {
-  display: grid;
-  margin-top: var(--space-md);
-  border: 1px solid var(--line);
-  background: var(--paper);
-}
-
-.match-row {
-  display: grid;
-  grid-template-columns: 188px minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 104px;
-  gap: var(--space-8) var(--space-md);
-  align-items: center;
-  padding: 13px 18px;
-  border-bottom: 1px solid var(--line);
-  color: var(--ink);
-  text-decoration: none;
-  font-size: var(--text-md);
-}
-
-.match-row:last-child {
-  border-bottom: 0;
-}
-
-.match-row:hover {
-  background: var(--hover-row);
-}
-
-.match-row:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
-}
-
-.match-row__date {
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-
-.match-row__match {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.match-row__result {
-  color: var(--muted);
-  font-size: var(--text-md);
-}
-
-.match-row__result strong {
-  color: var(--ink);
-  font-weight: 400;
-  font-family: "Degular", "Cadiz", system-ui, sans-serif;
-  font-size: 1.05rem;
-}
-
-.match-row__points {
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-
-.match-row .status,
-.match-row .hit-chip {
-  justify-self: end;
 }
 
 .hit-chip[data-result="exact"] {
@@ -1413,31 +1344,6 @@ main p a:hover {
   .match-card__tips {
     grid-auto-flow: column;
     grid-auto-columns: minmax(0, 1fr);
-  }
-
-  .match-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .match-row__date,
-  .match-row__result,
-  .match-row__points {
-    grid-column: 1 / -1;
-  }
-
-  .match-row__points:empty {
-    display: none;
-  }
-
-  .match-row .status,
-  .match-row .hit-chip {
-    grid-row: 2;
-    grid-column: 2;
-  }
-
-  .match-row__match {
-    grid-row: 2;
-    grid-column: 1;
   }
 
   .detail-hero {

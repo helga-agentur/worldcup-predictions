@@ -23,7 +23,8 @@
     {% if list_kind == "future" %}
       {% include "partials/match_cards.html" %}
     {% else %}
-      {% include "partials/match_rows.html" %}
+      {% set match_card_variant = "past" %}
+      {% include "partials/match_cards.html" %}
     {% endif %}
   {% else %}
     <p class="empty">{{ empty_text }}</p>
