@@ -47,8 +47,12 @@ FONT_ASSET_FILES = (
 )
 BRACKETRY_ASSET_FILE = "assets/vendor/bracketry-1.1.3.esm.js"
 CONFETTI_ASSET_FILE = "assets/vendor/canvas-confetti-1.9.4.module.mjs"
+OG_IMAGE_ASSET_FILE = "assets/world-cup-2026-predictions-og.png"
+OG_IMAGE_WIDTH = 1200
+OG_IMAGE_HEIGHT = 630
 STATIC_ASSET_FILES = (
     "assets/favicon.svg",
+    OG_IMAGE_ASSET_FILE,
     BRACKETRY_ASSET_FILE,
     CONFETTI_ASSET_FILE,
     *FONT_ASSET_FILES,
@@ -468,6 +472,11 @@ def _site_context(
         "generated_at_display": _date_time_text(generated_at),
         "asset_css": f"/{asset_path}",
         "asset_js": f"/{script_path}",
+        "og_image_url": _absolute_site_url(f"/{OG_IMAGE_ASSET_FILE}", base_url=base_url),
+        "og_image_width": OG_IMAGE_WIDTH,
+        "og_image_height": OG_IMAGE_HEIGHT,
+        "og_image_type": "image/png",
+        "og_image_alt": catalog.translate("seo.og_image_alt"),
         "bracketry_asset": f"/{BRACKETRY_ASSET_FILE}",
         "confetti_asset": f"/{CONFETTI_ASSET_FILE}",
         "gtm_container_id": (gtm_container_id or "").strip(),

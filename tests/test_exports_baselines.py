@@ -1077,8 +1077,10 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertEqual(len(list((result.output_dir / "assets").glob("theme.*.js"))), 1)
             self.assertTrue((result.output_dir / "assets" / "fonts" / "CadizWeb-Regular.woff2").exists())
             self.assertTrue((result.output_dir / "assets" / "fonts" / "Degular-Regular.woff2").exists())
+            self.assertTrue((result.output_dir / "assets" / "world-cup-2026-predictions-og.png").exists())
             self.assertIn("assets/fonts/CadizWeb-Regular.woff2", result.asset_files)
             self.assertIn("assets/fonts/Degular-Regular.woff2", result.asset_files)
+            self.assertIn("assets/world-cup-2026-predictions-og.png", result.asset_files)
             redirect_html = (result.output_dir / "index.html").read_text(encoding="utf-8")
             html = (result.output_dir / "de" / "index.html").read_text(encoding="utf-8")
             en_html = (result.output_dir / "en" / "index.html").read_text(encoding="utf-8")
@@ -1106,9 +1108,24 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<link rel="alternate" type="text/markdown" href="http://127.0.0.1:8000/llms.txt" title="llms.txt">', html)
             self.assertIn('<meta property="og:site_name" content="Helga WM Prognosen">', html)
             self.assertIn('<meta property="og:url" content="http://127.0.0.1:8000/de/">', html)
+            self.assertIn('<meta property="og:image" content="http://127.0.0.1:8000/assets/world-cup-2026-predictions-og.png">', html)
+            self.assertIn('<meta property="og:image:width" content="1200">', html)
+            self.assertIn('<meta property="og:image:height" content="630">', html)
+            self.assertIn('<meta property="og:image:type" content="image/png">', html)
+            self.assertIn(
+                '<meta property="og:image:alt" content="Illustration einer WM-Prognoseanalyse mit Fussballspielerinnen und Fussballspielern, Diagrammen und einer 2:1-Sprechblase.">',
+                html,
+            )
             self.assertIn('<meta property="og:locale" content="de_CH">', html)
             self.assertIn('<meta property="og:locale:alternate" content="en_US">', html)
-            self.assertIn('<meta name="twitter:card" content="summary">', html)
+            self.assertIn('<meta name="twitter:card" content="summary_large_image">', html)
+            self.assertIn('<meta name="twitter:image" content="http://127.0.0.1:8000/assets/world-cup-2026-predictions-og.png">', html)
+            self.assertIn(
+                '<meta name="twitter:image:alt" content="Illustration einer WM-Prognoseanalyse mit Fussballspielerinnen und Fussballspielern, Diagrammen und einer 2:1-Sprechblase.">',
+                html,
+            )
+            self.assertIn('<meta property="og:image" content="http://127.0.0.1:8000/assets/world-cup-2026-predictions-og.png">', detail)
+            self.assertIn('<meta name="twitter:card" content="summary_large_image">', detail)
             self.assertEqual(html.count('<script type="application/ld+json">'), 1)
             self.assertEqual(detail.count('<script type="application/ld+json">'), 1)
             self.assertEqual(_jsonld_node(home_jsonld, "Organization")["name"], "Helga")

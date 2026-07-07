@@ -105,6 +105,7 @@ Generated files include:
 - `public/current/assets/site.<hash>.css`
 - `public/current/assets/theme.<hash>.js`
 - `public/current/assets/favicon.svg`
+- `public/current/assets/world-cup-2026-predictions-og.png`
 - `public/current/sitemap.xml`
 - `public/current/robots.txt`
 - `public/current/llms.txt`

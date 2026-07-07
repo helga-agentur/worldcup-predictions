@@ -88,6 +88,7 @@
   "seo.match.title": "{match} Prediction | World Cup 2026",
   "seo.match.title_final": "{match} result {score} | World Cup 2026 prediction",
   "seo.match.title_with_score": "{match} prediction: {score} | World Cup 2026",
+  "seo.og_image_alt": "Illustration of World Cup prediction analysis with football players, charts, and a 2:1 score bubble.",
   "seo.past.description": "Past and locked World Cup 2026 matches with published SRF and 20min tips, final scores, points, and hit quality as results arrive.",
   "seo.past.title": "Past World Cup 2026 Matches & Tip Results | Helga",
   "seo.tournament.description": "World Cup 2026 title probabilities for every remaining team, powered by 20,000 tournament simulations and the current match forecast path.",
