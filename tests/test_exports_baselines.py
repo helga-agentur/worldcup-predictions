@@ -360,21 +360,91 @@ class ExportAndBaselineTest(unittest.TestCase):
                 ],
                 source="test",
             )
+            storage.write_records(
+                PUBLISHED_PREDICTION_LEDGER,
+                [
+                    {
+                        "record_key": "published-m93",
+                        "fixture_key": "2026-07-06T19:00:00Z|POR|ESP",
+                        "event_date": "2026-07-06T19:00:00Z",
+                        "home_team": "Portugal",
+                        "away_team": "Spain",
+                        "status": "future",
+                        "most_likely_score": "1:1",
+                        "most_likely_home": 1,
+                        "most_likely_away": 1,
+                        "metadata": {
+                            "prediction_metadata": {
+                                "advancement_probabilities": {"home": 0.37, "away": 0.63},
+                                "features": {"home_rating": 2014, "away_rating": 2122},
+                            }
+                        },
+                    },
+                    {
+                        "record_key": "published-m94",
+                        "fixture_key": "2026-07-07T00:00:00Z|USA|BEL",
+                        "event_date": "2026-07-07T00:00:00Z",
+                        "home_team": "United States",
+                        "away_team": "Belgium",
+                        "status": "future",
+                        "most_likely_score": "1:1",
+                        "most_likely_home": 1,
+                        "most_likely_away": 1,
+                        "metadata": {
+                            "prediction_metadata": {
+                                "advancement_probabilities": {"home": 0.34, "away": 0.66},
+                                "features": {"home_rating": 1889, "away_rating": 1962},
+                            }
+                        },
+                    },
+                ],
+                source="test",
+            )
 
             result = build_site(project_root=root, storage=storage, gtm_container_id="", base_url="http://127.0.0.1:8000/")
             tournament_html = (result.output_dir / "en" / "tournament-forecast" / "index.html").read_text(encoding="utf-8")
+            bracket_json = tournament_html.split(
+                '<script type="application/json" id="tournament-bracket-data">',
+                1,
+            )[1]
+            bracket_json = bracket_json.split("</script>", 1)[0]
+            bracket_data = json.loads(bracket_json)
+            timeline_json = tournament_html.split(
+                '<script type="application/json" id="tournament-bracket-timeline">',
+                1,
+            )[1]
+            timeline_json = timeline_json.split("</script>", 1)[0]
+            timeline_data = json.loads(timeline_json)
 
             self.assertTrue((result.output_dir / "assets" / "vendor" / "bracketry-1.1.3.esm.js").exists())
             self.assertIn('import { createBracket } from "/assets/vendor/bracketry-1.1.3.esm.js";', tournament_html)
             self.assertIn('class="bracket-tree" data-bracketry-root', tournament_html)
             self.assertNotIn('"matchLabel": "M73"', tournament_html)
             self.assertNotIn('"name": "Round of 32"', tournament_html)
-            self.assertEqual(tournament_html.count('"matchLabel": "M93"'), 1)
-            self.assertIn('"matchStatus": "Mon, 06.07., 21:00"', tournament_html)
+            self.assertIn('"matchStatus": "Forecast"', tournament_html)
             self.assertIn('"matchLabel": "M93"', tournament_html)
+            self.assertIn("Forecast simulation", tournament_html)
+            self.assertNotIn("Projected knockout path", tournament_html)
+            self.assertIn('data-bracket-play', tournament_html)
+            self.assertIn('data-bracket-reset disabled', tournament_html)
+            self.assertIn(">Play<", tournament_html)
+            self.assertIn(">Pause<", tournament_html)
+            self.assertIn(">Reset<", tournament_html)
             self.assertIn("🇵🇹 Portugal", tournament_html)
             self.assertIn("🇪🇸 Spain", tournament_html)
-            self.assertIn("Winner Round of 16 match 5", tournament_html)
+            self.assertIn("🇧🇪 Belgium", tournament_html)
+            initial_m98 = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M98")
+            self.assertEqual([side["contestantId"] for side in initial_m98["sides"]], ["W93", "W94"])
+            self.assertFalse(any("scores" in side for side in initial_m98["sides"]))
+            m93_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M93")
+            self.assertEqual(m93_step["winner"], "ESP")
+            m93_carry = next(match for match in m93_step["matches"] if match["matchLabel"] == "M98")
+            self.assertEqual([side["contestantId"] for side in m93_carry["sides"]], ["ESP", "W94"])
+            m98_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M98")
+            m98 = next(match for match in m98_step["matches"] if match["matchLabel"] == "M98")
+            self.assertEqual([side["contestantId"] for side in m98["sides"]], ["ESP", "BEL"])
+            self.assertEqual([side["scores"][0]["mainScore"] for side in m98["sides"]], [1, 0])
+            self.assertTrue(m98["sides"][0]["isWinner"])
 
     def test_published_ledger_replaces_stale_shifted_fixture_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

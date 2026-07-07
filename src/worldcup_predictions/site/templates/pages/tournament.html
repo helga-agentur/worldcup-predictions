@@ -33,9 +33,24 @@
   <header class="section__heading">
     <section class="section__heading-copy">
       <h2 id="bracket-title">{{ t("tournament.bracket.title") }}</h2>
-      <p>{{ t("tournament.bracket.description") }}</p>
     </section>
   </header>
+  <div class="bracket-controls" aria-label="{{ t("tournament.bracket.controls") }}">
+    <button class="bracket-control" type="button" data-bracket-play aria-label="{{ t("tournament.bracket.play") }}">
+      <span data-bracket-play-label>
+        {{ icon("play") }}
+        <span>{{ t("tournament.bracket.play") }}</span>
+      </span>
+      <span data-bracket-pause-label hidden>
+        {{ icon("pause") }}
+        <span>{{ t("tournament.bracket.pause") }}</span>
+      </span>
+    </button>
+    <button class="bracket-control" type="button" data-bracket-reset disabled>
+      {{ icon("rotate-ccw") }}
+      <span>{{ t("tournament.bracket.reset") }}</span>
+    </button>
+  </div>
   <div class="bracket-tree" data-bracketry-root aria-label="{{ t("tournament.bracket.title") }}"></div>
   <div class="bracket-tree__fallback" data-bracket-fallback>
     {% for row in tournament_bracket.fallback_rows %}
@@ -47,12 +62,18 @@
     {% endfor %}
   </div>
   <script type="application/json" id="tournament-bracket-data">{{ tournament_bracket.data_json|safe }}</script>
+  <script type="application/json" id="tournament-bracket-timeline">{{ tournament_bracket.timeline_json|safe }}</script>
   <script type="module">
     import { createBracket } from {{ bracketry_asset|tojson }};
 
     const wrapper = document.querySelector("[data-bracketry-root]");
     const fallback = document.querySelector("[data-bracket-fallback]");
     const dataElement = document.getElementById("tournament-bracket-data");
+    const timelineElement = document.getElementById("tournament-bracket-timeline");
+    const playButton = document.querySelector("[data-bracket-play]");
+    const resetButton = document.querySelector("[data-bracket-reset]");
+    const playLabel = playButton?.querySelector("[data-bracket-play-label]");
+    const pauseLabel = playButton?.querySelector("[data-bracket-pause-label]");
     const escapeHtml = (value) => String(value || "").replace(/[&<>"']/g, (char) => ({
       "&": "&amp;",
       "<": "&lt;",
@@ -68,7 +89,10 @@
     if (wrapper && dataElement) {
       try {
         const bracketData = JSON.parse(dataElement.textContent || "{}");
-        const bracket = createBracket(bracketData, wrapper, {
+        const cloneData = (value) => JSON.parse(JSON.stringify(value));
+        const initialBracketData = cloneData(bracketData);
+        const bracketTimeline = JSON.parse(timelineElement?.textContent || "{\"steps\": []}");
+        const bracket = createBracket(cloneData(initialBracketData), wrapper, {
           ...responsiveOptions(),
           width: "100%",
           height: "100%",
@@ -105,6 +129,89 @@
         const refreshBracket = () => bracket.applyNewOptions(responsiveOptions());
         window.matchMedia("(max-width: 760px)").addEventListener("change", refreshBracket);
         window.matchMedia("(max-width: 1100px)").addEventListener("change", refreshBracket);
+        const timelineSteps = Array.isArray(bracketTimeline.steps) ? bracketTimeline.steps : [];
+        let timelineTimer = 0;
+        let timelineIndex = 0;
+        const setSimulationState = (state) => {
+          wrapper.dataset.simulationState = state;
+          const isRunning = state === "running";
+          if (playButton) {
+            playButton.disabled = !timelineSteps.length;
+            playButton.setAttribute(
+              "aria-label",
+              isRunning ? {{ t("tournament.bracket.pause")|tojson }} : {{ t("tournament.bracket.play")|tojson }}
+            );
+            playButton.dataset.bracketControlState = isRunning ? "pause" : "play";
+          }
+          if (playLabel && pauseLabel) {
+            playLabel.hidden = isRunning;
+            pauseLabel.hidden = !isRunning;
+          }
+          if (resetButton) {
+            resetButton.disabled = state === "idle";
+          }
+        };
+        const applyStep = (step) => {
+          const matches = Array.isArray(step.matches) ? step.matches : [];
+          if (matches.length) {
+            bracket.applyMatchesUpdates(matches);
+          }
+          if (step.winner) {
+            bracket.highlightContestantHistory(step.winner);
+          }
+        };
+        const resetSimulation = () => {
+          window.clearTimeout(timelineTimer);
+          timelineTimer = 0;
+          timelineIndex = 0;
+          bracket.replaceData(cloneData(initialBracketData));
+          bracket.highlightContestantHistory("");
+          refreshBracket();
+          setSimulationState("idle");
+        };
+        const pauseTimeline = () => {
+          window.clearTimeout(timelineTimer);
+          timelineTimer = 0;
+          setSimulationState("paused");
+        };
+        const scheduleNextStep = (delay) => {
+          timelineTimer = window.setTimeout(playNextStep, delay);
+        };
+        const playNextStep = () => {
+          const step = timelineSteps[timelineIndex];
+          if (!step) {
+            timelineTimer = 0;
+            setSimulationState("done");
+            return;
+          }
+          applyStep(step);
+          timelineIndex += 1;
+          scheduleNextStep(1100);
+        };
+        const playTimeline = () => {
+          if (!timelineSteps.length) {
+            return;
+          }
+          if (wrapper.dataset.simulationState === "running") {
+            pauseTimeline();
+            return;
+          }
+          const wasPaused = wrapper.dataset.simulationState === "paused";
+          if (!wasPaused) {
+            resetSimulation();
+          }
+          if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            timelineSteps.slice(timelineIndex).forEach(applyStep);
+            timelineIndex = timelineSteps.length;
+            setSimulationState("done");
+          } else {
+            setSimulationState("running");
+            scheduleNextStep(wasPaused ? 300 : 700);
+          }
+        };
+        playButton?.addEventListener("click", playTimeline);
+        resetButton?.addEventListener("click", resetSimulation);
+        setSimulationState("idle");
       } catch (error) {
         wrapper.hidden = true;
         if (fallback) {

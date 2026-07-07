@@ -422,6 +422,7 @@ html[data-js="true"] .site-menu[data-state="open"] .site-menu__footer {
 .language-switch__link:focus-visible,
 .breadcrumb__link:focus-visible,
 .resources__link:focus-visible,
+.bracket-control:focus-visible,
 main p a:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
@@ -1359,6 +1360,55 @@ html[data-theme="dark"] .tag[data-result="trend"] {
   background: var(--paper);
 }
 
+.bracket-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  justify-content: flex-start;
+  margin-top: var(--space-md);
+}
+
+.bracket-control {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  color: var(--helga-blue);
+  background: var(--paper);
+  font: inherit;
+}
+
+.bracket-control .icon {
+  flex: 0 0 auto;
+  font-size: 1rem;
+}
+
+.bracket-control [data-bracket-play-label],
+.bracket-control [data-bracket-pause-label] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.bracket-control [hidden] {
+  display: none;
+}
+
+.bracket-control:hover:not(:disabled) {
+  color: var(--paper);
+  border-color: var(--helga-blue);
+  background: var(--helga-blue);
+}
+
+.bracket-control:disabled {
+  cursor: default;
+  color: var(--muted);
+  opacity: 0.54;
+}
+
 .bracket-tree[hidden] {
   display: none;
 }
@@ -1369,10 +1419,12 @@ html[data-theme="dark"] .tag[data-result="trend"] {
 
 .bracket-tree .match-body {
   background: var(--paper);
+  transition: background-color 0.24s ease, border-color 0.24s ease;
 }
 
 .bracket-tree .match-status {
   color: var(--muted);
+  transition: color 0.24s ease, border-color 0.24s ease;
 }
 
 .bracket-tree__match-label {
