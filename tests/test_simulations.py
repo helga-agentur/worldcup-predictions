@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import itertools
 import math
+import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 
 from worldcup_predictions.cli import (
     _latest_current_state_simulation_fixture_fingerprint,
     _simulation_fixture_metadata,
     _simulation_known_results,
     _simulation_known_winners,
+    _simulation_score_matrix_provider,
     _simulation_score_matrices,
     build_parser,
 )
@@ -29,6 +33,7 @@ from worldcup_predictions.plugins.providers.ch_srf import (
     evaluate_srf_bonus_questions,
 )
 from worldcup_predictions.simulations import SimulationInputs, TournamentSimulator, pair_key
+from worldcup_predictions.storage import DuckDBStorage
 
 
 class TournamentSimulationTest(unittest.TestCase):
@@ -179,6 +184,28 @@ class TournamentSimulationSamplingRegressionTest(unittest.TestCase):
         self.assertIn("simulated", sources)
         self.assertIn("Final", stages)
 
+    def test_hypothetical_knockout_pairs_use_generated_matrices_before_fallback(self) -> None:
+        def provider(_match_id: str, _home: str, _away: str) -> list[ScoreMatrixEntry]:
+            return [ScoreMatrixEntry(2, 0, 1.0)]
+
+        inputs = _mid_tournament_inputs()
+        inputs = SimulationInputs(
+            fixtures=inputs.fixtures,
+            known_results=inputs.known_results,
+            known_winners=inputs.known_winners,
+            score_matrices=inputs.score_matrices,
+            score_matrix_provider=provider,
+        )
+        summary = TournamentSimulator(inputs, iterations=80, seed=20260611).run()
+
+        matrix_sources = summary.metadata["matrix_source_counts"]
+        self.assertGreater(matrix_sources.get("generated", 0), 0)
+        self.assertEqual(matrix_sources.get("fallback", 0), 0)
+        self.assertEqual(summary.metadata["forecast_champion"], summary.distributions["champion"][0]["answer"])
+        final = next(row for row in summary.metadata["forecast_results"] if row["match_id"] == "M104")
+        self.assertEqual(final["winner"], summary.metadata["forecast_champion"])
+        self.assertEqual(final["matrix_source"], "generated")
+
 
 class KnockoutShootoutResolutionTest(unittest.TestCase):
     """Fixed knockout ties must advance the real winner when it is known."""
@@ -263,6 +290,25 @@ class SimulationInputWiringTest(unittest.TestCase):
         self.assertEqual(matrices[state.fixtures[1].to_fixture().key], matrix)
         self.assertEqual(matrices[pair_key("France", "Sweden")], matrix)
         self.assertNotIn(pair_key("Mexico", "South Africa"), matrices)
+
+    def test_cli_score_matrix_provider_generates_hypothetical_knockout_matrix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            fixture = FixtureRecord(
+                event_date="2026-07-14T19:00:00Z",
+                home_team=TeamRef("Spain", "ESP"),
+                away_team=TeamRef("France", "FRA"),
+                stage="Semi-final",
+                metadata={"match_number": 101},
+            )
+            state = TournamentState(fixtures=[fixture], results=[], standings={})
+            workflow = SimpleNamespace(context=SimpleNamespace(storage=storage, event_results=[]))
+
+            provider = _simulation_score_matrix_provider(workflow, state, include_current_results=True)
+            matrix = provider("M101", "Spain", "France")
+
+        self.assertTrue(matrix)
+        self.assertAlmostEqual(sum(entry.probability for entry in matrix), 1.0, places=9)
 
     def test_known_winners_require_a_level_score_and_source_consensus(self) -> None:
         group_fixture = FixtureRecord(

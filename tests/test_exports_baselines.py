@@ -436,6 +436,64 @@ class ExportAndBaselineTest(unittest.TestCase):
                 ],
                 source="test",
             )
+            storage.write_records(
+                SIMULATION_SUMMARY,
+                [
+                    {
+                        "record_key": "sim-bracket-path",
+                        "simulation_id": "sim-bracket-path",
+                        "iterations": 20000,
+                        "distributions": {
+                            "champion": [
+                                {"answer": "Belgium", "probability": 0.55},
+                                {"answer": "Portugal", "probability": 0.45},
+                            ]
+                        },
+                        "metadata": {
+                            "forecast_champion": "Belgium",
+                            "forecast_results": [
+                                {
+                                    "match_id": "M93",
+                                    "home_team": "Portugal",
+                                    "away_team": "Spain",
+                                    "score": "2:0",
+                                    "home_score": 2,
+                                    "away_score": 0,
+                                    "stage": "Round of 16",
+                                    "winner": "Portugal",
+                                    "source": "simulated",
+                                    "matrix_source": "generated",
+                                },
+                                {
+                                    "match_id": "M94",
+                                    "home_team": "United States",
+                                    "away_team": "Belgium",
+                                    "score": "0:1",
+                                    "home_score": 0,
+                                    "away_score": 1,
+                                    "stage": "Round of 16",
+                                    "winner": "Belgium",
+                                    "source": "simulated",
+                                    "matrix_source": "stored",
+                                },
+                                {
+                                    "match_id": "M98",
+                                    "home_team": "Portugal",
+                                    "away_team": "Belgium",
+                                    "score": "0:1",
+                                    "home_score": 0,
+                                    "away_score": 1,
+                                    "stage": "Quarter-final",
+                                    "winner": "Belgium",
+                                    "source": "simulated",
+                                    "matrix_source": "generated",
+                                },
+                            ],
+                        },
+                    }
+                ],
+                source="simulate_tournament",
+            )
 
             result = build_site(project_root=root, storage=storage, gtm_container_id="", base_url="http://127.0.0.1:8000/")
             tournament_html = (result.output_dir / "en" / "tournament-forecast" / "index.html").read_text(encoding="utf-8")
@@ -497,22 +555,23 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertEqual(initial_m98["matchStatus"], "Open")
             self.assertFalse(any("scores" in side for side in initial_m98["sides"]))
             m93_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M93")
-            self.assertEqual(m93_step["winner"], "ESP")
+            self.assertEqual(m93_step["winner"], "POR")
             self.assertNotIn("preAdvanceToRoundIndex", m93_step)
             m93 = next(match for match in m93_step["matches"] if match["matchLabel"] == "M93")
-            self.assertEqual(m93["matchStatus"], "🇪🇸 Spain")
+            self.assertEqual(m93["matchStatus"], "🇵🇹 Portugal")
+            self.assertEqual([side["scores"][0]["mainScore"] for side in m93["sides"]], [2, 0])
             m93_carry = next(match for match in m93_step["matches"] if match["matchLabel"] == "M98")
-            self.assertEqual([side["contestantId"] for side in m93_carry["sides"]], ["ESP", "W94"])
+            self.assertEqual([side["contestantId"] for side in m93_carry["sides"]], ["POR", "W94"])
             self.assertEqual(m93_carry["matchStatus"], "Open")
             m94_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M94")
             self.assertNotIn("preAdvanceToRoundIndex", m94_step)
             m98_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M98")
             self.assertEqual(m98_step["preAdvanceToRoundIndex"], 1)
             m98 = next(match for match in m98_step["matches"] if match["matchLabel"] == "M98")
-            self.assertEqual([side["contestantId"] for side in m98["sides"]], ["ESP", "BEL"])
-            self.assertEqual(m98["matchStatus"], "🇪🇸 Spain")
-            self.assertEqual([side["scores"][0]["mainScore"] for side in m98["sides"]], [1, 0])
-            self.assertTrue(m98["sides"][0]["isWinner"])
+            self.assertEqual([side["contestantId"] for side in m98["sides"]], ["POR", "BEL"])
+            self.assertEqual(m98["matchStatus"], "🇧🇪 Belgium")
+            self.assertEqual([side["scores"][0]["mainScore"] for side in m98["sides"]], [0, 1])
+            self.assertTrue(m98["sides"][1]["isWinner"])
 
     def test_published_ledger_replaces_stale_shifted_fixture_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

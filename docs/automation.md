@@ -78,9 +78,13 @@ The half-hourly `scheduled-update` command also checks whether the unresolved fi
 
 The daily simulation starts from the current confirmed tournament state. For analysis or retrospective comparison, run `worldcup-predictions simulate-tournament --from-day-one` to ignore stored final scores and simulate from the initial fixture plan.
 
+For future knockout rounds, the simulator advances winners round by round. Existing score matrices are used for known/current fixtures; if a simulated pairing did not already have a published matrix, the simulator generates a matchup-specific baseline matrix on demand and caches it for the run before falling back to the neutral matrix. Each summary stores `metadata.matrix_source_counts` and a coherent `metadata.forecast_results` path for the modal champion.
+
 ## Static Site
 
 The static site reads from `published_prediction_ledger`. The tournament page additionally reads the latest `simulation_summary` champion distribution, falling back to `market_outrights` no-vig probabilities (with a source note) when no usable simulation data exists.
+
+When `simulation_summary.metadata.forecast_results` is present, the tournament bracket animation uses that simulated path so the bracket winner and champion bars are based on the same run.
 
 Future rows can move until the relevant match locks. Past rows stay frozen as public historical predictions, while final score fields and provider point totals can be added afterward.
 

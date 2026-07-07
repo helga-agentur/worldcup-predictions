@@ -477,6 +477,7 @@ def _site_context(
         "tournament_bracket": _localized_tournament_bracket(
             knockout_bracket_matches,
             prediction_rows=rows,
+            simulation_forecast_results=(champion_odds or {}).get("forecast_results") or [],
             country_registry=country_registry,
             locale=locale,
             catalog=catalog,
@@ -615,6 +616,7 @@ def _localized_tournament_bracket(
     matches: list[KnockoutBracketMatch],
     *,
     prediction_rows: list[dict[str, Any]],
+    simulation_forecast_results: list[dict[str, Any]],
     country_registry: CountryRegistry,
     locale: str,
     catalog: TranslationCatalog,
@@ -632,6 +634,7 @@ def _localized_tournament_bracket(
     actual_winners: dict[str, BracketTeam] = {}
     projected_winners: dict[str, BracketTeam] = {}
     prediction_lookup = _bracket_prediction_lookup(prediction_rows)
+    simulation_forecast_lookup = _bracket_simulation_forecast_lookup(simulation_forecast_results)
     team_ratings = _bracket_team_ratings(prediction_rows, country_registry=country_registry)
     matches_by_number = {match.match_number: match for match in matches}
 
@@ -654,13 +657,23 @@ def _localized_tournament_bracket(
         home = _bracket_team(fixture.home_team, projected_winners, country_registry=country_registry, locale=locale)
         away = _bracket_team(fixture.away_team, projected_winners, country_registry=country_registry, locale=locale)
         prediction_row = _bracket_prediction_row(fixture, home, away, prediction_lookup)
-        projection = _bracket_projection(
-            bracket_match,
-            home=home,
-            away=away,
-            prediction_row=prediction_row,
-            team_ratings=team_ratings,
-            catalog=catalog,
+        forecast_row = simulation_forecast_lookup.get(bracket_match.match_number)
+        projection = (
+            _forecast_bracket_projection(
+                forecast_row,
+                country_registry=country_registry,
+                locale=locale,
+                catalog=catalog,
+            )
+            if forecast_row and bracket_match.result is None
+            else _bracket_projection(
+                bracket_match,
+                home=home,
+                away=away,
+                prediction_row=prediction_row,
+                team_ratings=team_ratings,
+                catalog=catalog,
+            )
         )
         if projection.winner is not None:
             projected_winners[f"M{bracket_match.match_number}"] = projection.winner
@@ -687,6 +700,7 @@ def _localized_tournament_bracket(
         round_match_numbers=round_match_numbers,
         initial_winners=actual_winners,
         prediction_lookup=prediction_lookup,
+        simulation_forecast_lookup=simulation_forecast_lookup,
         team_ratings=team_ratings,
         country_registry=country_registry,
         locale=locale,
@@ -783,6 +797,7 @@ def _bracket_timeline_steps(
     round_match_numbers: dict[str, list[int]],
     initial_winners: dict[str, BracketTeam],
     prediction_lookup: dict[str, dict[str, Any]],
+    simulation_forecast_lookup: dict[int, dict[str, Any]],
     team_ratings: dict[str, float],
     country_registry: CountryRegistry,
     locale: str,
@@ -797,14 +812,24 @@ def _bracket_timeline_steps(
         round_name = ROUND_NAMES.get(f"M{bracket_match.match_number}")
         if bracket_match.result is not None or round_name not in visible_round_index:
             continue
-        projection = _projected_bracket_projection(
-            bracket_match,
-            winners=winners,
-            prediction_lookup=prediction_lookup,
-            team_ratings=team_ratings,
-            country_registry=country_registry,
-            locale=locale,
-            catalog=catalog,
+        forecast_row = simulation_forecast_lookup.get(bracket_match.match_number)
+        projection = (
+            _forecast_bracket_projection(
+                forecast_row,
+                country_registry=country_registry,
+                locale=locale,
+                catalog=catalog,
+            )
+            if forecast_row
+            else _projected_bracket_projection(
+                bracket_match,
+                winners=winners,
+                prediction_lookup=prediction_lookup,
+                team_ratings=team_ratings,
+                country_registry=country_registry,
+                locale=locale,
+                catalog=catalog,
+            )
         )
         if projection.winner is not None:
             winners[f"M{bracket_match.match_number}"] = projection.winner
@@ -873,6 +898,91 @@ def _projected_bracket_projection(
         team_ratings=team_ratings,
         catalog=catalog,
     )
+
+
+def _bracket_simulation_forecast_lookup(rows: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
+    lookup = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        match_number = _simulation_forecast_match_number(row)
+        if match_number is None or ROUND_NAMES.get(f"M{match_number}") not in KNOCKOUT_BRACKET_ROUNDS:
+            continue
+        lookup.setdefault(match_number, row)
+    return lookup
+
+
+def _simulation_forecast_match_number(row: dict[str, Any]) -> int | None:
+    match_id = str(row.get("match_id") or "")
+    if match_id.startswith("M"):
+        return _optional_int(match_id[1:])
+    return _optional_int(row.get("match_number"))
+
+
+def _forecast_bracket_projection(
+    row: dict[str, Any],
+    *,
+    country_registry: CountryRegistry,
+    locale: str,
+    catalog: TranslationCatalog,
+) -> BracketProjection:
+    home = _forecast_bracket_team(str(row.get("home_team") or ""), country_registry=country_registry, locale=locale)
+    away = _forecast_bracket_team(str(row.get("away_team") or ""), country_registry=country_registry, locale=locale)
+    home_score = _optional_int(row.get("home_score"))
+    away_score = _optional_int(row.get("away_score"))
+    if home_score is None or away_score is None:
+        home_score, away_score = _parse_score_text(str(row.get("score") or ""))
+    score = ScoreTip(home_score, away_score) if home_score is not None and away_score is not None else None
+    winner = _forecast_bracket_winner(str(row.get("winner") or ""), home=home, away=away)
+    if winner is None and score is not None:
+        winner = home if score.home >= score.away else away
+    return BracketProjection(
+        home=home,
+        away=away,
+        score=score,
+        winner=winner,
+        status=_bracket_winner_status(winner, catalog=catalog, fallback_key="tournament.bracket.status_open"),
+    )
+
+
+def _forecast_bracket_team(
+    name: str,
+    *,
+    country_registry: CountryRegistry,
+    locale: str,
+) -> BracketTeam:
+    resolved = country_registry.resolve(name, locale="en") or country_registry.resolve(name, locale="de")
+    if resolved and resolved.canonical_id in country_registry.countries:
+        ref = TeamRef(name, resolved.canonical_id)
+    else:
+        ref = TeamRef(name)
+    display = _bracket_team_display(ref, country_registry=country_registry, locale=locale)
+    return BracketTeam(id=display["id"], label=display["label"], ref=ref)
+
+
+def _forecast_bracket_winner(winner: str, *, home: BracketTeam, away: BracketTeam) -> BracketTeam | None:
+    if _bracket_team_name_matches(home, winner):
+        return home
+    if _bracket_team_name_matches(away, winner):
+        return away
+    return None
+
+
+def _bracket_team_name_matches(team: BracketTeam, value: str) -> bool:
+    normalized = _rating_key(value)
+    return normalized in {
+        _rating_key(team.id),
+        _rating_key(team.label),
+        _rating_key(team.ref.name),
+        _rating_key(team.ref.fifa_code or ""),
+    }
+
+
+def _parse_score_text(value: str) -> tuple[int | None, int | None]:
+    if ":" not in value:
+        return None, None
+    home, away = value.split(":", 1)
+    return _optional_int(home.strip()), _optional_int(away.strip())
 
 
 def _current_bracket_projection(
@@ -1337,6 +1447,7 @@ def _simulation_champion_odds(
         "iterations": _optional_int(payload.get("iterations")) or 0,
         "as_of": latest[0],
         "entries": entries,
+        "forecast_results": _simulation_forecast_results(payload),
     }
 
 
@@ -1373,6 +1484,16 @@ def _market_champion_odds(
         "as_of": as_of,
         "entries": entries,
     }
+
+
+def _simulation_forecast_results(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return []
+    rows = metadata.get("forecast_results")
+    if not isinstance(rows, list):
+        return []
+    return [row for row in rows if isinstance(row, dict)]
 
 
 def _active_champion_team_codes(storage, *, country_registry: CountryRegistry) -> set[str]:

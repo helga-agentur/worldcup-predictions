@@ -51,13 +51,13 @@ from worldcup_predictions.evaluation.published_prediction_ledger import write_pu
 from worldcup_predictions.evaluation.provider_points import build_provider_points_rows
 from worldcup_predictions.evaluation.reports import write_standard_reports
 from worldcup_predictions.evaluation.scheduled_update import summarize_source_ledger_rows, write_prediction_run_summary
-from worldcup_predictions.model import load_historical_results
-from worldcup_predictions.model import BaselineModelConfig, HistoricalResult
+from worldcup_predictions.model import BaselineModel, BaselineModelConfig, HistoricalResult, load_historical_results
 from worldcup_predictions.model.baseline import compute_elo
 from worldcup_predictions.plugins import builtin_plugins
 from worldcup_predictions.plugins.providers.ch_srf import best_srf_bonus_answers, evaluate_srf_bonus_questions
 from worldcup_predictions.plugins.providers.ch_20min import best_twenty_min_bonus_answers, evaluate_twenty_min_bonus_questions
 from worldcup_predictions.simulations import SimulationInputs, TournamentSimulator, pair_key
+from worldcup_predictions.simulations.worldcup_2026 import ROUND_NAMES
 from worldcup_predictions.site import build_site, serve_site
 from worldcup_predictions.site.generator import gtm_container_id_from_env
 from worldcup_predictions.storage.ledger import stable_hash
@@ -65,6 +65,7 @@ from worldcup_predictions.tournament.repository import (
     load_results,
     load_tournament_state,
 )
+from worldcup_predictions.tournament import FixtureRecord, TeamRef
 
 
 def build_manager(project_root: Path | None = None) -> PluginManager:
@@ -802,6 +803,11 @@ def _simulation_inputs_from_state(
         known_results=_simulation_known_results(state, known_results),
         known_winners=_simulation_known_winners(state, load_results(workflow.context.storage), known_results),
         score_matrices=matrices,
+        score_matrix_provider=_simulation_score_matrix_provider(
+            workflow,
+            state,
+            include_current_results=include_current_results_in_ratings,
+        ),
         team_strengths=team_strengths,
         team_ratings=team_ratings,
     )
@@ -822,6 +828,119 @@ def _simulation_score_matrices(predictions) -> dict:
         if prediction.score_matrix and not fixture.group:
             matrices.setdefault(pair_key(fixture.home_team, fixture.away_team), prediction.score_matrix)
     return matrices
+
+
+def _simulation_score_matrix_provider(
+    workflow: PredictionWorkflow,
+    state,
+    *,
+    include_current_results: bool,
+):
+    historical_results = _simulation_historical_results(
+        workflow.context.storage,
+        state,
+        include_current_results=include_current_results,
+    )
+    model = BaselineModel(historical_results)
+    signals = _workflow_signals(workflow)
+    team_refs = _simulation_team_refs(state)
+    fixture_templates = _simulation_fixture_templates(state)
+    cache = {}
+
+    def provide(fixture_key: str, home: str, away: str):
+        cache_key = (fixture_key, home, away)
+        if cache_key in cache:
+            return cache[cache_key]
+        template = fixture_templates.get(fixture_key)
+        match_number = _simulation_match_number(template) if template is not None else _match_id_number(fixture_key)
+        stage = (template.stage if template is not None else None) or ROUND_NAMES.get(f"M{match_number}", "Knockout stage")
+        event_date = (
+            template.event_date
+            if template is not None
+            else dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        )
+        fixture = FixtureRecord(
+            event_date=event_date,
+            home_team=team_refs.get(home, TeamRef(home)),
+            away_team=team_refs.get(away, TeamRef(away)),
+            stage=stage,
+            source_id=str(match_number or fixture_key),
+            metadata={
+                "match_number": match_number,
+                "neutral": True,
+                "simulation_hypothetical": True,
+            },
+        )
+        cache[cache_key] = model.predict_fixture(fixture, signals=signals).score_matrix
+        return cache[cache_key]
+
+    return provide
+
+
+def _simulation_historical_results(storage, state, *, include_current_results: bool) -> list[HistoricalResult]:
+    historical_results = load_historical_results(storage)
+    if include_current_results:
+        historical_results.extend(
+            HistoricalResult(
+                date=result.event_date[:10],
+                home_team=result.home_team,
+                away_team=result.away_team,
+                score=result.score,
+                tournament="FIFA World Cup",
+                neutral=True,
+                source=result.source,
+            )
+            for result in state.results
+        )
+    return historical_results
+
+
+def _simulation_team_refs(state) -> dict[str, TeamRef]:
+    refs: dict[str, TeamRef] = {}
+    for fixture in state.fixtures:
+        for team in (fixture.home_team, fixture.away_team):
+            refs.setdefault(team.name, team)
+            if team.fifa_code:
+                refs.setdefault(team.fifa_code, team)
+    for result in state.results:
+        for team in (result.home_team, result.away_team):
+            refs.setdefault(team.name, team)
+            if team.fifa_code:
+                refs.setdefault(team.fifa_code, team)
+    return refs
+
+
+def _simulation_fixture_templates(state) -> dict[str, FixtureRecord]:
+    templates: dict[str, FixtureRecord] = {}
+    for fixture in state.fixtures:
+        templates.setdefault(fixture.key, fixture)
+        match_number = _simulation_match_number(fixture)
+        if match_number is not None:
+            templates.setdefault(f"M{match_number}", fixture)
+    return templates
+
+
+def _simulation_match_number(fixture: FixtureRecord | None) -> int | None:
+    if fixture is None:
+        return None
+    for value in (fixture.metadata.get("match_number"), fixture.source_id):
+        number = _optional_int(value)
+        if number is not None:
+            return number
+    return None
+
+
+def _match_id_number(value: str) -> int | None:
+    if value.startswith("M"):
+        return _optional_int(value[1:])
+    return None
+
+
+def _optional_int(value) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _simulation_known_results(state, known_results: dict[str, ScoreTip]) -> dict[str, ScoreTip]:
@@ -945,23 +1064,13 @@ def _team_ratings_for_simulation(storage, state, *, include_current_results: boo
     """
 
     config = BaselineModelConfig()
-    historical_results = load_historical_results(storage)
-    tournament_history = []
-    if include_current_results:
-        tournament_history = [
-            HistoricalResult(
-                date=result.event_date[:10],
-                home_team=result.home_team,
-                away_team=result.away_team,
-                score=result.score,
-                tournament="FIFA World Cup",
-                neutral=True,
-                source=result.source,
-            )
-            for result in state.results
-        ]
+    historical_results = _simulation_historical_results(
+        storage,
+        state,
+        include_current_results=include_current_results,
+    )
     ratings_by_key = compute_elo(
-        historical_results + tournament_history,
+        historical_results,
         cutoff=dt.datetime.now(dt.timezone.utc),
         config=config,
     )
