@@ -81,6 +81,9 @@ def build_published_prediction_ledger_rows(storage, *, now: dt.datetime | None =
         if existing is None:
             published_rows.append(current)
             continue
+        if _should_reopen_future_final(existing, current, now=now):
+            published_rows.append(_merge_live_row(existing, current, now_iso=now_iso))
+            continue
         if _should_freeze(existing, current):
             published_rows.append(_merge_frozen_row(existing, current, now_iso=now_iso))
         else:
@@ -132,6 +135,24 @@ def _should_freeze(existing: dict[str, Any], current: dict[str, Any]) -> bool:
     if existing.get("status") in FROZEN_STATUSES:
         return True
     return current.get("status") == "final"
+
+
+def _should_reopen_future_final(existing: dict[str, Any], current: dict[str, Any], *, now: dt.datetime) -> bool:
+    if existing.get("status") != "final" or current.get("status") == "final":
+        return False
+    if current.get("actual_score"):
+        return False
+    return _event_is_future(current, now=now)
+
+
+def _event_is_future(row: dict[str, Any], *, now: dt.datetime) -> bool:
+    try:
+        event_at = parse_datetime(str(row.get("event_date") or ""))
+    except ValueError:
+        return False
+    if event_at is None:
+        return False
+    return event_at > now
 
 
 def _merge_live_row(existing: dict[str, Any], current: dict[str, Any], *, now_iso: str) -> dict[str, Any]:

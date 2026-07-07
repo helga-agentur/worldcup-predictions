@@ -763,6 +763,70 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertEqual(rows[0]["fixture_key"], corrected_key)
             self.assertEqual(rows[0]["status"], "final")
 
+    def test_published_ledger_reopens_bad_future_final(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            fixture_key = "2099-07-11T21:00:00Z|NOR|ENG"
+            storage.write_records(
+                PUBLISHED_PREDICTION_LEDGER,
+                [
+                    {
+                        "record_key": fixture_key,
+                        "fixture_key": fixture_key,
+                        "event_date": "2099-07-11T21:00:00Z",
+                        "home_team": "Norway",
+                        "away_team": "England",
+                        "status": "final",
+                        "prediction_ledger_status": "past",
+                        "actual_score": "3:2",
+                        "actual_home": 3,
+                        "actual_away": 2,
+                        "first_published_at_utc": "2026-07-07T22:45:23Z",
+                        "published_at_utc": "2026-07-07T22:45:23Z",
+                        "locked_at_utc": "2026-07-07T21:44:50Z",
+                        "finalized_at_utc": "2026-07-07T21:44:50Z",
+                    }
+                ],
+                source="published_prediction_ledger",
+            )
+            storage.write_records(
+                PREDICTION_LEDGER,
+                [
+                    {
+                        "record_key": fixture_key,
+                        "fixture_key": fixture_key,
+                        "event_date": "2099-07-11T21:00:00Z",
+                        "home_team": "Norway",
+                        "away_team": "England",
+                        "status": "future",
+                        "prediction_context": "latest_live_prediction",
+                        "actual_score": None,
+                        "actual_home": None,
+                        "actual_away": None,
+                        "most_likely_score": "1:1",
+                        "srf_tip": "1:2",
+                        "twenty_min_tip": "England",
+                    }
+                ],
+                source="prediction_ledger",
+            )
+
+            write_published_prediction_ledger(
+                storage,
+                run_id="reopen",
+                now=dt.datetime(2026, 7, 8, 12, tzinfo=dt.timezone.utc),
+            )
+
+            rows = storage.read_records(PUBLISHED_PREDICTION_LEDGER, latest_only=True)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["fixture_key"], fixture_key)
+            self.assertEqual(rows[0]["status"], "future")
+            self.assertEqual(rows[0]["prediction_ledger_status"], "future")
+            self.assertIsNone(rows[0]["actual_score"])
+            self.assertIsNone(rows[0]["locked_at_utc"])
+            self.assertIsNone(rows[0]["finalized_at_utc"])
+            self.assertEqual(rows[0]["first_published_at_utc"], "2026-07-07T22:45:23Z")
+
     def test_published_ledger_ignores_future_rows_outside_active_fixtures(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             storage = DuckDBStorage.at_data_root(Path(tmp) / "data")

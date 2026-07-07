@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from collections import defaultdict
 from dataclasses import replace
 from typing import Iterable
 
+from worldcup_predictions.core.contracts import parse_utc_datetime
 from worldcup_predictions.core.constants import (
     CONFIRMED_RESULT_HIGH_AUTHORITY_MIN_SOURCES,
     CONFIRMED_RESULT_MIN_SOURCES,
@@ -24,18 +26,22 @@ from worldcup_predictions.tournament.slots import canonical_slot_code, is_slot_t
 def build_tournament_state(
     fixtures: Iterable[FixtureRecord],
     results: Iterable[ResultRecord],
+    *,
+    now: dt.datetime | None = None,
 ) -> TournamentState:
     """Reconcile fixtures/results and compute current group standings."""
 
+    now = _normalize_now(now)
     all_result_rows = list(results)
-    result_rows = _preferred_results(all_result_rows)
-    fixture_rows = _latest_fixtures(_canonicalize_fixtures([fixture for fixture in fixtures if _valid_fixture(fixture)], result_rows))
+    result_rows = _preferred_results(all_result_rows, now=now)
+    valid_fixtures = [fixture for fixture in fixtures if _valid_fixture(fixture)]
+    fixture_rows = _latest_fixtures(_canonicalize_fixtures(valid_fixtures, result_rows))
     standings = _build_standings(fixture_rows, result_rows)
     return TournamentState(
         fixtures=fixture_rows,
         results=result_rows,
         standings=standings,
-        result_checks=build_result_checks(all_result_rows),
+        result_checks=build_result_checks(all_result_rows, now=now),
     )
 
 
@@ -47,21 +53,28 @@ def standing_records(state: TournamentState) -> list[dict]:
     return rows
 
 
-def build_result_checks(results: list[ResultRecord]) -> list[dict]:
+def build_result_checks(results: list[ResultRecord], *, now: dt.datetime | None = None) -> list[dict]:
     """Compare multiple source results for the same fixture."""
 
+    now = _normalize_now(now)
     by_fixture: dict[str, list[ResultRecord]] = defaultdict(list)
     for result in results:
         by_fixture[result.fixture_key].append(result)
 
     checks = []
     for fixture_key, fixture_results in sorted(by_fixture.items()):
+        due_results = [result for result in fixture_results if _result_is_due(result, now=now)]
+        future_results = [result for result in fixture_results if not _result_is_due(result, now=now)]
         score_by_source = {result.source: result.score.as_text() for result in fixture_results}
-        primary = _best_result(fixture_results)
-        selected = _confirmed_result(fixture_results)
-        score_groups = _score_groups(fixture_results)
+        future_score_by_source = {result.source: result.score.as_text() for result in future_results}
+        primary = _best_result(due_results or fixture_results)
+        selected = _confirmed_result(due_results)
+        score_groups = _score_groups(due_results)
         confirmed_scores = [_score_text for _score_text, rows in score_groups.items() if _is_confirmed_result_group(rows)]
-        if selected is not None:
+        if not due_results and future_results:
+            status = "future_result_ignored"
+            selected_score = ""
+        elif selected is not None:
             status = "confirmed"
             selected_score = selected.score.as_text()
         elif len(score_groups) > 1:
@@ -84,9 +97,11 @@ def build_result_checks(results: list[ResultRecord]) -> list[dict]:
                 "candidate_score": primary.score.as_text(),
                 "scores_by_source": score_by_source,
                 "source_count": len(set(score_by_source)),
-                "confirmed_source_count": len(set(_sources_for_score(fixture_results, selected_score))) if selected_score else 0,
-                "high_authority_source_count": len(set(_high_authority_sources_for_score(fixture_results, selected_score))) if selected_score else 0,
+                "confirmed_source_count": len(set(_sources_for_score(due_results, selected_score))) if selected_score else 0,
+                "high_authority_source_count": len(set(_high_authority_sources_for_score(due_results, selected_score))) if selected_score else 0,
                 "confirmed_scores": confirmed_scores,
+                "ignored_future_source_count": len(set(future_score_by_source)),
+                "ignored_future_scores_by_source": future_score_by_source,
                 "policy": {
                     "min_sources": CONFIRMED_RESULT_MIN_SOURCES,
                     "high_authority_min_sources": CONFIRMED_RESULT_HIGH_AUTHORITY_MIN_SOURCES,
@@ -274,9 +289,11 @@ def _fixture_rank(fixture: FixtureRecord) -> int:
     return _source_rank(str(fixture.metadata.get("source") or fixture.source_id or ""))
 
 
-def _preferred_results(results: Iterable[ResultRecord]) -> list[ResultRecord]:
+def _preferred_results(results: Iterable[ResultRecord], *, now: dt.datetime) -> list[ResultRecord]:
     by_fixture: dict[str, list[ResultRecord]] = defaultdict(list)
     for result in results:
+        if not _result_is_due(result, now=now):
+            continue
         by_fixture[result.fixture_key].append(result)
     selected = [
         result
@@ -395,6 +412,24 @@ def _high_authority_sources_for_score(results: list[ResultRecord], score: str) -
 def _is_high_authority_source(source: str) -> bool:
     source_key = source.casefold()
     return any(authority.casefold() in source_key for authority in HIGH_AUTHORITY_RESULT_SOURCES)
+
+
+def _normalize_now(now: dt.datetime | None) -> dt.datetime:
+    if now is None:
+        return dt.datetime.now(dt.timezone.utc)
+    if now.tzinfo is None:
+        return now.replace(tzinfo=dt.timezone.utc)
+    return now.astimezone(dt.timezone.utc)
+
+
+def _result_is_due(result: ResultRecord, *, now: dt.datetime) -> bool:
+    try:
+        event_at = parse_utc_datetime(result.event_date)
+    except ValueError:
+        return True
+    if event_at is None:
+        return True
+    return event_at <= now
 
 
 def _build_standings(

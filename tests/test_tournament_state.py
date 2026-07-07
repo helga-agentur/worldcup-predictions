@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import tempfile
 import unittest
 from pathlib import Path
@@ -207,6 +208,31 @@ class TournamentStateTest(unittest.TestCase):
         self.assertEqual(len(state.results), 1)
         self.assertEqual(state.result_checks[0]["status"], "confirmed")
         self.assertEqual(state.result_checks[0]["high_authority_source_count"], 2)
+
+    def test_future_result_consensus_is_ignored_until_kickoff(self) -> None:
+        resolver = TeamResolver.default()
+        fixture = FixtureRecord(
+            event_date="2099-07-11T21:00:00Z",
+            home_team=resolver.resolve("Norway"),
+            away_team=resolver.resolve("England"),
+            stage="Quarter-final",
+        )
+        results = [
+            ResultRecord(fixture.event_date, fixture.home_team, fixture.away_team, ScoreTip(3, 2), source=source)
+            for source in ("srf_public", "football_data_org")
+        ]
+
+        state = build_tournament_state(
+            [fixture],
+            results,
+            now=dt.datetime(2026, 7, 8, 12, tzinfo=dt.timezone.utc),
+        )
+
+        self.assertEqual(state.results, [])
+        self.assertEqual(state.result_checks[0]["status"], "future_result_ignored")
+        self.assertEqual(state.result_checks[0]["selected_score"], "")
+        self.assertEqual(state.result_checks[0]["candidate_score"], "3:2")
+        self.assertEqual(state.result_checks[0]["ignored_future_source_count"], 2)
 
     def test_tournament_state_canonicalizes_unresolved_knockout_slots(self) -> None:
         resolver = TeamResolver.default()
