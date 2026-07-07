@@ -41,7 +41,7 @@
   "label.twenty_min_game": "20min tip",
   "matrix.axis": "Rows: {home} goals · Columns: {away} goals",
   "matrix.hidden_note": "Hidden: results with 6+ goals per team ({percent}).",
-  "matrix.legend_actual": "Green marker: final score.",
+  "matrix.legend_actual": "Green marker: final score {score} ({percent}).",
   "matrix.legend_most_likely": "Blue outline: most likely score {score} ({percent}).",
   "nav.breadcrumb": "Breadcrumb",
   "nav.language": "Language",

@@ -41,7 +41,7 @@
   "label.twenty_min_game": "20min Tipp",
   "matrix.axis": "Zeilen: Tore {home} · Spalten: Tore {away}",
   "matrix.hidden_note": "Ausgeblendet: Resultate mit 6+ Toren pro Team ({percent}).",
-  "matrix.legend_actual": "Grün markiert: Schlussresultat.",
+  "matrix.legend_actual": "Grün markiert: Schlussresultat {score} ({percent}).",
   "matrix.legend_most_likely": "Blau umrandet: wahrscheinlichstes Resultat {score} ({percent}).",
   "nav.breadcrumb": "Breadcrumb-Navigation",
   "nav.language": "Sprache",

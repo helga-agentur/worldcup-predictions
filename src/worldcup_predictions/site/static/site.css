@@ -1229,6 +1229,7 @@ html[data-theme="dark"] .tag[data-result="trend"] {
 }
 
 .heatmap__cell {
+  position: relative;
   width: clamp(38px, 6vw, 54px);
   height: clamp(38px, 6vw, 54px);
   border: 4px solid transparent;
@@ -1242,6 +1243,24 @@ html[data-theme="dark"] .tag[data-result="trend"] {
   vertical-align: middle;
 }
 
+.heatmap__cell-label {
+  position: relative;
+  z-index: 1;
+}
+
+.heatmap__cell-marker {
+  position: absolute;
+  inset-block-start: 5px;
+  inset-inline-end: 5px;
+  z-index: 2;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--paper);
+  pointer-events: none;
+}
+
 .heatmap__cell[data-hot="true"] {
   color: var(--paper);
 }
@@ -1249,15 +1268,6 @@ html[data-theme="dark"] .tag[data-result="trend"] {
 .heatmap__cell[data-most-likely="true"] {
   border-color: var(--focus-ring);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus-ring) 35%, transparent);
-}
-
-.heatmap__cell[data-actual="true"] {
-  border-color: var(--accent);
-}
-
-.heatmap__cell[data-most-likely="true"][data-actual="true"] {
-  border-color: var(--focus-ring);
-  box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 1px color-mix(in srgb, var(--focus-ring) 35%, transparent);
 }
 
 .heatmap__side {

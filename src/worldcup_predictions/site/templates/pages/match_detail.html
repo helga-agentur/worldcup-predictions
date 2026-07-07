@@ -120,7 +120,7 @@
                 <th scope="row" class="numeric">{{ matrix_row.home }}</th>
                 {% for cell in matrix_row.cells %}
                 <td class="heatmap__cell"{% if cell.hot %} data-hot="true"{% endif %}{% if cell.most_likely %} data-most-likely="true"{% endif %}{% if cell.actual %} data-actual="true"{% endif %}
-                    style="--heat: {{ cell.weight }}%" title="{{ cell.title }}">{{ cell.label }}</td>
+                    style="--heat: {{ cell.weight }}%" title="{{ cell.title }}">{% if cell.actual %}<span class="heatmap__cell-marker" data-marker="actual" aria-hidden="true"></span>{% endif %}<span class="heatmap__cell-label">{{ cell.label }}</span></td>
                 {% endfor %}
               </tr>
               {% endfor %}

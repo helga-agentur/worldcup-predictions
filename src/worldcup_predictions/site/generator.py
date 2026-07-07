@@ -2928,7 +2928,17 @@ def _heatmap(row: dict[str, Any], *, catalog: TranslationCatalog) -> dict[str, A
         }
     ]
     if mark_actual and None not in actual and max(actual) <= HEATMAP_MAX_GOALS:
-        legend.append({"marker": "actual", "text": catalog.translate("matrix.legend_actual")})
+        actual_probability = cells.get((actual[0], actual[1]), 0.0)
+        legend.append(
+            {
+                "marker": "actual",
+                "text": catalog.translate(
+                    "matrix.legend_actual",
+                    score=_score_text(actual[0], actual[1]),
+                    percent=_score_matrix_percent_text(actual_probability),
+                ),
+            }
+        )
     if hidden_mass >= 0.001:
         legend.append({"marker": "", "text": catalog.translate("matrix.hidden_note", percent=f"{hidden_mass * 100:.1f}%")})
     return {
