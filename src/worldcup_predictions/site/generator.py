@@ -46,9 +46,11 @@ FONT_ASSET_FILES = (
     "assets/fonts/Degular-Regular.woff2",
 )
 BRACKETRY_ASSET_FILE = "assets/vendor/bracketry-1.1.3.esm.js"
+CONFETTI_ASSET_FILE = "assets/vendor/canvas-confetti-1.9.4.module.mjs"
 STATIC_ASSET_FILES = (
     "assets/favicon.svg",
     BRACKETRY_ASSET_FILE,
+    CONFETTI_ASSET_FILE,
     *FONT_ASSET_FILES,
 )
 
@@ -460,6 +462,7 @@ def _site_context(
         "asset_css": f"/{asset_path}",
         "asset_js": f"/{script_path}",
         "bracketry_asset": f"/{BRACKETRY_ASSET_FILE}",
+        "confetti_asset": f"/{CONFETTI_ASSET_FILE}",
         "gtm_container_id": (gtm_container_id or "").strip(),
         "rows": rows,
         "future_rows": future_rows,

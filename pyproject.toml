@@ -35,6 +35,7 @@ worldcup_predictions = [
   "site/static/*.svg",
   "site/static/fonts/*.woff2",
   "site/static/vendor/*.js",
+  "site/static/vendor/*.mjs",
   "site/static/vendor/*.md",
   "site/templates/*.html",
   "site/templates/pages/*.html",

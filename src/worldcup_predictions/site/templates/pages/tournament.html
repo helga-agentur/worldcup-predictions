@@ -65,6 +65,7 @@
   <script type="application/json" id="tournament-bracket-timeline">{{ tournament_bracket.timeline_json|safe }}</script>
   <script type="module">
     import { createBracket } from {{ bracketry_asset|tojson }};
+    import confetti from {{ confetti_asset|tojson }};
 
     const wrapper = document.querySelector("[data-bracketry-root]");
     const fallback = document.querySelector("[data-bracket-fallback]");
@@ -134,6 +135,7 @@
         const timelineSteps = Array.isArray(bracketTimeline.steps) ? bracketTimeline.steps : [];
         let timelineTimer = 0;
         let timelineIndex = 0;
+        let celebrationFired = false;
         const timelineMatchForStep = (step) => {
           const matches = Array.isArray(step.matches) ? step.matches : [];
           if (!matches.length) {
@@ -214,10 +216,29 @@
           applyStepContent(step);
           return advancedRound;
         };
+        const celebrateChampion = (step) => {
+          if (celebrationFired || prefersReducedMotion() || step.matchLabel !== "M104" || !step.winner) {
+            return;
+          }
+          celebrationFired = true;
+          const defaults = {
+            colors: ["#0000ff", "#399918", "#b4e50d", "#ff9b2f", "#fb4141"],
+            disableForReducedMotion: true,
+            particleCount: 52,
+            scalar: 0.82,
+            spread: 58,
+            startVelocity: 36,
+            ticks: 120,
+            zIndex: 40
+          };
+          confetti({ ...defaults, angle: 58, origin: { x: 0.18, y: 0.72 } });
+          confetti({ ...defaults, angle: 122, origin: { x: 0.82, y: 0.72 } });
+        };
         const resetSimulation = () => {
           window.clearTimeout(timelineTimer);
           timelineTimer = 0;
           timelineIndex = 0;
+          celebrationFired = false;
           bracket.replaceData(cloneData(initialBracketData));
           bracket.highlightContestantHistory("");
           refreshBracket();
@@ -244,6 +265,7 @@
           const advancedRound = advanceBeforeStep(step);
           const finishStep = () => {
             applyStepContent(step);
+            celebrateChampion(step);
             timelineIndex += 1;
             scheduleNextStep(1100);
           };
