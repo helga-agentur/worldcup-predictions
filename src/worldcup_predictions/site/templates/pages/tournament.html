@@ -85,6 +85,9 @@
       visibleRoundsCount: window.matchMedia("(max-width: 760px)").matches ? 1 : window.matchMedia("(max-width: 1100px)").matches ? 2 : 3,
       matchMaxWidth: window.matchMedia("(max-width: 760px)").matches ? 230 : 270
     });
+    const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const shouldFocusTimelineMatch = () => window.matchMedia("(max-width: 760px)").matches;
+    const initialVerticalScrollMode = () => shouldFocusTimelineMatch() ? "native" : "mixed";
 
     if (wrapper && dataElement) {
       try {
@@ -117,7 +120,7 @@
           matchMinVerticalGap: 18,
           matchHorMargin: 20,
           navButtonsPosition: "overTitles",
-          verticalScrollMode: "mixed",
+          verticalScrollMode: initialVerticalScrollMode(),
           showScrollbar: true,
           getPlayerTitleHTML: (player) => escapeHtml(player.title)
         });
@@ -131,6 +134,45 @@
         const timelineSteps = Array.isArray(bracketTimeline.steps) ? bracketTimeline.steps : [];
         let timelineTimer = 0;
         let timelineIndex = 0;
+        const timelineMatchForStep = (step) => {
+          const matches = Array.isArray(step.matches) ? step.matches : [];
+          if (!matches.length) {
+            return null;
+          }
+          if (step.matchLabel) {
+            const focusedMatch = matches.find((match) => match.matchLabel === step.matchLabel);
+            if (focusedMatch) {
+              return focusedMatch;
+            }
+          }
+          return matches[0];
+        };
+        const focusSimulatedMatch = (step) => {
+          if (!shouldFocusTimelineMatch()) {
+            return;
+          }
+          const match = timelineMatchForStep(step);
+          if (!match || !Number.isInteger(match.roundIndex) || !Number.isInteger(match.order)) {
+            return;
+          }
+          const scroller = wrapper.querySelector(".matches-scroller");
+          const matchElement = wrapper.querySelector(
+            `.round-wrapper[round-index="${match.roundIndex}"] .match-wrapper[match-order="${match.order}"]`
+          );
+          if (!scroller || !matchElement) {
+            return;
+          }
+          const scrollerRect = scroller.getBoundingClientRect();
+          const matchRect = matchElement.getBoundingClientRect();
+          const targetTop = scroller.scrollTop
+            + matchRect.top
+            - scrollerRect.top
+            - ((scroller.clientHeight - matchElement.offsetHeight) / 2);
+          const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+          const top = Math.max(0, Math.min(targetTop, maxTop));
+          const behavior = prefersReducedMotion() ? "auto" : "smooth";
+          scroller.scrollTo({ top, behavior });
+        };
         const setSimulationState = (state) => {
           wrapper.dataset.simulationState = state;
           const isRunning = state === "running";
@@ -165,6 +207,7 @@
           if (step.winner) {
             bracket.highlightContestantHistory(step.winner);
           }
+          focusSimulatedMatch(step);
         };
         const applyStep = (step) => {
           const advancedRound = advanceBeforeStep(step);
@@ -204,7 +247,7 @@
             timelineIndex += 1;
             scheduleNextStep(1100);
           };
-          if (advancedRound && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          if (advancedRound && !prefersReducedMotion()) {
             scheduleTimelineAction(finishStep, 520);
           } else {
             finishStep();
@@ -222,7 +265,7 @@
           if (!wasPaused) {
             resetSimulation();
           }
-          if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          if (prefersReducedMotion()) {
             timelineSteps.slice(timelineIndex).forEach(applyStep);
             timelineIndex = timelineSteps.length;
             setSimulationState("done");
