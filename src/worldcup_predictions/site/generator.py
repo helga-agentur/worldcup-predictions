@@ -32,7 +32,7 @@ from worldcup_predictions.entities.countries import normalize_entity_text
 from worldcup_predictions.evaluation.provider_points import points_for_row
 from worldcup_predictions.plugins.providers.ch_20min.rules import twenty_min_points_for_fixture
 from worldcup_predictions.plugins.providers.ch_srf.rules import srf_rules_for_fixture
-from worldcup_predictions.simulations.worldcup_2026 import ROUND_NAMES, group_letter
+from worldcup_predictions.simulations.worldcup_2026 import NEXT_ROUNDS, ROUND_NAMES, group_letter
 from worldcup_predictions.storage.ledger import normalize_datetime, utc_now
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamRef
 from worldcup_predictions.tournament.repository import load_tournament_state
@@ -625,14 +625,7 @@ def _localized_tournament_bracket(
     if not visible_rounds:
         return None
     round_index = {round_name: index for index, round_name in enumerate(visible_rounds)}
-    round_match_numbers = {
-        round_name: sorted(
-            int(match_id.removeprefix("M"))
-            for match_id, name in ROUND_NAMES.items()
-            if name == round_name
-        )
-        for round_name in visible_rounds
-    }
+    round_match_numbers = _bracket_round_match_numbers(visible_rounds)
     current_matches = []
     contestants: dict[str, dict[str, Any]] = {}
     fallback_rows = []
@@ -730,6 +723,58 @@ def _visible_knockout_bracket_rounds(matches: list[KnockoutBracketMatch]) -> lis
     ]
 
 
+def _bracket_round_match_numbers(round_names: list[str]) -> dict[str, list[int]]:
+    visual_order = _knockout_visual_match_order()
+    return {round_name: visual_order.get(round_name, []) for round_name in round_names}
+
+
+def _knockout_visual_match_order() -> dict[str, list[int]]:
+    dependencies = {
+        match_id: (home_source, away_source)
+        for round_matches in NEXT_ROUNDS
+        for match_id, home_source, away_source in round_matches
+    }
+    final_match_ids = sorted(match_id for match_id, round_name in ROUND_NAMES.items() if round_name == "Final")
+    visual_order: dict[str, list[int]] = {}
+    for round_name in KNOCKOUT_BRACKET_ROUNDS:
+        ordered_ids: list[str] = []
+        for final_match_id in final_match_ids:
+            _collect_visual_round_match_ids(
+                final_match_id,
+                target_round=round_name,
+                dependencies=dependencies,
+                ordered_ids=ordered_ids,
+            )
+        fallback_ids = sorted(
+            (match_id for match_id, name in ROUND_NAMES.items() if name == round_name),
+            key=lambda value: int(value.removeprefix("M")),
+        )
+        for match_id in fallback_ids:
+            if match_id not in ordered_ids:
+                ordered_ids.append(match_id)
+        visual_order[round_name] = [int(match_id.removeprefix("M")) for match_id in ordered_ids]
+    return visual_order
+
+
+def _collect_visual_round_match_ids(
+    match_id: str,
+    *,
+    target_round: str,
+    dependencies: dict[str, tuple[str, str]],
+    ordered_ids: list[str],
+) -> None:
+    if ROUND_NAMES.get(match_id) == target_round:
+        ordered_ids.append(match_id)
+        return
+    for source_match_id in dependencies.get(match_id, ()):
+        _collect_visual_round_match_ids(
+            source_match_id,
+            target_round=target_round,
+            dependencies=dependencies,
+            ordered_ids=ordered_ids,
+        )
+
+
 def _bracket_timeline_steps(
     matches: list[KnockoutBracketMatch],
     *,
@@ -746,11 +791,7 @@ def _bracket_timeline_steps(
 ) -> list[dict[str, Any]]:
     winners = dict(initial_winners)
     simulated_matches = {match.match_number for match in matches if match.result is not None}
-    remaining_by_round: dict[str, int] = {}
-    for match in matches:
-        round_name = ROUND_NAMES.get(f"M{match.match_number}")
-        if match.result is None and round_name in visible_round_index:
-            remaining_by_round[round_name] = remaining_by_round.get(round_name, 0) + 1
+    current_round_index = 0
     steps = []
     for bracket_match in matches:
         round_name = ROUND_NAMES.get(f"M{bracket_match.match_number}")
@@ -798,16 +839,15 @@ def _bracket_timeline_steps(
                     round_match_numbers=round_match_numbers,
                 )
             )
-        remaining_by_round[round_name] = max(0, remaining_by_round.get(round_name, 0) - 1)
+        round_index = visible_round_index[round_name]
         step = {
             "matchLabel": f"M{bracket_match.match_number}",
             "winner": projection.winner.id if projection.winner else "",
             "matches": updates,
         }
-        if remaining_by_round[round_name] == 0:
-            next_round_index = visible_round_index[round_name] + 1
-            if next_round_index < len(visible_round_index):
-                step["advanceToRoundIndex"] = next_round_index
+        if round_index > current_round_index:
+            step["preAdvanceToRoundIndex"] = round_index
+            current_round_index = round_index
         steps.append(step)
     return steps
 

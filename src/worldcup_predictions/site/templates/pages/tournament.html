@@ -151,7 +151,14 @@
             resetButton.disabled = state === "idle";
           }
         };
-        const applyStep = (step) => {
+        const advanceBeforeStep = (step) => {
+          if (Number.isInteger(step.preAdvanceToRoundIndex)) {
+            bracket.setBaseRoundIndex(step.preAdvanceToRoundIndex);
+            return true;
+          }
+          return false;
+        };
+        const applyStepContent = (step) => {
           const matches = Array.isArray(step.matches) ? step.matches : [];
           if (matches.length) {
             bracket.applyMatchesUpdates(matches);
@@ -159,11 +166,11 @@
           if (step.winner) {
             bracket.highlightContestantHistory(step.winner);
           }
-          if (Number.isInteger(step.advanceToRoundIndex)) {
-            bracket.setBaseRoundIndex(step.advanceToRoundIndex);
-            return true;
-          }
-          return false;
+        };
+        const applyStep = (step) => {
+          const advancedRound = advanceBeforeStep(step);
+          applyStepContent(step);
+          return advancedRound;
         };
         const resetSimulation = () => {
           window.clearTimeout(timelineTimer);
@@ -182,6 +189,9 @@
         const scheduleNextStep = (delay) => {
           timelineTimer = window.setTimeout(playNextStep, delay);
         };
+        const scheduleTimelineAction = (callback, delay) => {
+          timelineTimer = window.setTimeout(callback, delay);
+        };
         const playNextStep = () => {
           const step = timelineSteps[timelineIndex];
           if (!step) {
@@ -189,9 +199,17 @@
             setSimulationState("done");
             return;
           }
-          const advancedRound = applyStep(step);
-          timelineIndex += 1;
-          scheduleNextStep(advancedRound ? 1400 : 1100);
+          const advancedRound = advanceBeforeStep(step);
+          const finishStep = () => {
+            applyStepContent(step);
+            timelineIndex += 1;
+            scheduleNextStep(1100);
+          };
+          if (advancedRound && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            scheduleTimelineAction(finishStep, 520);
+          } else {
+            finishStep();
+          }
         };
         const playTimeline = () => {
           if (!timelineSteps.length) {

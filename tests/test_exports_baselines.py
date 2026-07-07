@@ -312,6 +312,30 @@ class ExportAndBaselineTest(unittest.TestCase):
                         "metadata": {"source": "fifa_match_centre", "match_number": 94},
                     },
                     {
+                        "record_key": "2026-07-06T16:00:00Z|BRA|NOR",
+                        "fixture_key": "2026-07-06T16:00:00Z|BRA|NOR",
+                        "event_date": "2026-07-06T16:00:00Z",
+                        "home_team": "Brazil",
+                        "away_team": "Norway",
+                        "home_fifa_code": "BRA",
+                        "away_fifa_code": "NOR",
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 91},
+                    },
+                    {
+                        "record_key": "2026-07-06T18:00:00Z|MEX|ENG",
+                        "fixture_key": "2026-07-06T18:00:00Z|MEX|ENG",
+                        "event_date": "2026-07-06T18:00:00Z",
+                        "home_team": "Mexico",
+                        "away_team": "England",
+                        "home_fifa_code": "MEX",
+                        "away_fifa_code": "ENG",
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 92},
+                    },
+                    {
                         "record_key": "2026-07-10T19:00:00Z|W93|W94",
                         "fixture_key": "2026-07-10T19:00:00Z|W93|W94",
                         "event_date": "2026-07-10T19:00:00Z",
@@ -322,6 +346,18 @@ class ExportAndBaselineTest(unittest.TestCase):
                         "stage": "Quarter-final",
                         "status": "scheduled",
                         "metadata": {"source": "fifa_match_centre", "match_number": 98},
+                    },
+                    {
+                        "record_key": "2026-07-11T21:00:00Z|W91|W92",
+                        "fixture_key": "2026-07-11T21:00:00Z|W91|W92",
+                        "event_date": "2026-07-11T21:00:00Z",
+                        "home_team": "W91",
+                        "away_team": "W92",
+                        "home_fifa_code": None,
+                        "away_fifa_code": None,
+                        "stage": "Quarter-final",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 99},
                     },
                 ],
                 source="fifa_match_centre",
@@ -429,7 +465,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn("Winner Round of 16 match 5", tournament_html)
             self.assertIn('data-bracket-play', tournament_html)
             self.assertIn('data-bracket-reset disabled', tournament_html)
-            self.assertIn("bracket.setBaseRoundIndex(step.advanceToRoundIndex)", tournament_html)
+            self.assertIn("bracket.setBaseRoundIndex(step.preAdvanceToRoundIndex)", tournament_html)
             self.assertIn(">Play<", tournament_html)
             self.assertIn(">Pause<", tournament_html)
             self.assertIn(">Reset<", tournament_html)
@@ -438,21 +474,36 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("🇧🇪 Belgium", tournament_html)
             self.assertEqual(bracket_data["contestants"]["W93"]["players"][0]["title"], "W93")
             self.assertEqual(bracket_data["contestants"]["W94"]["players"][0]["title"], "W94")
+            self.assertEqual(bracket_data["contestants"]["W91"]["players"][0]["title"], "W91")
+            self.assertEqual(bracket_data["contestants"]["W92"]["players"][0]["title"], "W92")
+            m91 = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M91")
+            m92 = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M92")
+            m93_initial = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M93")
+            m94_initial = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M94")
+            self.assertEqual(m93_initial["order"], 2)
+            self.assertEqual(m94_initial["order"], 3)
+            self.assertEqual(m91["order"], 4)
+            self.assertEqual(m92["order"], 5)
             initial_m98 = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M98")
+            initial_m99 = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M99")
+            self.assertEqual(initial_m98["order"], 1)
+            self.assertEqual(initial_m99["order"], 2)
             self.assertEqual([side["contestantId"] for side in initial_m98["sides"]], ["W93", "W94"])
+            self.assertEqual([side["contestantId"] for side in initial_m99["sides"]], ["W91", "W92"])
             self.assertEqual(initial_m98["matchStatus"], "Open")
             self.assertFalse(any("scores" in side for side in initial_m98["sides"]))
             m93_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M93")
             self.assertEqual(m93_step["winner"], "ESP")
-            self.assertNotIn("advanceToRoundIndex", m93_step)
+            self.assertNotIn("preAdvanceToRoundIndex", m93_step)
             m93 = next(match for match in m93_step["matches"] if match["matchLabel"] == "M93")
             self.assertEqual(m93["matchStatus"], "🇪🇸 Spain")
             m93_carry = next(match for match in m93_step["matches"] if match["matchLabel"] == "M98")
             self.assertEqual([side["contestantId"] for side in m93_carry["sides"]], ["ESP", "W94"])
             self.assertEqual(m93_carry["matchStatus"], "Open")
             m94_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M94")
-            self.assertEqual(m94_step["advanceToRoundIndex"], 1)
+            self.assertNotIn("preAdvanceToRoundIndex", m94_step)
             m98_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M98")
+            self.assertEqual(m98_step["preAdvanceToRoundIndex"], 1)
             m98 = next(match for match in m98_step["matches"] if match["matchLabel"] == "M98")
             self.assertEqual([side["contestantId"] for side in m98["sides"]], ["ESP", "BEL"])
             self.assertEqual(m98["matchStatus"], "🇪🇸 Spain")
