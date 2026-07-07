@@ -47,8 +47,12 @@ FONT_ASSET_FILES = (
 )
 BRACKETRY_ASSET_FILE = "assets/vendor/bracketry-1.1.3.esm.js"
 CONFETTI_ASSET_FILE = "assets/vendor/canvas-confetti-1.9.4.module.mjs"
+OG_IMAGE_ASSET_FILE = "assets/world-cup-2026-predictions-og.png"
+OG_IMAGE_WIDTH = 1200
+OG_IMAGE_HEIGHT = 630
 STATIC_ASSET_FILES = (
     "assets/favicon.svg",
+    OG_IMAGE_ASSET_FILE,
     BRACKETRY_ASSET_FILE,
     CONFETTI_ASSET_FILE,
     *FONT_ASSET_FILES,
@@ -126,6 +130,7 @@ API_PRESENTATION_KEYS = {
     "away_flag",
     "away_team_display",
     "away_team_label",
+    "card_aria_label",
     "confidence_text",
     "current_url",
     "detail_path",
@@ -141,11 +146,12 @@ API_PRESENTATION_KEYS = {
     "home_flag",
     "home_team_display",
     "home_team_label",
-    "jsonld",
     "kickoff_display",
     "language_switch_links",
     "match",
     "match_display",
+    "match_title_text",
+    "meta_description",
     "metadata",
     "most_likely_away_display",
     "most_likely_home_display",
@@ -451,16 +457,26 @@ def _site_context(
     _add_alternate_links(locale, rows)
     future_list_path = LOCALE_MATCH_LIST_PATHS[locale]["future"]
     past_list_path = LOCALE_MATCH_LIST_PATHS[locale]["past"]
-    return {
+    context = {
         "locale": locale,
-        "title": catalog.translate("site.title"),
-        "site_name": catalog.translate("site.title"),
+        "title": catalog.translate("seo.home.title"),
+        "site_name": catalog.translate("site.name"),
         "og_locale": {"de": "de_CH", "en": "en_US"}.get(locale, locale),
-        "description": catalog.translate("site.description"),
+        "og_alternate_locales": [
+            {"de": "de_CH", "en": "en_US"}.get(site_locale, site_locale)
+            for site_locale in SITE_LOCALES
+            if site_locale != locale
+        ],
+        "description": catalog.translate("seo.home.description"),
         "generated_at_utc": generated_at,
         "generated_at_display": _date_time_text(generated_at),
         "asset_css": f"/{asset_path}",
         "asset_js": f"/{script_path}",
+        "og_image_url": _absolute_site_url(f"/{OG_IMAGE_ASSET_FILE}", base_url=base_url),
+        "og_image_width": OG_IMAGE_WIDTH,
+        "og_image_height": OG_IMAGE_HEIGHT,
+        "og_image_type": "image/png",
+        "og_image_alt": catalog.translate("seo.og_image_alt"),
         "bracketry_asset": f"/{BRACKETRY_ASSET_FILE}",
         "confetti_asset": f"/{CONFETTI_ASSET_FILE}",
         "gtm_container_id": (gtm_container_id or "").strip(),
@@ -494,6 +510,12 @@ def _site_context(
         "base_url": base_url,
         "t": catalog.translate,
     }
+    context["jsonld_graph"] = _page_jsonld_graph(
+        context,
+        page_kind="home",
+        item_rows=[*context["future_preview_rows"], *context["tipped_preview_rows"]],
+    )
+    return context
 
 
 def _hit_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1574,6 +1596,8 @@ def _localized_champion_odds(
             {
                 "label": label,
                 "flag": FIFA_FLAG_EMOJIS.get(code or "", ""),
+                "code": code or "",
+                "probability": probability,
                 "percent_text": _champion_percent_text(probability),
                 "width": f"{100 * probability / peak:.2f}",
             }
@@ -1803,6 +1827,8 @@ def _write_site_files(
             rows=context["future_rows"],
             title_key="section.future.title",
             description_key="section.future.description",
+            seo_title_key="seo.future.title",
+            seo_description_key="seo.future.description",
             empty_key="empty.future",
         )
         _write_match_list_page(
@@ -1813,6 +1839,8 @@ def _write_site_files(
             rows=context["tipped_rows"],
             title_key="section.tipped.title",
             description_key="section.tipped.description",
+            seo_title_key="seo.past.title",
+            seo_description_key="seo.past.description",
             empty_key="empty.tipped",
         )
         _write_tournament_page(output_dir, template=tournament_template, context=context)
@@ -1828,12 +1856,15 @@ def _write_site_files(
             detail_dir.mkdir(parents=True, exist_ok=True)
             detail_context = {
                 **context,
-                "title": f"{row['match']} — {context['title']}",
-                "description": row.get("og_description") or context["description"],
+                "title": row.get("page_title") or context["title"],
+                "description": row.get("meta_description")
+                or row.get("og_description")
+                or context["description"],
                 "current_url": row["current_url"],
                 "alternate_links": row["alternate_links"],
                 "language_switch_links": row["language_switch_links"],
             }
+            detail_context["jsonld_graph"] = _page_jsonld_graph(detail_context, page_kind="match_detail", row=row)
             detail_dir.joinpath("index.html").write_text(detail_template.render(**detail_context, row=row), encoding="utf-8")
     (output_dir / asset_path).write_text(css_content, encoding="utf-8")
     (output_dir / script_path).write_text(js_content, encoding="utf-8")
@@ -1844,6 +1875,7 @@ def _write_site_files(
     )
     (output_dir / "robots.txt").write_text("User-agent: *\nAllow: /\nSitemap: /sitemap.xml\n", encoding="utf-8")
     (output_dir / "sitemap.xml").write_text(_sitemap_xml(localized_contexts), encoding="utf-8")
+    (output_dir / "llms.txt").write_text(_llms_txt(localized_contexts), encoding="utf-8")
 
 
 def _write_match_list_page(
@@ -1855,6 +1887,8 @@ def _write_match_list_page(
     rows: list[dict[str, Any]],
     title_key: str,
     description_key: str,
+    seo_title_key: str,
+    seo_description_key: str,
     empty_key: str,
 ) -> None:
     locale = str(context["locale"])
@@ -1863,8 +1897,8 @@ def _write_match_list_page(
     page_dir.mkdir(parents=True, exist_ok=True)
     page_context = {
         **context,
-        "title": f"{context['t'](title_key)} — {context['title']}",
-        "description": context["t"](description_key),
+        "title": context["t"](seo_title_key),
+        "description": context["t"](seo_description_key),
         "current_url": page_path,
         "alternate_links": _match_list_alternate_links(kind),
         "language_switch_links": _match_list_language_switch_links(locale, kind),
@@ -1874,6 +1908,7 @@ def _write_match_list_page(
         "page_description": context["t"](description_key),
         "empty_text": context["t"](empty_key),
     }
+    page_context["jsonld_graph"] = _page_jsonld_graph(page_context, page_kind="match_list", item_rows=rows)
     page_dir.joinpath("index.html").write_text(template.render(**page_context), encoding="utf-8")
 
 
@@ -1884,14 +1919,15 @@ def _write_tournament_page(output_dir: Path, *, template, context: dict[str, Any
     page_dir.mkdir(parents=True, exist_ok=True)
     page_context = {
         **context,
-        "title": f"{context['t']('tournament.title')} — {context['title']}",
-        "description": context["t"]("tournament.lead"),
+        "title": context["t"]("seo.tournament.title"),
+        "description": context["t"]("seo.tournament.description"),
         "current_url": page_path,
         "alternate_links": _tournament_alternate_links(),
         "language_switch_links": _tournament_language_switch_links(locale),
         "page_title": context["t"]("tournament.title"),
         "page_description": context["t"]("tournament.lead"),
     }
+    page_context["jsonld_graph"] = _page_jsonld_graph(page_context, page_kind="tournament")
     page_dir.joinpath("index.html").write_text(template.render(**page_context), encoding="utf-8")
 
 
@@ -2388,6 +2424,7 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
     home_display = _country_name_display(home_name, home_flag)
     away_display = _country_name_display(away_name, away_flag)
     prepared["match"] = f"{home_name} - {away_name}".strip(" -")
+    prepared["match_title_text"] = _match_title_text(home_name, away_name, locale=locale)
     prepared["home_team_label"] = home_name
     prepared["away_team_label"] = away_name
     prepared["home_flag"] = home_flag
@@ -2473,8 +2510,10 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
     prepared["explain_text"] = _explain_text(prepared, catalog=catalog)
     prepared["advancement"] = _advancement_display(prepared, country_registry=country_registry, locale=locale)
     prepared["heatmap"] = _heatmap(prepared, catalog=catalog)
-    prepared["og_description"] = _match_og_description(prepared, catalog=catalog)
-    prepared["jsonld"] = _match_jsonld(prepared)
+    prepared["page_title"] = _match_page_title(prepared, catalog=catalog)
+    prepared["meta_description"] = _match_meta_description(prepared, catalog=catalog)
+    prepared["og_description"] = prepared["meta_description"]
+    prepared["card_aria_label"] = _match_card_aria_label(prepared, catalog=catalog)
     return prepared
 
 
@@ -2904,30 +2943,433 @@ def _heatmap(row: dict[str, Any], *, catalog: TranslationCatalog) -> dict[str, A
     }
 
 
-def _match_og_description(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
-    parts = []
+def _match_title_text(home: str, away: str, *, locale: str) -> str:
+    separator = " vs " if locale == "en" else " - "
+    if home and away:
+        return f"{home}{separator}{away}"
+    return (home or away).strip()
+
+
+def _match_page_title(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
+    match = str(row.get("match_title_text") or row.get("match") or "").strip()
+    actual_score = str(row.get("actual_score") or "").strip()
+    if actual_score:
+        return catalog.translate("seo.match.title_final", match=match, score=actual_score)
+    score = _match_score_text(row)
+    if score:
+        return catalog.translate("seo.match.title_with_score", match=match, score=score)
+    return catalog.translate("seo.match.title", match=match)
+
+
+def _match_meta_description(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
+    match = str(row.get("match_title_text") or row.get("match") or "").strip()
+    kickoff = str(row.get("kickoff_display") or "").strip()
+    actual_score = str(row.get("actual_score") or "").strip()
+    if actual_score:
+        hit_label = str(row.get("hit_label") or "").strip()
+        return catalog.translate(
+            "seo.match.description_final",
+            match=match,
+            score=actual_score,
+            hit_label=hit_label or catalog.translate("label.result"),
+        )
+    score = _match_score_text(row)
+    percent = str(row.get("most_likely_percent_text") or "").strip()
+    hda = _match_hda_meta_text(row, catalog=catalog)
+    srf_tip = str(row.get("srf_tip_label") or "").strip() or catalog.translate("card.no_prediction")
+    twenty_min_tip = (
+        str(row.get("twenty_min_tip_plain_label") or "").strip()
+        or catalog.translate("card.no_prediction")
+    )
+    if score and hda:
+        return catalog.translate(
+            "seo.match.description",
+            match=match,
+            kickoff=kickoff,
+            score=score,
+            percent=percent,
+            hda=hda,
+            srf_tip=srf_tip,
+            twenty_min_tip=twenty_min_tip,
+        )
+    return catalog.translate("seo.match.description_pending", match=match, kickoff=kickoff)
+
+
+def _match_card_aria_label(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
+    match = str(row.get("match_title_text") or row.get("match") or "").strip()
+    kickoff = str(row.get("kickoff_display") or "").strip()
+    actual_score = str(row.get("actual_score") or "").strip()
+    if actual_score:
+        return catalog.translate(
+            "card.aria_past",
+            match=match,
+            kickoff=kickoff,
+            score=actual_score,
+            quality=str(row.get("hit_label") or "").strip() or catalog.translate("label.result"),
+        )
+    if str(row.get("status") or "") == "locked":
+        return catalog.translate(
+            "card.aria_locked",
+            match=match,
+            kickoff=kickoff,
+            srf_tip=str(row.get("srf_tip_label") or "").strip() or catalog.translate("card.no_prediction"),
+            twenty_min_tip=(
+                str(row.get("twenty_min_tip_plain_label") or "").strip()
+                or catalog.translate("card.no_prediction")
+            ),
+        )
+    return catalog.translate(
+        "card.aria_future",
+        match=match,
+        kickoff=kickoff,
+        score=_match_score_text(row) or catalog.translate("card.no_prediction"),
+        srf_tip=str(row.get("srf_tip_label") or "").strip() or catalog.translate("card.no_prediction"),
+        twenty_min_tip=str(row.get("twenty_min_tip_plain_label") or "").strip() or catalog.translate("card.no_prediction"),
+    )
+
+
+def _match_score_text(row: dict[str, Any]) -> str:
+    score = str(row.get("most_likely_score") or "").strip()
+    if score and ":" in score and "-" not in score:
+        return score
+    home = str(row.get("most_likely_home_display") or "").strip()
+    away = str(row.get("most_likely_away_display") or "").strip()
+    if home and away:
+        return f"{home}:{away}"
+    return ""
+
+
+def _match_hda_meta_text(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
     values = _probability_values(row)
-    if values is not None:
-        labels = _hda_parts(row, catalog=catalog)
-        parts.append(" · ".join(f"{part['label']} {_round_percent_text(value)}" for part, value in zip(labels, values)))
-    srf_tip_label = str(row.get("srf_tip_label") or "")
-    if srf_tip_label:
-        parts.append(f"{catalog.translate('label.srf_game')}: {srf_tip_label}")
-    if not parts:
-        return catalog.translate("site.description")
-    return " — ".join(parts)
+    if values is None:
+        return ""
+    labels = _hda_compact_labels(row, catalog=catalog)
+    return ", ".join(
+        (
+            f"{labels['home']} {_round_percent_text(values[0])}",
+            f"{labels['draw']} {_round_percent_text(values[1])}",
+            f"{labels['away']} {_round_percent_text(values[2])}",
+        )
+    )
 
 
-def _match_jsonld(row: dict[str, Any]) -> str:
-    payload = {
-        "@context": "https://schema.org",
-        "@type": "SportsEvent",
-        "name": str(row.get("match") or ""),
-        "startDate": str(row.get("event_date") or ""),
-        "homeTeam": {"@type": "SportsTeam", "name": str(row.get("home_team_label") or "")},
-        "awayTeam": {"@type": "SportsTeam", "name": str(row.get("away_team_label") or "")},
+def _page_jsonld_graph(
+    context: dict[str, Any],
+    *,
+    page_kind: str,
+    item_rows: list[dict[str, Any]] | None = None,
+    row: dict[str, Any] | None = None,
+) -> str:
+    base_url = str(context["base_url"])
+    page_url = _absolute_site_url(str(context["current_url"]), base_url=base_url)
+    graph: list[dict[str, Any]] = [
+        _organization_jsonld(base_url),
+        _website_jsonld(context),
+        _predictions_dataset_jsonld(context),
+    ]
+
+    main_entity_id = _page_main_entity_id(page_url, page_kind=page_kind, has_items=bool(item_rows))
+    graph.append(_webpage_jsonld(context, page_url=page_url, page_kind=page_kind, main_entity_id=main_entity_id))
+    graph.append(_breadcrumb_jsonld(context, page_url=page_url, row=row))
+
+    if page_kind == "match_detail" and row is not None:
+        graph.append(_sports_event_jsonld(context, row=row, page_url=page_url))
+    elif page_kind in {"home", "match_list"} and item_rows:
+        graph.append(
+            _match_item_list_jsonld(
+                context,
+                rows=item_rows,
+                list_id=main_entity_id or f"{page_url}#matches",
+                name=str(context.get("page_title") or context.get("title") or ""),
+            )
+        )
+    elif page_kind == "tournament":
+        champion_list = _champion_item_list_jsonld(context, list_id=main_entity_id or f"{page_url}#tournament-probabilities")
+        if champion_list:
+            graph.append(champion_list)
+
+    return json.dumps({"@context": "https://schema.org", "@graph": graph}, ensure_ascii=False)
+
+
+def _organization_jsonld(base_url: str) -> dict[str, Any]:
+    return {
+        "@type": "Organization",
+        "@id": f"{base_url}/#organization",
+        "name": "Helga",
+        "url": "https://www.helga.ch/",
+        "sameAs": [
+            "https://github.com/helga-agentur",
+        ],
     }
-    return json.dumps(payload, ensure_ascii=False)
+
+
+def _website_jsonld(context: dict[str, Any]) -> dict[str, Any]:
+    base_url = str(context["base_url"])
+    payload: dict[str, Any] = {
+        "@type": "WebSite",
+        "@id": f"{base_url}/#website",
+        "url": f"{base_url}/",
+        "name": str(context.get("site_name") or "Helga World Cup Predictions"),
+        "inLanguage": list(SITE_LOCALES),
+        "publisher": {"@id": f"{base_url}/#organization"},
+    }
+    generated_at = str(context.get("generated_at_utc") or "").strip()
+    if generated_at:
+        payload["dateModified"] = generated_at
+    return payload
+
+
+def _predictions_dataset_jsonld(context: dict[str, Any]) -> dict[str, Any]:
+    base_url = str(context["base_url"])
+    api_url = _absolute_site_url(JSON_FEED_PATH, base_url=base_url)
+    generated_at = str(context.get("generated_at_utc") or "").strip()
+    payload: dict[str, Any] = {
+        "@type": "Dataset",
+        "@id": f"{api_url}#dataset",
+        "name": "Helga World Cup 2026 Predictions API",
+        "description": (
+            "Machine-readable FIFA World Cup 2026 prediction feed with fixture keys, team identifiers, "
+            "score probabilities, SRF and 20min tip recommendations, result state, and localized detail URLs."
+        ),
+        "url": api_url,
+        "isAccessibleForFree": True,
+        "inLanguage": list(SITE_LOCALES),
+        "creator": {"@id": f"{base_url}/#organization"},
+        "license": "https://github.com/helga-agentur/worldcup-predictions/blob/main/LICENSE",
+        "sameAs": "https://github.com/helga-agentur/worldcup-predictions",
+        "distribution": {
+            "@type": "DataDownload",
+            "@id": f"{api_url}#download",
+            "contentUrl": api_url,
+            "encodingFormat": "application/json",
+            "name": "Predictions JSON API",
+        },
+    }
+    if generated_at:
+        payload["dateModified"] = generated_at
+    return payload
+
+
+def _page_main_entity_id(page_url: str, *, page_kind: str, has_items: bool) -> str | None:
+    if page_kind == "match_detail":
+        return f"{page_url}#sportsevent"
+    if page_kind == "tournament":
+        return f"{page_url}#tournament-probabilities"
+    if page_kind == "match_list":
+        return f"{page_url}#matches"
+    if page_kind == "home" and has_items:
+        return f"{page_url}#match-preview"
+    return None
+
+
+def _webpage_jsonld(
+    context: dict[str, Any],
+    *,
+    page_url: str,
+    page_kind: str,
+    main_entity_id: str | None,
+) -> dict[str, Any]:
+    base_url = str(context["base_url"])
+    page_type: str | list[str] = "WebPage"
+    if page_kind in {"home", "match_list", "tournament"}:
+        page_type = ["WebPage", "CollectionPage"]
+    payload: dict[str, Any] = {
+        "@type": page_type,
+        "@id": f"{page_url}#webpage",
+        "url": page_url,
+        "name": str(context.get("title") or context.get("page_title") or ""),
+        "description": str(context.get("description") or context.get("page_description") or ""),
+        "inLanguage": str(context.get("locale") or DEFAULT_SITE_LOCALE),
+        "isPartOf": {"@id": f"{base_url}/#website"},
+        "publisher": {"@id": f"{base_url}/#organization"},
+        "about": {"@id": f"{_absolute_site_url(JSON_FEED_PATH, base_url=base_url)}#dataset"},
+    }
+    generated_at = str(context.get("generated_at_utc") or "").strip()
+    if generated_at:
+        payload["dateModified"] = generated_at
+    if main_entity_id:
+        payload["mainEntity"] = {"@id": main_entity_id}
+    return payload
+
+
+def _breadcrumb_jsonld(context: dict[str, Any], *, page_url: str, row: dict[str, Any] | None) -> dict[str, Any]:
+    locale = str(context.get("locale") or DEFAULT_SITE_LOCALE)
+    base_url = str(context["base_url"])
+    home_url = _absolute_site_url(f"/{locale}/", base_url=base_url)
+    items = [
+        {
+            "@type": "ListItem",
+            "position": 1,
+            "name": str(context["t"]("nav.home")),
+            "item": home_url,
+        }
+    ]
+    if page_url != home_url:
+        items.append(
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": _breadcrumb_current_name(context, row=row),
+                "item": page_url,
+            }
+        )
+    return {
+        "@type": "BreadcrumbList",
+        "@id": f"{page_url}#breadcrumbs",
+        "itemListElement": items,
+    }
+
+
+def _breadcrumb_current_name(context: dict[str, Any], *, row: dict[str, Any] | None) -> str:
+    if row is not None:
+        return str(row.get("match_title_text") or row.get("match") or context.get("title") or "")
+    return str(context.get("page_title") or context.get("title") or "")
+
+
+def _match_item_list_jsonld(
+    context: dict[str, Any],
+    *,
+    rows: list[dict[str, Any]],
+    list_id: str,
+    name: str,
+) -> dict[str, Any]:
+    base_url = str(context["base_url"])
+    return {
+        "@type": "ItemList",
+        "@id": list_id,
+        "name": name,
+        "numberOfItems": len(rows),
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": index,
+                "item": _match_list_item_jsonld(row, base_url=base_url),
+            }
+            for index, row in enumerate(rows, start=1)
+        ],
+    }
+
+
+def _match_list_item_jsonld(row: dict[str, Any], *, base_url: str) -> dict[str, Any]:
+    path = str(row.get("current_url") or f"{row.get('detail_path', '')}/")
+    page_url = _absolute_site_url(path, base_url=base_url)
+    payload = {
+        "@type": "SportsEvent",
+        "@id": f"{page_url}#sportsevent",
+        "url": page_url,
+        "name": str(row.get("match_title_text") or row.get("match") or ""),
+        "startDate": str(row.get("event_date") or ""),
+        "eventStatus": _schema_event_status(row),
+    }
+    return {key: value for key, value in payload.items() if value not in ("", None)}
+
+
+def _champion_item_list_jsonld(context: dict[str, Any], *, list_id: str) -> dict[str, Any] | None:
+    champion = context.get("champion")
+    if not isinstance(champion, dict):
+        return None
+    entries = champion.get("entries")
+    if not isinstance(entries, list) or not entries:
+        return None
+    return {
+        "@type": "ItemList",
+        "@id": list_id,
+        "name": str(context.get("page_title") or context.get("title") or ""),
+        "numberOfItems": len(entries),
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": index,
+                "item": _champion_team_jsonld(entry),
+            }
+            for index, entry in enumerate(entries, start=1)
+        ],
+    }
+
+
+def _champion_team_jsonld(entry: dict[str, Any]) -> dict[str, Any]:
+    code = str(entry.get("code") or "").strip()
+    team: dict[str, Any] = {
+        "@type": "SportsTeam",
+        "name": str(entry.get("label") or ""),
+        "additionalProperty": [
+            {
+                "@type": "PropertyValue",
+                "name": "Title probability",
+                "value": str(entry.get("percent_text") or ""),
+            }
+        ],
+    }
+    if code:
+        team["identifier"] = code
+    return team
+
+
+def _sports_event_jsonld(context: dict[str, Any], *, row: dict[str, Any], page_url: str) -> dict[str, Any]:
+    base_url = str(context["base_url"])
+    home_team = _sports_team_jsonld(row, side="home", base_url=base_url)
+    away_team = _sports_team_jsonld(row, side="away", base_url=base_url)
+    payload: dict[str, Any] = {
+        "@type": "SportsEvent",
+        "@id": f"{page_url}#sportsevent",
+        "url": page_url,
+        "name": str(row.get("match_title_text") or row.get("match") or ""),
+        "description": str(row.get("meta_description") or row.get("og_description") or context.get("description") or ""),
+        "sport": "Football",
+        "startDate": str(row.get("event_date") or ""),
+        "eventStatus": _schema_event_status(row),
+        "inLanguage": str(context.get("locale") or DEFAULT_SITE_LOCALE),
+        "superEvent": {
+            "@type": "SportsEvent",
+            "@id": f"{base_url}/#fifa-world-cup-2026",
+            "name": "FIFA World Cup 2026",
+        },
+        "homeTeam": home_team,
+        "awayTeam": away_team,
+        "competitor": [home_team, away_team],
+        "isAccessibleForFree": True,
+    }
+    venue = _row_venue(row)
+    if venue:
+        payload["location"] = {"@type": "Place", "name": venue}
+    return {key: value for key, value in payload.items() if value not in ("", None)}
+
+
+def _sports_team_jsonld(row: dict[str, Any], *, side: str, base_url: str) -> dict[str, Any]:
+    label = str(row.get(f"{side}_team_label") or row.get(f"{side}_team") or "").strip()
+    identifier = _team_identifier(row, side=side)
+    payload: dict[str, Any] = {
+        "@type": "SportsTeam",
+        "name": label,
+    }
+    if identifier:
+        payload["@id"] = f"{base_url}/#team-{normalize_entity_text(identifier)}"
+        payload["identifier"] = identifier
+    return payload
+
+
+def _team_identifier(row: dict[str, Any], *, side: str) -> str:
+    code = str(row.get(f"{side}_fifa_code") or "").strip().upper()
+    if code:
+        return canonical_slot_code(code) or code
+    part = _fixture_key_part(str(row.get("fixture_key") or ""), side=side)
+    return canonical_slot_code(part) or part
+
+
+def _schema_event_status(row: dict[str, Any]) -> str:
+    return (
+        "https://schema.org/EventCompleted"
+        if str(row.get("status") or "") == "final"
+        else "https://schema.org/EventScheduled"
+    )
+
+
+def _row_venue(row: dict[str, Any]) -> str:
+    venue = str(row.get("venue") or "").strip()
+    if venue:
+        return venue
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    return str(metadata.get("venue") or "").strip()
 
 
 def _match_slug(row: dict[str, Any]) -> str:
@@ -3194,6 +3636,48 @@ def _sitemap_xml(localized_contexts: dict[str, dict[str, Any]]) -> str:
 {url_nodes}
 </urlset>
 """
+
+
+def _llms_txt(localized_contexts: dict[str, dict[str, Any]]) -> str:
+    context = localized_contexts.get(DEFAULT_SITE_LOCALE) or next(iter(localized_contexts.values()))
+    base_url = str(context["base_url"])
+    return "\n".join(
+        (
+            "# Helga World Cup Predictions",
+            "",
+            "> Data-driven FIFA World Cup 2026 forecasts from Helga: match score probabilities, provider-neutral predictions, SRF and 20min tip recommendations, result history, tournament probabilities, and a machine-readable JSON API.",
+            "",
+            "This static site publishes localized HTML pages for humans and a JSON feed for agents. Treat the JSON API as the freshest structured source. HTML pages provide canonical URLs, hreflang alternates, OpenGraph/Twitter metadata, and SportsEvent JSON-LD on match detail pages.",
+            "",
+            "Display times are formatted for Europe/Zurich. API timestamps and fixture dates use UTC where available. Predictions and provider-specific tips can change until kickoff; final rows include confirmed results and scoring outcomes.",
+            "",
+            "## Primary pages",
+            "",
+            f"- [English overview]({_absolute_site_url('/en/', base_url=base_url)}): Current prediction dashboard with upcoming matches, past matches, and tournament forecast preview.",
+            f"- [German overview]({_absolute_site_url('/de/', base_url=base_url)}): Localized German prediction dashboard.",
+            f"- [Upcoming matches]({_absolute_site_url(LOCALE_MATCH_LIST_PATHS['en']['future'], base_url=base_url)}): Open fixtures with score probabilities and SRF/20min recommendations.",
+            f"- [Past matches]({_absolute_site_url(LOCALE_MATCH_LIST_PATHS['en']['past'], base_url=base_url)}): Locked or played fixtures with published tips, results, points, and hit quality where available.",
+            f"- [Tournament forecast]({_absolute_site_url(LOCALE_TOURNAMENT_PATHS['en'], base_url=base_url)}): Remaining-team title probabilities and knockout forecast simulation.",
+            "",
+            "## Structured data",
+            "",
+            f"- [Predictions JSON API]({_absolute_site_url(JSON_FEED_PATH, base_url=base_url)}): Canonical machine-readable prediction feed. Includes summary totals, fixture keys, team ids, probabilities, provider tips, result state, and localized detail URLs.",
+            f"- [Sitemap]({_absolute_site_url('/sitemap.xml', base_url=base_url)}): Indexable localized HTML pages.",
+            "",
+            "## Source and methodology",
+            "",
+            "- [GitHub repository](https://github.com/helga-agentur/worldcup-predictions): Full source code for ingestion, modeling, provider optimization, tournament simulation, static export, and deployment automation.",
+            "- [Data vs gut feeling](https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8): Background article explaining the motivation for the forecasts.",
+            "",
+            "## Notes for LLMs",
+            "",
+            "- The core forecast is provider-neutral; SRF and 20min tips are optimization layers on top of the neutral prediction data.",
+            "- Prefer fixture keys, FIFA team codes, and JSON fields over localized display labels when comparing rows.",
+            "- Use localized HTML pages for human-readable summaries and the JSON API for exact current values.",
+            "- Do not infer that predictions are final before kickoff; open and locked matches can still differ from confirmed results.",
+            "",
+        )
+    )
 
 
 class _CacheAwareStaticHandler(SimpleHTTPRequestHandler):

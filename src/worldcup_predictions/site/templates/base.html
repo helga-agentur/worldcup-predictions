@@ -5,19 +5,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title }}</title>
   <meta name="description" content="{{ description }}">
+  <meta name="robots" content="index,follow">
   <link rel="canonical" href="{{ base_url }}{{ current_url }}">
   {% for alternate in alternate_links %}
   <link rel="alternate" hreflang="{{ alternate.locale }}" href="{{ base_url }}{{ alternate.href }}">
   {% endfor %}
+  <link rel="alternate" type="application/json" href="{{ base_url }}{{ json_feed_path }}" title="{{ t('resources.json_api') }}">
+  <link rel="alternate" type="text/markdown" href="{{ base_url }}/llms.txt" title="llms.txt">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="{{ site_name }}">
   <meta property="og:title" content="{{ title }}">
   <meta property="og:description" content="{{ description }}">
   <meta property="og:url" content="{{ base_url }}{{ current_url }}">
+  <meta property="og:image" content="{{ og_image_url }}">
+  <meta property="og:image:width" content="{{ og_image_width }}">
+  <meta property="og:image:height" content="{{ og_image_height }}">
+  <meta property="og:image:type" content="{{ og_image_type }}">
+  <meta property="og:image:alt" content="{{ og_image_alt }}">
   <meta property="og:locale" content="{{ og_locale }}">
-  <meta name="twitter:card" content="summary">
+  {% for og_locale_alternate in og_alternate_locales %}
+  <meta property="og:locale:alternate" content="{{ og_locale_alternate }}">
+  {% endfor %}
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{{ title }}">
   <meta name="twitter:description" content="{{ description }}">
+  <meta name="twitter:image" content="{{ og_image_url }}">
+  <meta name="twitter:image:alt" content="{{ og_image_alt }}">
+  {% if jsonld_graph %}
+  <script type="application/ld+json">{{ jsonld_graph|safe }}</script>
+  {% endif %}
   {% block head_extra %}{% endblock %}
   {% if gtm_container_id %}
   <script>

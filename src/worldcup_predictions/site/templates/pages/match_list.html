@@ -3,7 +3,7 @@
 {% from "partials/page_intro.html" import page_intro %}
 
 {% block content %}
-<nav class="breadcrumb" aria-label="Breadcrumb">
+<nav class="breadcrumb" aria-label="{{ t('nav.breadcrumb') }}">
   <a class="breadcrumb__link" href="/{{ locale }}/">{{ t("nav.home") }}</a>
   <span aria-hidden="true">/</span>
   <a class="breadcrumb__link" href="{{ current_url }}" aria-current="page">{{ page_title }}</a>

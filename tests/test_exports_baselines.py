@@ -46,6 +46,25 @@ from worldcup_predictions.storage import DuckDBStorage
 from worldcup_predictions.tournament import FixtureRecord, TeamResolver
 
 
+def _jsonld_graph_from_html(source: str) -> list[dict[str, object]]:
+    marker = '<script type="application/ld+json">'
+    raw_payload = source.split(marker, 1)[1].split("</script>", 1)[0]
+    payload = json.loads(raw_payload)
+    return payload["@graph"]
+
+
+def _jsonld_node(graph: list[dict[str, object]], schema_type: str, *, node_id_suffix: str | None = None) -> dict[str, object]:
+    for node in graph:
+        node_type = node.get("@type")
+        types = node_type if isinstance(node_type, list) else [node_type]
+        if schema_type not in types:
+            continue
+        if node_id_suffix and not str(node.get("@id") or "").endswith(node_id_suffix):
+            continue
+        return node
+    raise AssertionError(f"JSON-LD node not found: {schema_type} {node_id_suffix or ''}".strip())
+
+
 class StaticPredictionPlugin(BasePlugin):
     id = "static_prediction"
     priority = 10
@@ -1053,12 +1072,15 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertTrue((result.output_dir / "en" / "matches" / "future" / "index.html").exists())
             self.assertTrue((result.output_dir / "en" / "matches" / "past" / "index.html").exists())
             self.assertTrue((result.output_dir / "api" / "predictions").exists())
+            self.assertTrue((result.output_dir / "llms.txt").exists())
             self.assertEqual(len(list((result.output_dir / "assets").glob("site.*.css"))), 1)
             self.assertEqual(len(list((result.output_dir / "assets").glob("theme.*.js"))), 1)
             self.assertTrue((result.output_dir / "assets" / "fonts" / "CadizWeb-Regular.woff2").exists())
             self.assertTrue((result.output_dir / "assets" / "fonts" / "Degular-Regular.woff2").exists())
+            self.assertTrue((result.output_dir / "assets" / "world-cup-2026-predictions-og.png").exists())
             self.assertIn("assets/fonts/CadizWeb-Regular.woff2", result.asset_files)
             self.assertIn("assets/fonts/Degular-Regular.woff2", result.asset_files)
+            self.assertIn("assets/world-cup-2026-predictions-og.png", result.asset_files)
             redirect_html = (result.output_dir / "index.html").read_text(encoding="utf-8")
             html = (result.output_dir / "de" / "index.html").read_text(encoding="utf-8")
             en_html = (result.output_dir / "en" / "index.html").read_text(encoding="utf-8")
@@ -1070,7 +1092,11 @@ class ExportAndBaselineTest(unittest.TestCase):
             js = next((result.output_dir / "assets").glob("theme.*.js")).read_text(encoding="utf-8")
             detail = (result.output_dir / "de" / "spiele" / "2026-07-10-bra-jpn" / "index.html").read_text(encoding="utf-8")
             en_detail = (result.output_dir / "en" / "matches" / "2026-07-10-bra-jpn" / "index.html").read_text(encoding="utf-8")
+            llms_txt = (result.output_dir / "llms.txt").read_text(encoding="utf-8")
             payload = json.loads((result.output_dir / "api" / "predictions").read_text(encoding="utf-8"))
+            home_jsonld = _jsonld_graph_from_html(html)
+            past_jsonld = _jsonld_graph_from_html(de_past_html)
+            detail_jsonld = _jsonld_graph_from_html(detail)
             self.assertIn('meta http-equiv="refresh" content="0; url=/en/"', redirect_html)
             self.assertIn('helga_language', redirect_html)
             self.assertIn('navigator.languages', redirect_html)
@@ -1079,18 +1105,52 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<link rel="canonical" href="http://127.0.0.1:8000/de/">', html)
             self.assertIn('<link rel="alternate" hreflang="en" href="http://127.0.0.1:8000/en/">', html)
             self.assertIn('<link rel="alternate" hreflang="x-default" href="http://127.0.0.1:8000/en/">', html)
-            self.assertIn('<meta property="og:site_name" content="WM 2026 Prognosen">', html)
+            self.assertIn('<link rel="alternate" type="text/markdown" href="http://127.0.0.1:8000/llms.txt" title="llms.txt">', html)
+            self.assertIn('<meta property="og:site_name" content="Helga WM Prognosen">', html)
             self.assertIn('<meta property="og:url" content="http://127.0.0.1:8000/de/">', html)
+            self.assertIn('<meta property="og:image" content="http://127.0.0.1:8000/assets/world-cup-2026-predictions-og.png">', html)
+            self.assertIn('<meta property="og:image:width" content="1200">', html)
+            self.assertIn('<meta property="og:image:height" content="630">', html)
+            self.assertIn('<meta property="og:image:type" content="image/png">', html)
+            self.assertIn(
+                '<meta property="og:image:alt" content="Illustration einer WM-Prognoseanalyse mit Fussballspielerinnen und Fussballspielern, Diagrammen und einer 2:1-Sprechblase.">',
+                html,
+            )
             self.assertIn('<meta property="og:locale" content="de_CH">', html)
-            self.assertIn('<meta name="twitter:card" content="summary">', html)
+            self.assertIn('<meta property="og:locale:alternate" content="en_US">', html)
+            self.assertIn('<meta name="twitter:card" content="summary_large_image">', html)
+            self.assertIn('<meta name="twitter:image" content="http://127.0.0.1:8000/assets/world-cup-2026-predictions-og.png">', html)
+            self.assertIn(
+                '<meta name="twitter:image:alt" content="Illustration einer WM-Prognoseanalyse mit Fussballspielerinnen und Fussballspielern, Diagrammen und einer 2:1-Sprechblase.">',
+                html,
+            )
+            self.assertIn('<meta property="og:image" content="http://127.0.0.1:8000/assets/world-cup-2026-predictions-og.png">', detail)
+            self.assertIn('<meta name="twitter:card" content="summary_large_image">', detail)
+            self.assertEqual(html.count('<script type="application/ld+json">'), 1)
+            self.assertEqual(detail.count('<script type="application/ld+json">'), 1)
+            self.assertEqual(_jsonld_node(home_jsonld, "Organization")["name"], "Helga")
+            self.assertEqual(_jsonld_node(home_jsonld, "WebSite")["url"], "http://127.0.0.1:8000/")
+            dataset_jsonld = _jsonld_node(home_jsonld, "Dataset")
+            self.assertEqual(dataset_jsonld["@id"], "http://127.0.0.1:8000/api/predictions#dataset")
+            self.assertEqual(dataset_jsonld["distribution"]["@type"], "DataDownload")
+            self.assertEqual(dataset_jsonld["distribution"]["contentUrl"], "http://127.0.0.1:8000/api/predictions")
+            self.assertEqual(dataset_jsonld["distribution"]["encodingFormat"], "application/json")
+            home_breadcrumb = _jsonld_node(home_jsonld, "BreadcrumbList")
+            self.assertEqual(home_breadcrumb["itemListElement"][0]["item"], "http://127.0.0.1:8000/de/")
+            past_item_list = _jsonld_node(past_jsonld, "ItemList", node_id_suffix="#matches")
+            self.assertEqual(past_item_list["numberOfItems"], 1)
+            self.assertEqual(
+                past_item_list["itemListElement"][0]["item"]["@id"],
+                "http://127.0.0.1:8000/de/spiele/2026-07-10-bra-jpn/#sportsevent",
+            )
             self.assertIn("World Cup 2026 Predictions", en_html)
-            self.assertIn("Upcoming Matches", en_html)
+            self.assertIn("Upcoming matches", en_html)
             self.assertIn("Past matches", en_html)
             self.assertIn('<link rel="canonical" href="http://127.0.0.1:8000/de/spiele/kommende">', de_future_html)
             self.assertIn('<link rel="alternate" hreflang="en" href="http://127.0.0.1:8000/en/matches/future">', de_future_html)
             self.assertIn('<link rel="alternate" hreflang="x-default" href="http://127.0.0.1:8000/en/matches/future">', de_future_html)
             self.assertIn('<a class="language-switch__link" href="/en/matches/future" lang="en"', de_future_html)
-            self.assertIn('<title>Kommende Spiele — WM 2026 Prognosen</title>', de_future_html)
+            self.assertIn('<title>Kommende WM-2026-Spiele &amp; Tipps | Helga</title>', de_future_html)
             self.assertIn('<a class="action-link action-link--back" href="/de/">', de_future_html)
             self.assertIn('<span>Zurück zur Startseite</span>', de_future_html)
             self.assertIn('<link rel="canonical" href="http://127.0.0.1:8000/de/spiele/vergangene">', de_past_html)
@@ -1123,14 +1183,14 @@ class ExportAndBaselineTest(unittest.TestCase):
             )
             self.assertNotIn("<span>Tippspiel Prognosen</span>", html)
             self.assertIn(
-                '<nav class="breadcrumb" aria-label="Breadcrumb">\n'
+                '<nav class="breadcrumb" aria-label="Breadcrumb-Navigation">\n'
                 '  <a class="breadcrumb__link" href="/de/" aria-current="page">Home</a>\n'
                 "</nav>",
                 html,
             )
             self.assertIn('<header class="page-intro" aria-labelledby="page-title">', html)
-            self.assertIn("Die Prognosen bündeln aktuelle Spielplandaten, veröffentlichte Resultate", html)
-            self.assertIn("The predictions combine current fixture data, published results", en_html)
+            self.assertIn("Datengetriebene WM-2026-Prognosen von Helga", html)
+            self.assertIn("Data-driven World Cup 2026 forecasts from Helga", en_html)
             self.assertIn(
                 '<a href="https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8" target="_blank" rel="noopener" data-analytics-event="helga_blog_click">Helga-Blogbeitrag</a>',
                 html,
@@ -1182,7 +1242,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn("helga.ch/themes/custom/customer/dist/webfonts", css)
             self.assertNotIn("Aktion", html)
             self.assertNotIn(">Details</a>", html)
-            self.assertIn("Die Vorhersagen und Tipps können sich bis zum jeweiligen Spielstart noch verändern.", html)
+            self.assertIn("Resultat-Wahrscheinlichkeiten, SRF-Tipps und 20min-Tipps werden bis zum jeweiligen Spielstart aktualisiert.", html)
             self.assertIn("JSON API", html)
             self.assertIn('href="/api/predictions"', html)
             rendered_header = html.split("</header>", 1)[0]
@@ -1227,7 +1287,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                 past_section,
             )
             self.assertIn(
-                '<a class="match-card" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open" data-variant="past">',
+                '<a class="match-card" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open" aria-label="Brasilien - Japan, Anpfiff Fr, 10.07.2026, 20:00, Schlussresultat 2:0, Prognose-Ergebnis Teilweise richtig." data-variant="past">',
                 past_section,
             )
             self.assertNotIn('<a class="match-row"', past_section)
@@ -1243,7 +1303,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn('<span class="status" data-status="final">Getippt</span>', past_section)
             self.assertIn("🇧🇷", past_section)
             self.assertIn(
-                '<a class="match-card" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open" data-variant="past">',
+                '<a class="match-card" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open" aria-label="Brasilien - Japan, Anpfiff Fr, 10.07.2026, 20:00, Schlussresultat 2:0, Prognose-Ergebnis Teilweise richtig." data-variant="past">',
                 de_past_html,
             )
             self.assertNotIn('<a class="match-row"', de_past_html)
@@ -1271,9 +1331,24 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("<loc>http://127.0.0.1:8000/en/tournament-forecast</loc>", sitemap_xml)
             self.assertNotIn("<loc>http://127.0.0.1:8000/de/turnier</loc>", sitemap_xml)
             self.assertNotIn("<loc>http://127.0.0.1:8000/en/tournament</loc>", sitemap_xml)
-            self.assertIn('<title>Brasilien - Japan — WM 2026 Prognosen</title>', detail)
+            self.assertIn("# Helga World Cup Predictions", llms_txt)
+            self.assertIn("[Predictions JSON API](http://127.0.0.1:8000/api/predictions)", llms_txt)
+            self.assertIn("[English overview](http://127.0.0.1:8000/en/)", llms_txt)
+            self.assertIn("[Tournament forecast](http://127.0.0.1:8000/en/tournament-forecast)", llms_txt)
+            self.assertIn("Prefer fixture keys, FIFA team codes, and JSON fields", llms_txt)
+            self.assertIn('<title>Brasilien - Japan: Resultat 2:0 | WM 2026 Prognose</title>', detail)
             self.assertIn('"@type": "SportsEvent"', detail)
+            self.assertIn('"eventStatus": "https://schema.org/EventCompleted"', detail)
             self.assertIn('"startDate": "2026-07-10T18:00:00Z"', detail)
+            sports_event = _jsonld_node(detail_jsonld, "SportsEvent", node_id_suffix="#sportsevent")
+            self.assertEqual(sports_event["url"], "http://127.0.0.1:8000/de/spiele/2026-07-10-bra-jpn/")
+            self.assertEqual(sports_event["sport"], "Football")
+            self.assertEqual(sports_event["homeTeam"]["identifier"], "BRA")
+            self.assertEqual(sports_event["awayTeam"]["identifier"], "JPN")
+            self.assertEqual(sports_event["superEvent"]["name"], "FIFA World Cup 2026")
+            detail_breadcrumb_jsonld = _jsonld_node(detail_jsonld, "BreadcrumbList")
+            self.assertEqual(detail_breadcrumb_jsonld["itemListElement"][0]["name"], "Home")
+            self.assertEqual(detail_breadcrumb_jsonld["itemListElement"][1]["name"], "Brasilien - Japan")
             self.assertIn('<h1 id="match-title" class="detail-hero__title">', detail)
             h1_match_name = detail.split('<h1 id="match-title" class="detail-hero__title">', 1)[1].split("</h1>", 1)[0]
             self.assertIn('<span class="detail-hero__flag" aria-hidden="true">🇧🇷</span>', h1_match_name)
@@ -1316,25 +1391,25 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<div class="detail-pick__value">Brasilien</div>', detail)
             self.assertIn('<strong class="detail-pick__points numeric" data-state="positive">+6 Punkte</strong>', detail)
             self.assertIn("+6 Punkte", detail)
-            self.assertIn("Resultat-Matrix", detail)
+            self.assertIn("Wahrscheinlichste Resultate", detail)
             self.assertIn('<section class="section" aria-labelledby="matrix-title">\n    <div class="content-width content-width--narrow">', detail)
             self.assertIn('<table class="heatmap__table">', detail)
             self.assertIn('class="heatmap__cell" data-hot="true" data-most-likely="true"', detail)
             self.assertIn('title="1:0 — 12.3%"', detail)
             self.assertIn('<div class="heatmap__scale" aria-hidden="true"><span>0%</span><span class="heatmap__swatch"></span><span class="numeric">12.3%</span></div>', detail)
-            self.assertIn('<span class="heatmap__dot" data-marker="most-likely" aria-hidden="true"></span><span>Umrandet: wahrscheinlichstes Resultat 1:0 (12.3%).</span>', detail)
-            self.assertIn("Umrandet: wahrscheinlichstes Resultat 1:0 (12.3%).", detail)
+            self.assertIn('<span class="heatmap__dot" data-marker="most-likely" aria-hidden="true"></span><span>Blau umrandet: wahrscheinlichstes Resultat 1:0 (12.3%).</span>', detail)
+            self.assertIn("Blau umrandet: wahrscheinlichstes Resultat 1:0 (12.3%).", detail)
             self.assertIn('data-actual="true"', detail)
-            self.assertIn('<span class="heatmap__dot" data-marker="actual" aria-hidden="true"></span><span>Grün markiert: tatsächliches Resultat.</span>', detail)
+            self.assertIn('<span class="heatmap__dot" data-marker="actual" aria-hidden="true"></span><span>Grün markiert: Schlussresultat.</span>', detail)
             self.assertIn("Zeilen: Tore Brasilien · Spalten: Tore Japan", detail)
             self.assertIn("Rows: Brazil goals · Columns: Japan goals", en_detail)
-            self.assertIn("Grün markiert: tatsächliches Resultat.", detail)
+            self.assertIn("Grün markiert: Schlussresultat.", detail)
             self.assertIn("Zurück zur Startseite", detail)
             self.assertIn('<a class="action-link action-link--back" href="/de/">', detail)
             self.assertIn('<path d="M19 12H5"></path>', detail)
             self.assertIn('<a class="breadcrumb__link" href="/de/">Home</a>', detail)
             self.assertIn('<a class="breadcrumb__link" href="/de/spiele/2026-07-10-bra-jpn/" aria-current="page"><span class="match-name">', detail)
-            detail_breadcrumb = detail.split('<nav class="breadcrumb" aria-label="Breadcrumb">', 1)[1].split("</nav>", 1)[0]
+            detail_breadcrumb = detail.split('<nav class="breadcrumb" aria-label="Breadcrumb-Navigation">', 1)[1].split("</nav>", 1)[0]
             self.assertIn('<span class="match-name__label">Brasilien</span>', detail_breadcrumb)
             self.assertIn('<span class="match-name__label">Japan</span>', detail_breadcrumb)
             self.assertNotIn("match-name__flag", detail_breadcrumb)
