@@ -1430,14 +1430,15 @@ html[data-theme="dark"] .tag[data-result="trend"] {
 }
 
 .bracket-tree .match-status {
+  font-size: 0.82rem;
+  font-weight: 500;
   color: var(--muted);
-  transition: color 0.24s ease, border-color 0.24s ease;
+  transition: color 0.24s ease, border-color 0.24s ease, font-size 0.24s ease;
 }
 
-.bracket-tree__match-label {
-  color: var(--muted);
-  font-family: "Degular", ui-monospace, monospace;
-  font-size: var(--text-xs);
+.bracket-tree .match-body:has(.side-wrapper.winner) .match-status {
+  font-size: 0.9rem;
+  color: var(--ink);
 }
 
 .bracket-tree__fallback {

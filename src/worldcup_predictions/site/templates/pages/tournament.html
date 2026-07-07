@@ -119,8 +119,7 @@
           navButtonsPosition: "overTitles",
           verticalScrollMode: "mixed",
           showScrollbar: true,
-          getPlayerTitleHTML: (player) => escapeHtml(player.title),
-          getMatchTopHTML: (match) => match.matchLabel ? `<span class="bracket-tree__match-label">${escapeHtml(match.matchLabel)}</span>` : ""
+          getPlayerTitleHTML: (player) => escapeHtml(player.title)
         });
         wrapper.dataset.ready = "true";
         if (fallback) {
