@@ -84,7 +84,7 @@ For future knockout rounds, the simulator advances winners round by round. Exist
 
 The static site reads from `published_prediction_ledger`. The tournament page additionally reads the latest `simulation_summary` champion distribution, falling back to `market_outrights` no-vig probabilities (with a source note) when no usable simulation data exists.
 
-When `simulation_summary.metadata.forecast_results` is present, the tournament bracket animation uses that simulated path so the bracket winner and champion bars are based on the same run.
+When `simulation_summary.metadata.forecast_results` is present, the tournament bracket animation uses published ledger predictions for already-defined fixtures and uses the simulated path only for unresolved future pairings whose teams match the projected bracket slots. This keeps match pages, homepage cards, and bracketry aligned on the same per-fixture forecast while still letting the simulation fill future knockout rounds.
 
 Future rows can move until the relevant match locks. Past rows stay frozen as public historical predictions, while final score fields and provider point totals can be added afterward.
 

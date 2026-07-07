@@ -478,7 +478,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                                 },
                                 {
                                     "match_id": "M98",
-                                    "home_team": "Portugal",
+                                    "home_team": "Spain",
                                     "away_team": "Belgium",
                                     "score": "0:1",
                                     "home_score": 0,
@@ -560,20 +560,24 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertEqual(initial_m98["matchStatus"], "Open")
             self.assertFalse(any("scores" in side for side in initial_m98["sides"]))
             m93_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M93")
-            self.assertEqual(m93_step["winner"], "POR")
+            self.assertEqual(m93_step["winner"], "ESP")
             self.assertNotIn("preAdvanceToRoundIndex", m93_step)
             m93 = next(match for match in m93_step["matches"] if match["matchLabel"] == "M93")
-            self.assertEqual(m93["matchStatus"], "🇵🇹 Portugal")
-            self.assertEqual([side["scores"][0]["mainScore"] for side in m93["sides"]], [2, 0])
+            self.assertEqual(m93["matchStatus"], "🇪🇸 Spain")
+            self.assertEqual([side["scores"][0]["mainScore"] for side in m93["sides"]], [1, 1])
             m93_carry = next(match for match in m93_step["matches"] if match["matchLabel"] == "M98")
-            self.assertEqual([side["contestantId"] for side in m93_carry["sides"]], ["POR", "W94"])
+            self.assertEqual([side["contestantId"] for side in m93_carry["sides"]], ["ESP", "W94"])
             self.assertEqual(m93_carry["matchStatus"], "Open")
             m94_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M94")
+            self.assertEqual(m94_step["winner"], "BEL")
             self.assertNotIn("preAdvanceToRoundIndex", m94_step)
+            m94 = next(match for match in m94_step["matches"] if match["matchLabel"] == "M94")
+            self.assertEqual(m94["matchStatus"], "🇧🇪 Belgium")
+            self.assertEqual([side["scores"][0]["mainScore"] for side in m94["sides"]], [1, 1])
             m98_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M98")
             self.assertEqual(m98_step["preAdvanceToRoundIndex"], 1)
             m98 = next(match for match in m98_step["matches"] if match["matchLabel"] == "M98")
-            self.assertEqual([side["contestantId"] for side in m98["sides"]], ["POR", "BEL"])
+            self.assertEqual([side["contestantId"] for side in m98["sides"]], ["ESP", "BEL"])
             self.assertEqual(m98["matchStatus"], "🇧🇪 Belgium")
             self.assertEqual([side["scores"][0]["mainScore"] for side in m98["sides"]], [0, 1])
             self.assertTrue(m98["sides"][1]["isWinner"])
