@@ -2795,7 +2795,17 @@ def _most_likely_percent_text(row: dict[str, Any]) -> str:
     probability = _score_matrix_map(row).get((home, away))
     if probability is None:
         return ""
-    return _round_percent_text(probability)
+    return _score_matrix_percent_text(probability)
+
+
+def _score_matrix_percent_text(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "-"
+    if 0 < number < 0.001:
+        return "<0.1%"
+    return f"{number * 100:.1f}%"
 
 
 def _explain_text(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
@@ -2869,16 +2879,19 @@ def _heatmap(row: dict[str, Any], *, catalog: TranslationCatalog) -> dict[str, A
         rows.append({"home": home, "cells": cell_row})
     hidden_mass = max(0.0, 1.0 - shown_mass)
     legend = [
-        catalog.translate(
-            "matrix.legend_most_likely",
-            score=_score_text(most_likely[0], most_likely[1]),
-            percent=str(row.get("most_likely_percent_text") or _round_percent_text(peak)),
-        )
+        {
+            "marker": "most-likely",
+            "text": catalog.translate(
+                "matrix.legend_most_likely",
+                score=_score_text(most_likely[0], most_likely[1]),
+                percent=str(row.get("most_likely_percent_text") or _round_percent_text(peak)),
+            ),
+        }
     ]
     if mark_actual and None not in actual and max(actual) <= HEATMAP_MAX_GOALS:
-        legend.append(catalog.translate("matrix.legend_actual"))
+        legend.append({"marker": "actual", "text": catalog.translate("matrix.legend_actual")})
     if hidden_mass >= 0.001:
-        legend.append(catalog.translate("matrix.hidden_note", percent=f"{hidden_mass * 100:.1f}%"))
+        legend.append({"marker": "", "text": catalog.translate("matrix.hidden_note", percent=f"{hidden_mass * 100:.1f}%")})
     return {
         "columns": list(range(HEATMAP_MAX_GOALS + 1)),
         "rows": rows,

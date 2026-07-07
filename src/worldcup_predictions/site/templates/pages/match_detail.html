@@ -135,7 +135,7 @@
           <div class="heatmap__axis">{{ row.heatmap.axis_text }}</div>
           <div class="heatmap__scale" aria-hidden="true"><span>0%</span><span class="heatmap__swatch"></span><span class="numeric">{{ row.most_likely_percent_text }}</span></div>
           {% for note in row.heatmap.legend %}
-          <p class="heatmap__note">{{ note }}</p>
+          <p class="heatmap__note">{% if note.marker %}<span class="heatmap__dot" data-marker="{{ note.marker }}" aria-hidden="true"></span>{% endif %}<span>{{ note.text }}</span></p>
           {% endfor %}
         </div>
       </div>

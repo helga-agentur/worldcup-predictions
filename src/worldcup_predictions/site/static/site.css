@@ -1231,6 +1231,7 @@ html[data-theme="dark"] .tag[data-result="trend"] {
 .heatmap__cell {
   width: clamp(38px, 6vw, 54px);
   height: clamp(38px, 6vw, 54px);
+  border: 4px solid transparent;
   border-radius: 6px;
   color: var(--muted);
   background: var(--mist);
@@ -1246,15 +1247,17 @@ html[data-theme="dark"] .tag[data-result="trend"] {
 }
 
 .heatmap__cell[data-most-likely="true"] {
-  box-shadow: inset 0 0 0 2px var(--ink);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus-ring) 35%, transparent);
 }
 
 .heatmap__cell[data-actual="true"] {
-  box-shadow: inset 0 0 0 2px var(--accent);
+  border-color: var(--accent);
 }
 
 .heatmap__cell[data-most-likely="true"][data-actual="true"] {
-  box-shadow: inset 0 0 0 2px var(--ink), inset 0 0 0 4px var(--accent);
+  border-color: var(--focus-ring);
+  box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 1px color-mix(in srgb, var(--focus-ring) 35%, transparent);
 }
 
 .heatmap__side {
@@ -1290,7 +1293,26 @@ html[data-theme="dark"] .tag[data-result="trend"] {
 }
 
 .heatmap__note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
   font-size: var(--text-sm);
+}
+
+.heatmap__dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.heatmap__dot[data-marker="most-likely"] {
+  background: var(--focus-ring);
+}
+
+.heatmap__dot[data-marker="actual"] {
+  background: var(--accent);
 }
 
 /* ---------- champion odds ---------- */
