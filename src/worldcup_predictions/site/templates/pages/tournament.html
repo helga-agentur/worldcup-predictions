@@ -4,7 +4,7 @@
 {% from "partials/champion_odds.html" import champion_bars %}
 
 {% block content %}
-<nav class="breadcrumb" aria-label="Breadcrumb">
+<nav class="breadcrumb" aria-label="{{ t('nav.breadcrumb') }}">
   <a class="breadcrumb__link" href="/{{ locale }}/">{{ t("nav.home") }}</a>
   <span aria-hidden="true">/</span>
   <a class="breadcrumb__link" href="{{ current_url }}" aria-current="page">{{ page_title }}</a>
@@ -31,9 +31,9 @@
 {% if tournament_bracket %}
 <section class="section" aria-labelledby="bracket-title">
   <header class="section__heading">
-    <section class="section__heading-copy">
+    <div class="section__heading-copy">
       <h2 id="bracket-title">{{ t("tournament.bracket.title") }}</h2>
-    </section>
+    </div>
   </header>
   <div class="bracket-controls" aria-label="{{ t("tournament.bracket.controls") }}">
     <button class="bracket-control" type="button" data-bracket-play aria-label="{{ t("tournament.bracket.play") }}">

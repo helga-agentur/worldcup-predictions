@@ -1079,18 +1079,19 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<link rel="canonical" href="http://127.0.0.1:8000/de/">', html)
             self.assertIn('<link rel="alternate" hreflang="en" href="http://127.0.0.1:8000/en/">', html)
             self.assertIn('<link rel="alternate" hreflang="x-default" href="http://127.0.0.1:8000/en/">', html)
-            self.assertIn('<meta property="og:site_name" content="WM 2026 Prognosen">', html)
+            self.assertIn('<meta property="og:site_name" content="Helga WM Prognosen">', html)
             self.assertIn('<meta property="og:url" content="http://127.0.0.1:8000/de/">', html)
             self.assertIn('<meta property="og:locale" content="de_CH">', html)
+            self.assertIn('<meta property="og:locale:alternate" content="en_US">', html)
             self.assertIn('<meta name="twitter:card" content="summary">', html)
             self.assertIn("World Cup 2026 Predictions", en_html)
-            self.assertIn("Upcoming Matches", en_html)
+            self.assertIn("Upcoming matches", en_html)
             self.assertIn("Past matches", en_html)
             self.assertIn('<link rel="canonical" href="http://127.0.0.1:8000/de/spiele/kommende">', de_future_html)
             self.assertIn('<link rel="alternate" hreflang="en" href="http://127.0.0.1:8000/en/matches/future">', de_future_html)
             self.assertIn('<link rel="alternate" hreflang="x-default" href="http://127.0.0.1:8000/en/matches/future">', de_future_html)
             self.assertIn('<a class="language-switch__link" href="/en/matches/future" lang="en"', de_future_html)
-            self.assertIn('<title>Kommende Spiele — WM 2026 Prognosen</title>', de_future_html)
+            self.assertIn('<title>Kommende WM-2026-Spiele &amp; Tipps | Helga</title>', de_future_html)
             self.assertIn('<a class="action-link action-link--back" href="/de/">', de_future_html)
             self.assertIn('<span>Zurück zur Startseite</span>', de_future_html)
             self.assertIn('<link rel="canonical" href="http://127.0.0.1:8000/de/spiele/vergangene">', de_past_html)
@@ -1123,14 +1124,14 @@ class ExportAndBaselineTest(unittest.TestCase):
             )
             self.assertNotIn("<span>Tippspiel Prognosen</span>", html)
             self.assertIn(
-                '<nav class="breadcrumb" aria-label="Breadcrumb">\n'
+                '<nav class="breadcrumb" aria-label="Breadcrumb-Navigation">\n'
                 '  <a class="breadcrumb__link" href="/de/" aria-current="page">Home</a>\n'
                 "</nav>",
                 html,
             )
             self.assertIn('<header class="page-intro" aria-labelledby="page-title">', html)
-            self.assertIn("Die Prognosen bündeln aktuelle Spielplandaten, veröffentlichte Resultate", html)
-            self.assertIn("The predictions combine current fixture data, published results", en_html)
+            self.assertIn("Datengetriebene WM-2026-Prognosen von Helga", html)
+            self.assertIn("Data-driven World Cup 2026 forecasts from Helga", en_html)
             self.assertIn(
                 '<a href="https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8" target="_blank" rel="noopener" data-analytics-event="helga_blog_click">Helga-Blogbeitrag</a>',
                 html,
@@ -1182,7 +1183,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn("helga.ch/themes/custom/customer/dist/webfonts", css)
             self.assertNotIn("Aktion", html)
             self.assertNotIn(">Details</a>", html)
-            self.assertIn("Die Vorhersagen und Tipps können sich bis zum jeweiligen Spielstart noch verändern.", html)
+            self.assertIn("Resultat-Wahrscheinlichkeiten, SRF-Tipps und 20min-Tipps werden bis zum jeweiligen Spielstart aktualisiert.", html)
             self.assertIn("JSON API", html)
             self.assertIn('href="/api/predictions"', html)
             rendered_header = html.split("</header>", 1)[0]
@@ -1227,7 +1228,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                 past_section,
             )
             self.assertIn(
-                '<a class="match-card" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open" data-variant="past">',
+                '<a class="match-card" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open" aria-label="Brasilien - Japan, Anpfiff Fr, 10.07.2026, 20:00, Schlussresultat 2:0, Prognose-Ergebnis Teilweise richtig." data-variant="past">',
                 past_section,
             )
             self.assertNotIn('<a class="match-row"', past_section)
@@ -1243,7 +1244,7 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn('<span class="status" data-status="final">Getippt</span>', past_section)
             self.assertIn("🇧🇷", past_section)
             self.assertIn(
-                '<a class="match-card" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open" data-variant="past">',
+                '<a class="match-card" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open" aria-label="Brasilien - Japan, Anpfiff Fr, 10.07.2026, 20:00, Schlussresultat 2:0, Prognose-Ergebnis Teilweise richtig." data-variant="past">',
                 de_past_html,
             )
             self.assertNotIn('<a class="match-row"', de_past_html)
@@ -1271,8 +1272,9 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("<loc>http://127.0.0.1:8000/en/tournament-forecast</loc>", sitemap_xml)
             self.assertNotIn("<loc>http://127.0.0.1:8000/de/turnier</loc>", sitemap_xml)
             self.assertNotIn("<loc>http://127.0.0.1:8000/en/tournament</loc>", sitemap_xml)
-            self.assertIn('<title>Brasilien - Japan — WM 2026 Prognosen</title>', detail)
+            self.assertIn('<title>Brasilien - Japan: Resultat 2:0 | WM 2026 Prognose</title>', detail)
             self.assertIn('"@type": "SportsEvent"', detail)
+            self.assertIn('"eventStatus": "https://schema.org/EventCompleted"', detail)
             self.assertIn('"startDate": "2026-07-10T18:00:00Z"', detail)
             self.assertIn('<h1 id="match-title" class="detail-hero__title">', detail)
             h1_match_name = detail.split('<h1 id="match-title" class="detail-hero__title">', 1)[1].split("</h1>", 1)[0]
@@ -1316,25 +1318,25 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<div class="detail-pick__value">Brasilien</div>', detail)
             self.assertIn('<strong class="detail-pick__points numeric" data-state="positive">+6 Punkte</strong>', detail)
             self.assertIn("+6 Punkte", detail)
-            self.assertIn("Resultat-Matrix", detail)
+            self.assertIn("Wahrscheinlichste Resultate", detail)
             self.assertIn('<section class="section" aria-labelledby="matrix-title">\n    <div class="content-width content-width--narrow">', detail)
             self.assertIn('<table class="heatmap__table">', detail)
             self.assertIn('class="heatmap__cell" data-hot="true" data-most-likely="true"', detail)
             self.assertIn('title="1:0 — 12.3%"', detail)
             self.assertIn('<div class="heatmap__scale" aria-hidden="true"><span>0%</span><span class="heatmap__swatch"></span><span class="numeric">12.3%</span></div>', detail)
-            self.assertIn('<span class="heatmap__dot" data-marker="most-likely" aria-hidden="true"></span><span>Umrandet: wahrscheinlichstes Resultat 1:0 (12.3%).</span>', detail)
-            self.assertIn("Umrandet: wahrscheinlichstes Resultat 1:0 (12.3%).", detail)
+            self.assertIn('<span class="heatmap__dot" data-marker="most-likely" aria-hidden="true"></span><span>Blau umrandet: wahrscheinlichstes Resultat 1:0 (12.3%).</span>', detail)
+            self.assertIn("Blau umrandet: wahrscheinlichstes Resultat 1:0 (12.3%).", detail)
             self.assertIn('data-actual="true"', detail)
-            self.assertIn('<span class="heatmap__dot" data-marker="actual" aria-hidden="true"></span><span>Grün markiert: tatsächliches Resultat.</span>', detail)
+            self.assertIn('<span class="heatmap__dot" data-marker="actual" aria-hidden="true"></span><span>Grün markiert: Schlussresultat.</span>', detail)
             self.assertIn("Zeilen: Tore Brasilien · Spalten: Tore Japan", detail)
             self.assertIn("Rows: Brazil goals · Columns: Japan goals", en_detail)
-            self.assertIn("Grün markiert: tatsächliches Resultat.", detail)
+            self.assertIn("Grün markiert: Schlussresultat.", detail)
             self.assertIn("Zurück zur Startseite", detail)
             self.assertIn('<a class="action-link action-link--back" href="/de/">', detail)
             self.assertIn('<path d="M19 12H5"></path>', detail)
             self.assertIn('<a class="breadcrumb__link" href="/de/">Home</a>', detail)
             self.assertIn('<a class="breadcrumb__link" href="/de/spiele/2026-07-10-bra-jpn/" aria-current="page"><span class="match-name">', detail)
-            detail_breadcrumb = detail.split('<nav class="breadcrumb" aria-label="Breadcrumb">', 1)[1].split("</nav>", 1)[0]
+            detail_breadcrumb = detail.split('<nav class="breadcrumb" aria-label="Breadcrumb-Navigation">', 1)[1].split("</nav>", 1)[0]
             self.assertIn('<span class="match-name__label">Brasilien</span>', detail_breadcrumb)
             self.assertIn('<span class="match-name__label">Japan</span>', detail_breadcrumb)
             self.assertNotIn("match-name__flag", detail_breadcrumb)

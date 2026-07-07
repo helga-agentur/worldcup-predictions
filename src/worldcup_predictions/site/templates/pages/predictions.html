@@ -4,7 +4,7 @@
 {% from "partials/champion_odds.html" import champion_bars %}
 
 {% block content %}
-<nav class="breadcrumb" aria-label="Breadcrumb">
+<nav class="breadcrumb" aria-label="{{ t('nav.breadcrumb') }}">
   <a class="breadcrumb__link" href="/{{ locale }}/" aria-current="page">{{ t("nav.home") }}</a>
 </nav>
 
@@ -123,10 +123,10 @@
   <div class="homepage-grid__main">
     <section class="homepage-panel" aria-labelledby="future-title">
       <header class="section__heading">
-        <section class="section__heading-copy">
+        <div class="section__heading-copy">
           <h2 id="future-title">{{ t("section.future.title") }}</h2>
           <p>{{ t("section.future.description") }}</p>
-        </section>
+        </div>
       </header>
       {% if future_preview_rows %}
         {% set rows_to_show = future_preview_rows %}
@@ -141,10 +141,10 @@
 
     <section class="homepage-panel" aria-labelledby="past-title">
       <header class="section__heading">
-        <section class="section__heading-copy">
+        <div class="section__heading-copy">
           <h2 id="past-title">{{ t("section.tipped.title") }}</h2>
           <p>{{ t("section.tipped.description") }}</p>
-        </section>
+        </div>
       </header>
       {% if tipped_preview_rows %}
         {% set rows_to_show = tipped_preview_rows %}
@@ -163,10 +163,10 @@
   <aside class="homepage-grid__aside">
     <section class="homepage-panel" aria-labelledby="champion-title">
       <header class="section__heading">
-        <section class="section__heading-copy">
+        <div class="section__heading-copy">
           <h2 id="champion-title">{{ t("tournament.title") }}</h2>
           <p>{{ champion.source_text }}</p>
-        </section>
+        </div>
       </header>
       {{ champion_bars(champion.preview_entries) }}
       <div class="section__actions">

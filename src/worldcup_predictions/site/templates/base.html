@@ -5,16 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title }}</title>
   <meta name="description" content="{{ description }}">
+  <meta name="robots" content="index,follow">
   <link rel="canonical" href="{{ base_url }}{{ current_url }}">
   {% for alternate in alternate_links %}
   <link rel="alternate" hreflang="{{ alternate.locale }}" href="{{ base_url }}{{ alternate.href }}">
   {% endfor %}
+  <link rel="alternate" type="application/json" href="{{ base_url }}{{ json_feed_path }}" title="{{ t('resources.json_api') }}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="{{ site_name }}">
   <meta property="og:title" content="{{ title }}">
   <meta property="og:description" content="{{ description }}">
   <meta property="og:url" content="{{ base_url }}{{ current_url }}">
   <meta property="og:locale" content="{{ og_locale }}">
+  {% for og_locale_alternate in og_alternate_locales %}
+  <meta property="og:locale:alternate" content="{{ og_locale_alternate }}">
+  {% endfor %}
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="{{ title }}">
   <meta name="twitter:description" content="{{ description }}">

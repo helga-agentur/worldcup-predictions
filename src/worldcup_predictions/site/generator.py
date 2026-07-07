@@ -126,6 +126,7 @@ API_PRESENTATION_KEYS = {
     "away_flag",
     "away_team_display",
     "away_team_label",
+    "card_aria_label",
     "confidence_text",
     "current_url",
     "detail_path",
@@ -146,6 +147,8 @@ API_PRESENTATION_KEYS = {
     "language_switch_links",
     "match",
     "match_display",
+    "match_title_text",
+    "meta_description",
     "metadata",
     "most_likely_away_display",
     "most_likely_home_display",
@@ -453,10 +456,15 @@ def _site_context(
     past_list_path = LOCALE_MATCH_LIST_PATHS[locale]["past"]
     return {
         "locale": locale,
-        "title": catalog.translate("site.title"),
-        "site_name": catalog.translate("site.title"),
+        "title": catalog.translate("seo.home.title"),
+        "site_name": catalog.translate("site.name"),
         "og_locale": {"de": "de_CH", "en": "en_US"}.get(locale, locale),
-        "description": catalog.translate("site.description"),
+        "og_alternate_locales": [
+            {"de": "de_CH", "en": "en_US"}.get(site_locale, site_locale)
+            for site_locale in SITE_LOCALES
+            if site_locale != locale
+        ],
+        "description": catalog.translate("seo.home.description"),
         "generated_at_utc": generated_at,
         "generated_at_display": _date_time_text(generated_at),
         "asset_css": f"/{asset_path}",
@@ -1803,6 +1811,8 @@ def _write_site_files(
             rows=context["future_rows"],
             title_key="section.future.title",
             description_key="section.future.description",
+            seo_title_key="seo.future.title",
+            seo_description_key="seo.future.description",
             empty_key="empty.future",
         )
         _write_match_list_page(
@@ -1813,6 +1823,8 @@ def _write_site_files(
             rows=context["tipped_rows"],
             title_key="section.tipped.title",
             description_key="section.tipped.description",
+            seo_title_key="seo.past.title",
+            seo_description_key="seo.past.description",
             empty_key="empty.tipped",
         )
         _write_tournament_page(output_dir, template=tournament_template, context=context)
@@ -1828,8 +1840,10 @@ def _write_site_files(
             detail_dir.mkdir(parents=True, exist_ok=True)
             detail_context = {
                 **context,
-                "title": f"{row['match']} — {context['title']}",
-                "description": row.get("og_description") or context["description"],
+                "title": row.get("page_title") or context["title"],
+                "description": row.get("meta_description")
+                or row.get("og_description")
+                or context["description"],
                 "current_url": row["current_url"],
                 "alternate_links": row["alternate_links"],
                 "language_switch_links": row["language_switch_links"],
@@ -1855,6 +1869,8 @@ def _write_match_list_page(
     rows: list[dict[str, Any]],
     title_key: str,
     description_key: str,
+    seo_title_key: str,
+    seo_description_key: str,
     empty_key: str,
 ) -> None:
     locale = str(context["locale"])
@@ -1863,8 +1879,8 @@ def _write_match_list_page(
     page_dir.mkdir(parents=True, exist_ok=True)
     page_context = {
         **context,
-        "title": f"{context['t'](title_key)} — {context['title']}",
-        "description": context["t"](description_key),
+        "title": context["t"](seo_title_key),
+        "description": context["t"](seo_description_key),
         "current_url": page_path,
         "alternate_links": _match_list_alternate_links(kind),
         "language_switch_links": _match_list_language_switch_links(locale, kind),
@@ -1884,8 +1900,8 @@ def _write_tournament_page(output_dir: Path, *, template, context: dict[str, Any
     page_dir.mkdir(parents=True, exist_ok=True)
     page_context = {
         **context,
-        "title": f"{context['t']('tournament.title')} — {context['title']}",
-        "description": context["t"]("tournament.lead"),
+        "title": context["t"]("seo.tournament.title"),
+        "description": context["t"]("seo.tournament.description"),
         "current_url": page_path,
         "alternate_links": _tournament_alternate_links(),
         "language_switch_links": _tournament_language_switch_links(locale),
@@ -2388,6 +2404,7 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
     home_display = _country_name_display(home_name, home_flag)
     away_display = _country_name_display(away_name, away_flag)
     prepared["match"] = f"{home_name} - {away_name}".strip(" -")
+    prepared["match_title_text"] = _match_title_text(home_name, away_name, locale=locale)
     prepared["home_team_label"] = home_name
     prepared["away_team_label"] = away_name
     prepared["home_flag"] = home_flag
@@ -2473,7 +2490,10 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
     prepared["explain_text"] = _explain_text(prepared, catalog=catalog)
     prepared["advancement"] = _advancement_display(prepared, country_registry=country_registry, locale=locale)
     prepared["heatmap"] = _heatmap(prepared, catalog=catalog)
-    prepared["og_description"] = _match_og_description(prepared, catalog=catalog)
+    prepared["page_title"] = _match_page_title(prepared, catalog=catalog)
+    prepared["meta_description"] = _match_meta_description(prepared, catalog=catalog)
+    prepared["og_description"] = prepared["meta_description"]
+    prepared["card_aria_label"] = _match_card_aria_label(prepared, catalog=catalog)
     prepared["jsonld"] = _match_jsonld(prepared)
     return prepared
 
@@ -2904,18 +2924,114 @@ def _heatmap(row: dict[str, Any], *, catalog: TranslationCatalog) -> dict[str, A
     }
 
 
-def _match_og_description(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
-    parts = []
+def _match_title_text(home: str, away: str, *, locale: str) -> str:
+    separator = " vs " if locale == "en" else " - "
+    if home and away:
+        return f"{home}{separator}{away}"
+    return (home or away).strip()
+
+
+def _match_page_title(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
+    match = str(row.get("match_title_text") or row.get("match") or "").strip()
+    actual_score = str(row.get("actual_score") or "").strip()
+    if actual_score:
+        return catalog.translate("seo.match.title_final", match=match, score=actual_score)
+    score = _match_score_text(row)
+    if score:
+        return catalog.translate("seo.match.title_with_score", match=match, score=score)
+    return catalog.translate("seo.match.title", match=match)
+
+
+def _match_meta_description(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
+    match = str(row.get("match_title_text") or row.get("match") or "").strip()
+    kickoff = str(row.get("kickoff_display") or "").strip()
+    actual_score = str(row.get("actual_score") or "").strip()
+    if actual_score:
+        hit_label = str(row.get("hit_label") or "").strip()
+        return catalog.translate(
+            "seo.match.description_final",
+            match=match,
+            score=actual_score,
+            hit_label=hit_label or catalog.translate("label.result"),
+        )
+    score = _match_score_text(row)
+    percent = str(row.get("most_likely_percent_text") or "").strip()
+    hda = _match_hda_meta_text(row, catalog=catalog)
+    srf_tip = str(row.get("srf_tip_label") or "").strip() or catalog.translate("card.no_prediction")
+    twenty_min_tip = (
+        str(row.get("twenty_min_tip_plain_label") or "").strip()
+        or catalog.translate("card.no_prediction")
+    )
+    if score and hda:
+        return catalog.translate(
+            "seo.match.description",
+            match=match,
+            kickoff=kickoff,
+            score=score,
+            percent=percent,
+            hda=hda,
+            srf_tip=srf_tip,
+            twenty_min_tip=twenty_min_tip,
+        )
+    return catalog.translate("seo.match.description_pending", match=match, kickoff=kickoff)
+
+
+def _match_card_aria_label(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
+    match = str(row.get("match_title_text") or row.get("match") or "").strip()
+    kickoff = str(row.get("kickoff_display") or "").strip()
+    actual_score = str(row.get("actual_score") or "").strip()
+    if actual_score:
+        return catalog.translate(
+            "card.aria_past",
+            match=match,
+            kickoff=kickoff,
+            score=actual_score,
+            quality=str(row.get("hit_label") or "").strip() or catalog.translate("label.result"),
+        )
+    if str(row.get("status") or "") == "locked":
+        return catalog.translate(
+            "card.aria_locked",
+            match=match,
+            kickoff=kickoff,
+            srf_tip=str(row.get("srf_tip_label") or "").strip() or catalog.translate("card.no_prediction"),
+            twenty_min_tip=(
+                str(row.get("twenty_min_tip_plain_label") or "").strip()
+                or catalog.translate("card.no_prediction")
+            ),
+        )
+    return catalog.translate(
+        "card.aria_future",
+        match=match,
+        kickoff=kickoff,
+        score=_match_score_text(row) or catalog.translate("card.no_prediction"),
+        srf_tip=str(row.get("srf_tip_label") or "").strip() or catalog.translate("card.no_prediction"),
+        twenty_min_tip=str(row.get("twenty_min_tip_plain_label") or "").strip() or catalog.translate("card.no_prediction"),
+    )
+
+
+def _match_score_text(row: dict[str, Any]) -> str:
+    score = str(row.get("most_likely_score") or "").strip()
+    if score and ":" in score and "-" not in score:
+        return score
+    home = str(row.get("most_likely_home_display") or "").strip()
+    away = str(row.get("most_likely_away_display") or "").strip()
+    if home and away:
+        return f"{home}:{away}"
+    return ""
+
+
+def _match_hda_meta_text(row: dict[str, Any], *, catalog: TranslationCatalog) -> str:
     values = _probability_values(row)
-    if values is not None:
-        labels = _hda_parts(row, catalog=catalog)
-        parts.append(" · ".join(f"{part['label']} {_round_percent_text(value)}" for part, value in zip(labels, values)))
-    srf_tip_label = str(row.get("srf_tip_label") or "")
-    if srf_tip_label:
-        parts.append(f"{catalog.translate('label.srf_game')}: {srf_tip_label}")
-    if not parts:
-        return catalog.translate("site.description")
-    return " — ".join(parts)
+    if values is None:
+        return ""
+    labels = _hda_compact_labels(row, catalog=catalog)
+    return ", ".join(
+        (
+            f"{labels['home']} {_round_percent_text(values[0])}",
+            f"{labels['draw']} {_round_percent_text(values[1])}",
+            f"{labels['away']} {_round_percent_text(values[2])}",
+        )
+    )
 
 
 def _match_jsonld(row: dict[str, Any]) -> str:
@@ -2923,7 +3039,13 @@ def _match_jsonld(row: dict[str, Any]) -> str:
         "@context": "https://schema.org",
         "@type": "SportsEvent",
         "name": str(row.get("match") or ""),
+        "description": str(row.get("meta_description") or row.get("og_description") or ""),
         "startDate": str(row.get("event_date") or ""),
+        "eventStatus": (
+            "https://schema.org/EventCompleted"
+            if str(row.get("status") or "") == "final"
+            else "https://schema.org/EventScheduled"
+        ),
         "homeTeam": {"@type": "SportsTeam", "name": str(row.get("home_team_label") or "")},
         "awayTeam": {"@type": "SportsTeam", "name": str(row.get("away_team_label") or "")},
     }

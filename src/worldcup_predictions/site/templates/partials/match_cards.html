@@ -3,7 +3,7 @@
 <div class="match-cards">
   {% for row in rows_to_show %}
   {% set card_variant = match_card_variant|default("future") %}
-  <a class="match-card" href="{{ row.detail_path }}/" data-analytics-event="helga_match_open"{% if card_variant == "past" %} data-variant="past"{% endif %}>
+  <a class="match-card" href="{{ row.detail_path }}/" data-analytics-event="helga_match_open"{% if row.card_aria_label %} aria-label="{{ row.card_aria_label }}"{% endif %}{% if card_variant == "past" %} data-variant="past"{% endif %}>
     <span class="match-card__teams">
       <span class="match-card__matchup">
         <span class="match-card__team" data-side="home">
