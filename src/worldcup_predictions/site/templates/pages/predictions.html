@@ -73,7 +73,32 @@
         {% endif %}
       </div>
       <div class="summary__card">
-        <dt class="summary__label">{{ t("summary.hit_rate") }}</dt>
+        <dt class="summary__label">
+          <span>{{ t("summary.hit_rate") }}</span>
+          <button class="summary__help-button" type="button" aria-label="{{ t('summary.hit_method_aria') }}" aria-haspopup="dialog" aria-controls="hit-rate-tooltip" aria-expanded="false" data-tooltip-trigger="hit-rate-tooltip">
+            {{ icon("circle-help") }}
+          </button>
+        </dt>
+        <dd class="summary-tooltip" id="hit-rate-tooltip" role="dialog" aria-labelledby="hit-rate-tooltip-title" data-tooltip hidden>
+          <button class="summary-tooltip__close" type="button" aria-label="{{ t('summary.hit_method_close') }}" data-tooltip-close>
+            {{ icon("x") }}
+          </button>
+          <h3 id="hit-rate-tooltip-title" class="summary-tooltip__title">{{ t("summary.hit_method_title") }}</h3>
+          <ul class="summary-tooltip__list">
+            <li class="summary-tooltip__item">
+              <span class="bar__dot" data-state="strong" aria-hidden="true"></span>
+              <span><strong>{{ t("summary.exact_short") }}:</strong> {{ t("summary.hit_method_exact") }}</span>
+            </li>
+            <li class="summary-tooltip__item">
+              <span class="bar__dot" data-state="good" aria-hidden="true"></span>
+              <span><strong>{{ t("summary.correct_short") }}:</strong> {{ t("summary.hit_method_correct") }}</span>
+            </li>
+            <li class="summary-tooltip__item">
+              <span class="bar__dot" data-state="bad" aria-hidden="true"></span>
+              <span><strong>{{ t("summary.wrong_short") }}:</strong> {{ t("summary.hit_method_wrong") }}</span>
+            </li>
+          </ul>
+        </dd>
         <dd class="summary__value">{{ summary_extras.hit_rate_text }}</dd>
         {% if summary_extras.has_hits %}
         <dd class="summary__bar">
