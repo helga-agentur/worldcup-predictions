@@ -108,6 +108,7 @@
     menuToggle.setAttribute("aria-expanded", open ? "true" : "false");
     menuToggle.setAttribute("aria-label", menuToggle.getAttribute(open ? "data-close-label" : "data-open-label") || "");
     if (open) {
+      hideAllTooltips();
       focusBeforeMenu = document.activeElement;
       document.body.dataset.menuOpen = "true";
       menu.dataset.state = "opening";
@@ -206,6 +207,15 @@
       return;
     }
     setTooltip(trigger, tooltip, false, false);
+  }
+
+  function hideAllTooltips() {
+    tooltipTriggers.forEach(function (trigger) {
+      var tooltip = tooltipForTrigger(trigger);
+      if (tooltip && !tooltip.hidden) {
+        hideTooltip(trigger, tooltip, true);
+      }
+    });
   }
 
   function scheduleTooltipHide(trigger, tooltip) {
