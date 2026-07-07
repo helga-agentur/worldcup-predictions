@@ -106,7 +106,7 @@
   "summary.next_kickoff": "Next",
   "summary.open": "Open tips",
   "summary.played": "Played matches",
-  "summary.points_progress": "{current}/{max} Points",
+  "summary.points_progress": "{current}/{max} from played matches",
   "summary.srf_points": "SRF points",
   "summary.tipped": "Past matches",
   "summary.title": "Predictions overview",
