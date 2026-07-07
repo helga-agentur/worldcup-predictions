@@ -46,6 +46,25 @@ from worldcup_predictions.storage import DuckDBStorage
 from worldcup_predictions.tournament import FixtureRecord, TeamResolver
 
 
+def _jsonld_graph_from_html(source: str) -> list[dict[str, object]]:
+    marker = '<script type="application/ld+json">'
+    raw_payload = source.split(marker, 1)[1].split("</script>", 1)[0]
+    payload = json.loads(raw_payload)
+    return payload["@graph"]
+
+
+def _jsonld_node(graph: list[dict[str, object]], schema_type: str, *, node_id_suffix: str | None = None) -> dict[str, object]:
+    for node in graph:
+        node_type = node.get("@type")
+        types = node_type if isinstance(node_type, list) else [node_type]
+        if schema_type not in types:
+            continue
+        if node_id_suffix and not str(node.get("@id") or "").endswith(node_id_suffix):
+            continue
+        return node
+    raise AssertionError(f"JSON-LD node not found: {schema_type} {node_id_suffix or ''}".strip())
+
+
 class StaticPredictionPlugin(BasePlugin):
     id = "static_prediction"
     priority = 10
@@ -1073,6 +1092,9 @@ class ExportAndBaselineTest(unittest.TestCase):
             en_detail = (result.output_dir / "en" / "matches" / "2026-07-10-bra-jpn" / "index.html").read_text(encoding="utf-8")
             llms_txt = (result.output_dir / "llms.txt").read_text(encoding="utf-8")
             payload = json.loads((result.output_dir / "api" / "predictions").read_text(encoding="utf-8"))
+            home_jsonld = _jsonld_graph_from_html(html)
+            past_jsonld = _jsonld_graph_from_html(de_past_html)
+            detail_jsonld = _jsonld_graph_from_html(detail)
             self.assertIn('meta http-equiv="refresh" content="0; url=/en/"', redirect_html)
             self.assertIn('helga_language', redirect_html)
             self.assertIn('navigator.languages', redirect_html)
@@ -1087,6 +1109,23 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<meta property="og:locale" content="de_CH">', html)
             self.assertIn('<meta property="og:locale:alternate" content="en_US">', html)
             self.assertIn('<meta name="twitter:card" content="summary">', html)
+            self.assertEqual(html.count('<script type="application/ld+json">'), 1)
+            self.assertEqual(detail.count('<script type="application/ld+json">'), 1)
+            self.assertEqual(_jsonld_node(home_jsonld, "Organization")["name"], "Helga")
+            self.assertEqual(_jsonld_node(home_jsonld, "WebSite")["url"], "http://127.0.0.1:8000/")
+            dataset_jsonld = _jsonld_node(home_jsonld, "Dataset")
+            self.assertEqual(dataset_jsonld["@id"], "http://127.0.0.1:8000/api/predictions#dataset")
+            self.assertEqual(dataset_jsonld["distribution"]["@type"], "DataDownload")
+            self.assertEqual(dataset_jsonld["distribution"]["contentUrl"], "http://127.0.0.1:8000/api/predictions")
+            self.assertEqual(dataset_jsonld["distribution"]["encodingFormat"], "application/json")
+            home_breadcrumb = _jsonld_node(home_jsonld, "BreadcrumbList")
+            self.assertEqual(home_breadcrumb["itemListElement"][0]["item"], "http://127.0.0.1:8000/de/")
+            past_item_list = _jsonld_node(past_jsonld, "ItemList", node_id_suffix="#matches")
+            self.assertEqual(past_item_list["numberOfItems"], 1)
+            self.assertEqual(
+                past_item_list["itemListElement"][0]["item"]["@id"],
+                "http://127.0.0.1:8000/de/spiele/2026-07-10-bra-jpn/#sportsevent",
+            )
             self.assertIn("World Cup 2026 Predictions", en_html)
             self.assertIn("Upcoming matches", en_html)
             self.assertIn("Past matches", en_html)
@@ -1284,6 +1323,15 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('"@type": "SportsEvent"', detail)
             self.assertIn('"eventStatus": "https://schema.org/EventCompleted"', detail)
             self.assertIn('"startDate": "2026-07-10T18:00:00Z"', detail)
+            sports_event = _jsonld_node(detail_jsonld, "SportsEvent", node_id_suffix="#sportsevent")
+            self.assertEqual(sports_event["url"], "http://127.0.0.1:8000/de/spiele/2026-07-10-bra-jpn/")
+            self.assertEqual(sports_event["sport"], "Football")
+            self.assertEqual(sports_event["homeTeam"]["identifier"], "BRA")
+            self.assertEqual(sports_event["awayTeam"]["identifier"], "JPN")
+            self.assertEqual(sports_event["superEvent"]["name"], "FIFA World Cup 2026")
+            detail_breadcrumb_jsonld = _jsonld_node(detail_jsonld, "BreadcrumbList")
+            self.assertEqual(detail_breadcrumb_jsonld["itemListElement"][0]["name"], "Home")
+            self.assertEqual(detail_breadcrumb_jsonld["itemListElement"][1]["name"], "Brasilien - Japan")
             self.assertIn('<h1 id="match-title" class="detail-hero__title">', detail)
             h1_match_name = detail.split('<h1 id="match-title" class="detail-hero__title">', 1)[1].split("</h1>", 1)[0]
             self.assertIn('<span class="detail-hero__flag" aria-hidden="true">🇧🇷</span>', h1_match_name)

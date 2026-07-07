@@ -24,6 +24,9 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="{{ title }}">
   <meta name="twitter:description" content="{{ description }}">
+  {% if jsonld_graph %}
+  <script type="application/ld+json">{{ jsonld_graph|safe }}</script>
+  {% endif %}
   {% block head_extra %}{% endblock %}
   {% if gtm_container_id %}
   <script>

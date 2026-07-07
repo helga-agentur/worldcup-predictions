@@ -88,7 +88,7 @@ When `simulation_summary.metadata.forecast_results` is present, the tournament b
 
 Future rows can move until the relevant match locks. Past rows stay frozen as public historical predictions, while final score fields and provider point totals can be added afterward.
 
-Upcoming matches render as link cards with a 1-X-2 probability bar, the most likely score, and both provider tips with expected points. Past matches render as link cards with the final score, per-match provider points, and a hit-quality chip (exact score / partially correct / wrong outcome). Match detail pages lead with the SRF tip and expected points, a one-sentence explanation of how the tip relates to the most likely result, knockout advancement probabilities where available, and a shaded score-matrix heatmap. Every page carries OpenGraph/Twitter metadata; match pages add `SportsEvent` JSON-LD.
+Upcoming matches render as link cards with a 1-X-2 probability bar, the most likely score, and both provider tips with expected points. Past matches render as link cards with the final score, per-match provider points, and a hit-quality chip (exact score / partially correct / wrong outcome). Match detail pages lead with the SRF tip and expected points, a one-sentence explanation of how the tip relates to the most likely result, knockout advancement probabilities where available, and a shaded score-matrix heatmap. Every page carries OpenGraph/Twitter metadata plus a compact JSON-LD graph with `Organization`, `WebSite`, `Dataset`/`DataDownload`, and `BreadcrumbList`; match listings add `ItemList`, tournament probability pages add a team `ItemList`, and match detail pages add an enhanced `SportsEvent`.
 
 Generated files include:
 

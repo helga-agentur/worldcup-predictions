@@ -4,10 +4,6 @@
 {% from "partials/match_name.html" import match_name %}
 {% from "partials/probability_bar.html" import prob_bar %}
 
-{% block head_extra %}
-<script type="application/ld+json">{{ row.jsonld|safe }}</script>
-{% endblock %}
-
 {% block content %}
 <nav class="breadcrumb" aria-label="{{ t('nav.breadcrumb') }}">
   <a class="breadcrumb__link" href="/{{ locale }}/">{{ t("nav.home") }}</a>

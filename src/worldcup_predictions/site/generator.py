@@ -142,7 +142,6 @@ API_PRESENTATION_KEYS = {
     "home_flag",
     "home_team_display",
     "home_team_label",
-    "jsonld",
     "kickoff_display",
     "language_switch_links",
     "match",
@@ -454,7 +453,7 @@ def _site_context(
     _add_alternate_links(locale, rows)
     future_list_path = LOCALE_MATCH_LIST_PATHS[locale]["future"]
     past_list_path = LOCALE_MATCH_LIST_PATHS[locale]["past"]
-    return {
+    context = {
         "locale": locale,
         "title": catalog.translate("seo.home.title"),
         "site_name": catalog.translate("site.name"),
@@ -502,6 +501,12 @@ def _site_context(
         "base_url": base_url,
         "t": catalog.translate,
     }
+    context["jsonld_graph"] = _page_jsonld_graph(
+        context,
+        page_kind="home",
+        item_rows=[*context["future_preview_rows"], *context["tipped_preview_rows"]],
+    )
+    return context
 
 
 def _hit_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1582,6 +1587,8 @@ def _localized_champion_odds(
             {
                 "label": label,
                 "flag": FIFA_FLAG_EMOJIS.get(code or "", ""),
+                "code": code or "",
+                "probability": probability,
                 "percent_text": _champion_percent_text(probability),
                 "width": f"{100 * probability / peak:.2f}",
             }
@@ -1848,6 +1855,7 @@ def _write_site_files(
                 "alternate_links": row["alternate_links"],
                 "language_switch_links": row["language_switch_links"],
             }
+            detail_context["jsonld_graph"] = _page_jsonld_graph(detail_context, page_kind="match_detail", row=row)
             detail_dir.joinpath("index.html").write_text(detail_template.render(**detail_context, row=row), encoding="utf-8")
     (output_dir / asset_path).write_text(css_content, encoding="utf-8")
     (output_dir / script_path).write_text(js_content, encoding="utf-8")
@@ -1891,6 +1899,7 @@ def _write_match_list_page(
         "page_description": context["t"](description_key),
         "empty_text": context["t"](empty_key),
     }
+    page_context["jsonld_graph"] = _page_jsonld_graph(page_context, page_kind="match_list", item_rows=rows)
     page_dir.joinpath("index.html").write_text(template.render(**page_context), encoding="utf-8")
 
 
@@ -1909,6 +1918,7 @@ def _write_tournament_page(output_dir: Path, *, template, context: dict[str, Any
         "page_title": context["t"]("tournament.title"),
         "page_description": context["t"]("tournament.lead"),
     }
+    page_context["jsonld_graph"] = _page_jsonld_graph(page_context, page_kind="tournament")
     page_dir.joinpath("index.html").write_text(template.render(**page_context), encoding="utf-8")
 
 
@@ -2495,7 +2505,6 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
     prepared["meta_description"] = _match_meta_description(prepared, catalog=catalog)
     prepared["og_description"] = prepared["meta_description"]
     prepared["card_aria_label"] = _match_card_aria_label(prepared, catalog=catalog)
-    prepared["jsonld"] = _match_jsonld(prepared)
     return prepared
 
 
@@ -3035,22 +3044,323 @@ def _match_hda_meta_text(row: dict[str, Any], *, catalog: TranslationCatalog) ->
     )
 
 
-def _match_jsonld(row: dict[str, Any]) -> str:
-    payload = {
-        "@context": "https://schema.org",
-        "@type": "SportsEvent",
-        "name": str(row.get("match") or ""),
-        "description": str(row.get("meta_description") or row.get("og_description") or ""),
-        "startDate": str(row.get("event_date") or ""),
-        "eventStatus": (
-            "https://schema.org/EventCompleted"
-            if str(row.get("status") or "") == "final"
-            else "https://schema.org/EventScheduled"
-        ),
-        "homeTeam": {"@type": "SportsTeam", "name": str(row.get("home_team_label") or "")},
-        "awayTeam": {"@type": "SportsTeam", "name": str(row.get("away_team_label") or "")},
+def _page_jsonld_graph(
+    context: dict[str, Any],
+    *,
+    page_kind: str,
+    item_rows: list[dict[str, Any]] | None = None,
+    row: dict[str, Any] | None = None,
+) -> str:
+    base_url = str(context["base_url"])
+    page_url = _absolute_site_url(str(context["current_url"]), base_url=base_url)
+    graph: list[dict[str, Any]] = [
+        _organization_jsonld(base_url),
+        _website_jsonld(context),
+        _predictions_dataset_jsonld(context),
+    ]
+
+    main_entity_id = _page_main_entity_id(page_url, page_kind=page_kind, has_items=bool(item_rows))
+    graph.append(_webpage_jsonld(context, page_url=page_url, page_kind=page_kind, main_entity_id=main_entity_id))
+    graph.append(_breadcrumb_jsonld(context, page_url=page_url, row=row))
+
+    if page_kind == "match_detail" and row is not None:
+        graph.append(_sports_event_jsonld(context, row=row, page_url=page_url))
+    elif page_kind in {"home", "match_list"} and item_rows:
+        graph.append(
+            _match_item_list_jsonld(
+                context,
+                rows=item_rows,
+                list_id=main_entity_id or f"{page_url}#matches",
+                name=str(context.get("page_title") or context.get("title") or ""),
+            )
+        )
+    elif page_kind == "tournament":
+        champion_list = _champion_item_list_jsonld(context, list_id=main_entity_id or f"{page_url}#tournament-probabilities")
+        if champion_list:
+            graph.append(champion_list)
+
+    return json.dumps({"@context": "https://schema.org", "@graph": graph}, ensure_ascii=False)
+
+
+def _organization_jsonld(base_url: str) -> dict[str, Any]:
+    return {
+        "@type": "Organization",
+        "@id": f"{base_url}/#organization",
+        "name": "Helga",
+        "url": "https://www.helga.ch/",
+        "sameAs": [
+            "https://github.com/helga-agentur",
+        ],
     }
-    return json.dumps(payload, ensure_ascii=False)
+
+
+def _website_jsonld(context: dict[str, Any]) -> dict[str, Any]:
+    base_url = str(context["base_url"])
+    payload: dict[str, Any] = {
+        "@type": "WebSite",
+        "@id": f"{base_url}/#website",
+        "url": f"{base_url}/",
+        "name": str(context.get("site_name") or "Helga World Cup Predictions"),
+        "inLanguage": list(SITE_LOCALES),
+        "publisher": {"@id": f"{base_url}/#organization"},
+    }
+    generated_at = str(context.get("generated_at_utc") or "").strip()
+    if generated_at:
+        payload["dateModified"] = generated_at
+    return payload
+
+
+def _predictions_dataset_jsonld(context: dict[str, Any]) -> dict[str, Any]:
+    base_url = str(context["base_url"])
+    api_url = _absolute_site_url(JSON_FEED_PATH, base_url=base_url)
+    generated_at = str(context.get("generated_at_utc") or "").strip()
+    payload: dict[str, Any] = {
+        "@type": "Dataset",
+        "@id": f"{api_url}#dataset",
+        "name": "Helga World Cup 2026 Predictions API",
+        "description": (
+            "Machine-readable FIFA World Cup 2026 prediction feed with fixture keys, team identifiers, "
+            "score probabilities, SRF and 20min tip recommendations, result state, and localized detail URLs."
+        ),
+        "url": api_url,
+        "isAccessibleForFree": True,
+        "inLanguage": list(SITE_LOCALES),
+        "creator": {"@id": f"{base_url}/#organization"},
+        "license": "https://github.com/helga-agentur/worldcup-predictions/blob/main/LICENSE",
+        "sameAs": "https://github.com/helga-agentur/worldcup-predictions",
+        "distribution": {
+            "@type": "DataDownload",
+            "@id": f"{api_url}#download",
+            "contentUrl": api_url,
+            "encodingFormat": "application/json",
+            "name": "Predictions JSON API",
+        },
+    }
+    if generated_at:
+        payload["dateModified"] = generated_at
+    return payload
+
+
+def _page_main_entity_id(page_url: str, *, page_kind: str, has_items: bool) -> str | None:
+    if page_kind == "match_detail":
+        return f"{page_url}#sportsevent"
+    if page_kind == "tournament":
+        return f"{page_url}#tournament-probabilities"
+    if page_kind == "match_list":
+        return f"{page_url}#matches"
+    if page_kind == "home" and has_items:
+        return f"{page_url}#match-preview"
+    return None
+
+
+def _webpage_jsonld(
+    context: dict[str, Any],
+    *,
+    page_url: str,
+    page_kind: str,
+    main_entity_id: str | None,
+) -> dict[str, Any]:
+    base_url = str(context["base_url"])
+    page_type: str | list[str] = "WebPage"
+    if page_kind in {"home", "match_list", "tournament"}:
+        page_type = ["WebPage", "CollectionPage"]
+    payload: dict[str, Any] = {
+        "@type": page_type,
+        "@id": f"{page_url}#webpage",
+        "url": page_url,
+        "name": str(context.get("title") or context.get("page_title") or ""),
+        "description": str(context.get("description") or context.get("page_description") or ""),
+        "inLanguage": str(context.get("locale") or DEFAULT_SITE_LOCALE),
+        "isPartOf": {"@id": f"{base_url}/#website"},
+        "publisher": {"@id": f"{base_url}/#organization"},
+        "about": {"@id": f"{_absolute_site_url(JSON_FEED_PATH, base_url=base_url)}#dataset"},
+    }
+    generated_at = str(context.get("generated_at_utc") or "").strip()
+    if generated_at:
+        payload["dateModified"] = generated_at
+    if main_entity_id:
+        payload["mainEntity"] = {"@id": main_entity_id}
+    return payload
+
+
+def _breadcrumb_jsonld(context: dict[str, Any], *, page_url: str, row: dict[str, Any] | None) -> dict[str, Any]:
+    locale = str(context.get("locale") or DEFAULT_SITE_LOCALE)
+    base_url = str(context["base_url"])
+    home_url = _absolute_site_url(f"/{locale}/", base_url=base_url)
+    items = [
+        {
+            "@type": "ListItem",
+            "position": 1,
+            "name": str(context["t"]("nav.home")),
+            "item": home_url,
+        }
+    ]
+    if page_url != home_url:
+        items.append(
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": _breadcrumb_current_name(context, row=row),
+                "item": page_url,
+            }
+        )
+    return {
+        "@type": "BreadcrumbList",
+        "@id": f"{page_url}#breadcrumbs",
+        "itemListElement": items,
+    }
+
+
+def _breadcrumb_current_name(context: dict[str, Any], *, row: dict[str, Any] | None) -> str:
+    if row is not None:
+        return str(row.get("match_title_text") or row.get("match") or context.get("title") or "")
+    return str(context.get("page_title") or context.get("title") or "")
+
+
+def _match_item_list_jsonld(
+    context: dict[str, Any],
+    *,
+    rows: list[dict[str, Any]],
+    list_id: str,
+    name: str,
+) -> dict[str, Any]:
+    base_url = str(context["base_url"])
+    return {
+        "@type": "ItemList",
+        "@id": list_id,
+        "name": name,
+        "numberOfItems": len(rows),
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": index,
+                "item": _match_list_item_jsonld(row, base_url=base_url),
+            }
+            for index, row in enumerate(rows, start=1)
+        ],
+    }
+
+
+def _match_list_item_jsonld(row: dict[str, Any], *, base_url: str) -> dict[str, Any]:
+    path = str(row.get("current_url") or f"{row.get('detail_path', '')}/")
+    page_url = _absolute_site_url(path, base_url=base_url)
+    payload = {
+        "@type": "SportsEvent",
+        "@id": f"{page_url}#sportsevent",
+        "url": page_url,
+        "name": str(row.get("match_title_text") or row.get("match") or ""),
+        "startDate": str(row.get("event_date") or ""),
+        "eventStatus": _schema_event_status(row),
+    }
+    return {key: value for key, value in payload.items() if value not in ("", None)}
+
+
+def _champion_item_list_jsonld(context: dict[str, Any], *, list_id: str) -> dict[str, Any] | None:
+    champion = context.get("champion")
+    if not isinstance(champion, dict):
+        return None
+    entries = champion.get("entries")
+    if not isinstance(entries, list) or not entries:
+        return None
+    return {
+        "@type": "ItemList",
+        "@id": list_id,
+        "name": str(context.get("page_title") or context.get("title") or ""),
+        "numberOfItems": len(entries),
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": index,
+                "item": _champion_team_jsonld(entry),
+            }
+            for index, entry in enumerate(entries, start=1)
+        ],
+    }
+
+
+def _champion_team_jsonld(entry: dict[str, Any]) -> dict[str, Any]:
+    code = str(entry.get("code") or "").strip()
+    team: dict[str, Any] = {
+        "@type": "SportsTeam",
+        "name": str(entry.get("label") or ""),
+        "additionalProperty": [
+            {
+                "@type": "PropertyValue",
+                "name": "Title probability",
+                "value": str(entry.get("percent_text") or ""),
+            }
+        ],
+    }
+    if code:
+        team["identifier"] = code
+    return team
+
+
+def _sports_event_jsonld(context: dict[str, Any], *, row: dict[str, Any], page_url: str) -> dict[str, Any]:
+    base_url = str(context["base_url"])
+    home_team = _sports_team_jsonld(row, side="home", base_url=base_url)
+    away_team = _sports_team_jsonld(row, side="away", base_url=base_url)
+    payload: dict[str, Any] = {
+        "@type": "SportsEvent",
+        "@id": f"{page_url}#sportsevent",
+        "url": page_url,
+        "name": str(row.get("match_title_text") or row.get("match") or ""),
+        "description": str(row.get("meta_description") or row.get("og_description") or context.get("description") or ""),
+        "sport": "Football",
+        "startDate": str(row.get("event_date") or ""),
+        "eventStatus": _schema_event_status(row),
+        "inLanguage": str(context.get("locale") or DEFAULT_SITE_LOCALE),
+        "superEvent": {
+            "@type": "SportsEvent",
+            "@id": f"{base_url}/#fifa-world-cup-2026",
+            "name": "FIFA World Cup 2026",
+        },
+        "homeTeam": home_team,
+        "awayTeam": away_team,
+        "competitor": [home_team, away_team],
+        "isAccessibleForFree": True,
+    }
+    venue = _row_venue(row)
+    if venue:
+        payload["location"] = {"@type": "Place", "name": venue}
+    return {key: value for key, value in payload.items() if value not in ("", None)}
+
+
+def _sports_team_jsonld(row: dict[str, Any], *, side: str, base_url: str) -> dict[str, Any]:
+    label = str(row.get(f"{side}_team_label") or row.get(f"{side}_team") or "").strip()
+    identifier = _team_identifier(row, side=side)
+    payload: dict[str, Any] = {
+        "@type": "SportsTeam",
+        "name": label,
+    }
+    if identifier:
+        payload["@id"] = f"{base_url}/#team-{normalize_entity_text(identifier)}"
+        payload["identifier"] = identifier
+    return payload
+
+
+def _team_identifier(row: dict[str, Any], *, side: str) -> str:
+    code = str(row.get(f"{side}_fifa_code") or "").strip().upper()
+    if code:
+        return canonical_slot_code(code) or code
+    part = _fixture_key_part(str(row.get("fixture_key") or ""), side=side)
+    return canonical_slot_code(part) or part
+
+
+def _schema_event_status(row: dict[str, Any]) -> str:
+    return (
+        "https://schema.org/EventCompleted"
+        if str(row.get("status") or "") == "final"
+        else "https://schema.org/EventScheduled"
+    )
+
+
+def _row_venue(row: dict[str, Any]) -> str:
+    venue = str(row.get("venue") or "").strip()
+    if venue:
+        return venue
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    return str(metadata.get("venue") or "").strip()
 
 
 def _match_slug(row: dict[str, Any]) -> str:
