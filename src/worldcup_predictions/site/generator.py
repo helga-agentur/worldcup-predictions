@@ -32,7 +32,7 @@ from worldcup_predictions.entities.countries import normalize_entity_text
 from worldcup_predictions.evaluation.provider_points import points_for_row
 from worldcup_predictions.plugins.providers.ch_20min.rules import twenty_min_points_for_fixture
 from worldcup_predictions.plugins.providers.ch_srf.rules import srf_rules_for_fixture
-from worldcup_predictions.simulations.worldcup_2026 import ROUND_NAMES, group_letter
+from worldcup_predictions.simulations.worldcup_2026 import NEXT_ROUNDS, ROUND_NAMES, group_letter
 from worldcup_predictions.storage.ledger import normalize_datetime, utc_now
 from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamRef
 from worldcup_predictions.tournament.repository import load_tournament_state
@@ -45,8 +45,12 @@ FONT_ASSET_FILES = (
     "assets/fonts/CadizWeb-Regular.woff2",
     "assets/fonts/Degular-Regular.woff2",
 )
+BRACKETRY_ASSET_FILE = "assets/vendor/bracketry-1.1.3.esm.js"
+CONFETTI_ASSET_FILE = "assets/vendor/canvas-confetti-1.9.4.module.mjs"
 STATIC_ASSET_FILES = (
     "assets/favicon.svg",
+    BRACKETRY_ASSET_FILE,
+    CONFETTI_ASSET_FILE,
     *FONT_ASSET_FILES,
 )
 
@@ -83,6 +87,13 @@ LEGACY_TOURNAMENT_PATHS = {
 HOMEPAGE_MATCH_PREVIEW_LIMIT = 5
 HOMEPAGE_CHAMPION_PREVIEW_LIMIT = 5
 HEATMAP_MAX_GOALS = 5
+KNOCKOUT_BRACKET_ROUNDS = (
+    "Round of 32",
+    "Round of 16",
+    "Quarter-final",
+    "Semi-final",
+    "Final",
+)
 KNOCKOUT_ROUND_STAGE_KEYS = {
     "Round of 32": "slot.round.round_of_32",
     "Round of 16": "slot.round.round_of_16",
@@ -248,6 +259,35 @@ class SiteBuildResult:
         }
 
 
+@dataclass(frozen=True)
+class KnockoutBracketMatch:
+    """One fixture/result pair for the public tournament bracket."""
+
+    match_number: int
+    fixture: FixtureRecord
+    result: ResultRecord | None = None
+
+
+@dataclass(frozen=True)
+class BracketTeam:
+    """Resolved team/slot identity for the forecast bracket."""
+
+    id: str
+    label: str
+    ref: TeamRef
+
+
+@dataclass(frozen=True)
+class BracketProjection:
+    """Displayed result and advancing team for one bracket match."""
+
+    home: BracketTeam
+    away: BracketTeam
+    score: ScoreTip | None
+    winner: BracketTeam | None
+    status: str
+
+
 def build_site(
     *,
     project_root: Path,
@@ -283,6 +323,7 @@ def build_site(
     provider_max_points = _site_provider_point_max_totals(rows, country_registry=country_registry)
     hit_counts = _hit_counts(rows)
     champion_odds = _champion_odds(storage, country_registry=country_registry)
+    knockout_bracket_matches = _knockout_bracket_matches(storage)
     data_payload = {
         "generated_at_utc": generated_at,
         "summary": {
@@ -322,6 +363,7 @@ def build_site(
             summary=data_payload["summary"],
             country_registry=country_registry,
             champion_odds=champion_odds,
+            knockout_bracket_matches=knockout_bracket_matches,
             base_url=site_base_url,
         )
         for locale in SITE_LOCALES
@@ -391,6 +433,7 @@ def _site_context(
     summary: dict[str, Any],
     country_registry: CountryRegistry,
     champion_odds: dict[str, Any] | None,
+    knockout_bracket_matches: list[KnockoutBracketMatch],
     base_url: str,
 ) -> dict[str, Any]:
     catalog = load_translation_catalog(locale)
@@ -418,6 +461,8 @@ def _site_context(
         "generated_at_display": _date_time_text(generated_at),
         "asset_css": f"/{asset_path}",
         "asset_js": f"/{script_path}",
+        "bracketry_asset": f"/{BRACKETRY_ASSET_FILE}",
+        "confetti_asset": f"/{CONFETTI_ASSET_FILE}",
         "gtm_container_id": (gtm_container_id or "").strip(),
         "rows": rows,
         "future_rows": future_rows,
@@ -432,6 +477,14 @@ def _site_context(
         "summary": summary,
         "summary_extras": _summary_extras(summary, future_rows, catalog=catalog),
         "champion": _localized_champion_odds(champion_odds, country_registry=country_registry, locale=locale, catalog=catalog),
+        "tournament_bracket": _localized_tournament_bracket(
+            knockout_bracket_matches,
+            prediction_rows=rows,
+            simulation_forecast_results=(champion_odds or {}).get("forecast_results") or [],
+            country_registry=country_registry,
+            locale=locale,
+            catalog=catalog,
+        ),
         "tournament_path": LOCALE_TOURNAMENT_PATHS[locale],
         "json_feed_path": JSON_FEED_PATH,
         "language_cookie_name": LANGUAGE_COOKIE_NAME,
@@ -534,6 +587,838 @@ def _champion_odds(storage, *, country_registry: CountryRegistry) -> dict[str, A
     return _market_champion_odds(storage, country_registry=country_registry, active_team_codes=active_team_codes)
 
 
+def _knockout_bracket_matches(storage) -> list[KnockoutBracketMatch]:
+    state = load_tournament_state(storage)
+    fixtures_by_number: dict[int, FixtureRecord] = {}
+    for fixture in state.fixtures:
+        match_number = _knockout_match_number(fixture)
+        if match_number is None:
+            continue
+        existing = fixtures_by_number.get(match_number)
+        if existing is None or _bracket_fixture_source_priority(fixture) > _bracket_fixture_source_priority(existing):
+            fixtures_by_number[match_number] = fixture
+
+    results_by_number: dict[int, ResultRecord] = {}
+    results_by_key = {result.fixture_key: result for result in state.results}
+    for result in state.results:
+        match_number = _knockout_match_number(result)
+        if match_number is None:
+            continue
+        existing = results_by_number.get(match_number)
+        if existing is None or _bracket_result_source_priority(result) > _bracket_result_source_priority(existing):
+            results_by_number[match_number] = result
+
+    matches = []
+    for match_number, fixture in sorted(fixtures_by_number.items()):
+        result = results_by_number.get(match_number) or results_by_key.get(fixture.key)
+        matches.append(KnockoutBracketMatch(match_number=match_number, fixture=fixture, result=result))
+    return matches
+
+
+def _localized_tournament_bracket(
+    matches: list[KnockoutBracketMatch],
+    *,
+    prediction_rows: list[dict[str, Any]],
+    simulation_forecast_results: list[dict[str, Any]],
+    country_registry: CountryRegistry,
+    locale: str,
+    catalog: TranslationCatalog,
+) -> dict[str, Any] | None:
+    if not matches:
+        return None
+    visible_rounds = _visible_knockout_bracket_rounds(matches)
+    if not visible_rounds:
+        return None
+    round_index = {round_name: index for index, round_name in enumerate(visible_rounds)}
+    round_match_numbers = _bracket_round_match_numbers(visible_rounds)
+    current_matches = []
+    contestants: dict[str, dict[str, Any]] = {}
+    fallback_rows = []
+    actual_winners: dict[str, BracketTeam] = {}
+    projected_winners: dict[str, BracketTeam] = {}
+    prediction_lookup = _bracket_prediction_lookup(prediction_rows)
+    simulation_forecast_lookup = _bracket_simulation_forecast_lookup(simulation_forecast_results)
+    team_ratings = _bracket_team_ratings(prediction_rows, country_registry=country_registry)
+    matches_by_number = {match.match_number: match for match in matches}
+
+    for bracket_match in matches:
+        round_name = ROUND_NAMES.get(f"M{bracket_match.match_number}")
+        if round_name not in KNOCKOUT_BRACKET_ROUNDS:
+            continue
+        fixture = bracket_match.fixture
+        current_home = _bracket_team(fixture.home_team, actual_winners, country_registry=country_registry, locale=locale)
+        current_away = _bracket_team(fixture.away_team, actual_winners, country_registry=country_registry, locale=locale)
+        current_projection = _current_bracket_projection(
+            bracket_match,
+            home=current_home,
+            away=current_away,
+            catalog=catalog,
+        )
+        if current_projection.winner is not None:
+            actual_winners[f"M{bracket_match.match_number}"] = current_projection.winner
+
+        home = _bracket_team(fixture.home_team, projected_winners, country_registry=country_registry, locale=locale)
+        away = _bracket_team(fixture.away_team, projected_winners, country_registry=country_registry, locale=locale)
+        prediction_row = _bracket_prediction_row(fixture, home, away, prediction_lookup)
+        forecast_row = simulation_forecast_lookup.get(bracket_match.match_number)
+        projection = (
+            _forecast_bracket_projection(
+                forecast_row,
+                country_registry=country_registry,
+                locale=locale,
+                catalog=catalog,
+            )
+            if bracket_match.result is None and _should_use_simulation_forecast(forecast_row, prediction_row, home, away)
+            else _bracket_projection(
+                bracket_match,
+                home=home,
+                away=away,
+                prediction_row=prediction_row,
+                team_ratings=team_ratings,
+                catalog=catalog,
+            )
+        )
+        if projection.winner is not None:
+            projected_winners[f"M{bracket_match.match_number}"] = projection.winner
+        if round_name not in round_index:
+            continue
+        _add_bracket_contestants(contestants, current_projection.home, current_projection.away, projection.home, projection.away)
+        current_matches.append(
+            _bracket_match_payload(
+                bracket_match,
+                round_name=round_name,
+                projection=current_projection,
+                round_index=round_index,
+                round_match_numbers=round_match_numbers,
+            )
+        )
+        fallback_rows.append(_bracket_fallback_row(projection, round_name=round_name, catalog=catalog))
+
+    if not current_matches:
+        return None
+    timeline_steps = _bracket_timeline_steps(
+        matches,
+        matches_by_number=matches_by_number,
+        visible_round_index=round_index,
+        round_match_numbers=round_match_numbers,
+        initial_winners=actual_winners,
+        prediction_lookup=prediction_lookup,
+        simulation_forecast_lookup=simulation_forecast_lookup,
+        team_ratings=team_ratings,
+        country_registry=country_registry,
+        locale=locale,
+        catalog=catalog,
+        contestants=contestants,
+    )
+    rounds = [
+        {"name": catalog.translate(KNOCKOUT_ROUND_STAGE_KEYS[round_name])}
+        for round_name in visible_rounds
+    ]
+    data = {
+        "rounds": rounds,
+        "matches": current_matches,
+        "contestants": contestants,
+    }
+    return {
+        "data_json": json.dumps(data, ensure_ascii=False, sort_keys=True),
+        "timeline_json": json.dumps({"steps": timeline_steps}, ensure_ascii=False, sort_keys=True),
+        "fallback_rows": fallback_rows,
+    }
+
+
+def _visible_knockout_bracket_rounds(matches: list[KnockoutBracketMatch]) -> list[str]:
+    matches_by_round: dict[str, list[KnockoutBracketMatch]] = {round_name: [] for round_name in KNOCKOUT_BRACKET_ROUNDS}
+    for match in matches:
+        round_name = ROUND_NAMES.get(f"M{match.match_number}")
+        if round_name in matches_by_round:
+            matches_by_round[round_name].append(match)
+    return [
+        round_name
+        for round_name in KNOCKOUT_BRACKET_ROUNDS
+        if matches_by_round[round_name]
+        and (round_name == "Final" or any(match.result is None for match in matches_by_round[round_name]))
+    ]
+
+
+def _bracket_round_match_numbers(round_names: list[str]) -> dict[str, list[int]]:
+    visual_order = _knockout_visual_match_order()
+    return {round_name: visual_order.get(round_name, []) for round_name in round_names}
+
+
+def _knockout_visual_match_order() -> dict[str, list[int]]:
+    dependencies = {
+        match_id: (home_source, away_source)
+        for round_matches in NEXT_ROUNDS
+        for match_id, home_source, away_source in round_matches
+    }
+    final_match_ids = sorted(match_id for match_id, round_name in ROUND_NAMES.items() if round_name == "Final")
+    visual_order: dict[str, list[int]] = {}
+    for round_name in KNOCKOUT_BRACKET_ROUNDS:
+        ordered_ids: list[str] = []
+        for final_match_id in final_match_ids:
+            _collect_visual_round_match_ids(
+                final_match_id,
+                target_round=round_name,
+                dependencies=dependencies,
+                ordered_ids=ordered_ids,
+            )
+        fallback_ids = sorted(
+            (match_id for match_id, name in ROUND_NAMES.items() if name == round_name),
+            key=lambda value: int(value.removeprefix("M")),
+        )
+        for match_id in fallback_ids:
+            if match_id not in ordered_ids:
+                ordered_ids.append(match_id)
+        visual_order[round_name] = [int(match_id.removeprefix("M")) for match_id in ordered_ids]
+    return visual_order
+
+
+def _collect_visual_round_match_ids(
+    match_id: str,
+    *,
+    target_round: str,
+    dependencies: dict[str, tuple[str, str]],
+    ordered_ids: list[str],
+) -> None:
+    if ROUND_NAMES.get(match_id) == target_round:
+        ordered_ids.append(match_id)
+        return
+    for source_match_id in dependencies.get(match_id, ()):
+        _collect_visual_round_match_ids(
+            source_match_id,
+            target_round=target_round,
+            dependencies=dependencies,
+            ordered_ids=ordered_ids,
+        )
+
+
+def _bracket_timeline_steps(
+    matches: list[KnockoutBracketMatch],
+    *,
+    matches_by_number: dict[int, KnockoutBracketMatch],
+    visible_round_index: dict[str, int],
+    round_match_numbers: dict[str, list[int]],
+    initial_winners: dict[str, BracketTeam],
+    prediction_lookup: dict[str, dict[str, Any]],
+    simulation_forecast_lookup: dict[int, dict[str, Any]],
+    team_ratings: dict[str, float],
+    country_registry: CountryRegistry,
+    locale: str,
+    catalog: TranslationCatalog,
+    contestants: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    winners = dict(initial_winners)
+    simulated_matches = {match.match_number for match in matches if match.result is not None}
+    current_round_index = 0
+    steps = []
+    for bracket_match in matches:
+        round_name = ROUND_NAMES.get(f"M{bracket_match.match_number}")
+        if bracket_match.result is not None or round_name not in visible_round_index:
+            continue
+        forecast_row = simulation_forecast_lookup.get(bracket_match.match_number)
+        home = _bracket_team(bracket_match.fixture.home_team, winners, country_registry=country_registry, locale=locale)
+        away = _bracket_team(bracket_match.fixture.away_team, winners, country_registry=country_registry, locale=locale)
+        prediction_row = _bracket_prediction_row(bracket_match.fixture, home, away, prediction_lookup)
+        projection = (
+            _forecast_bracket_projection(
+                forecast_row,
+                country_registry=country_registry,
+                locale=locale,
+                catalog=catalog,
+            )
+            if _should_use_simulation_forecast(forecast_row, prediction_row, home, away)
+            else _bracket_projection(
+                bracket_match,
+                home=home,
+                away=away,
+                prediction_row=prediction_row,
+                team_ratings=team_ratings,
+                catalog=catalog,
+            )
+        )
+        if projection.winner is not None:
+            winners[f"M{bracket_match.match_number}"] = projection.winner
+        simulated_matches.add(bracket_match.match_number)
+        updates = [
+            _bracket_match_payload(
+                bracket_match,
+                round_name=round_name or "",
+                projection=projection,
+                round_index=visible_round_index,
+                round_match_numbers=round_match_numbers,
+            )
+        ]
+        _add_bracket_contestants(contestants, projection.home, projection.away)
+        for dependent in _bracket_dependent_matches(matches_by_number, bracket_match.match_number):
+            dependent_round = ROUND_NAMES.get(f"M{dependent.match_number}")
+            if dependent_round not in visible_round_index or dependent.match_number in simulated_matches:
+                continue
+            dependent_projection = _current_bracket_projection(
+                dependent,
+                home=_bracket_team(dependent.fixture.home_team, winners, country_registry=country_registry, locale=locale),
+                away=_bracket_team(dependent.fixture.away_team, winners, country_registry=country_registry, locale=locale),
+                catalog=catalog,
+            )
+            _add_bracket_contestants(contestants, dependent_projection.home, dependent_projection.away)
+            updates.append(
+                _bracket_match_payload(
+                    dependent,
+                    round_name=dependent_round,
+                    projection=dependent_projection,
+                    round_index=visible_round_index,
+                    round_match_numbers=round_match_numbers,
+                )
+            )
+        round_index = visible_round_index[round_name]
+        step = {
+            "matchLabel": f"M{bracket_match.match_number}",
+            "winner": projection.winner.id if projection.winner else "",
+            "matches": updates,
+        }
+        if round_index > current_round_index:
+            step["preAdvanceToRoundIndex"] = round_index
+            current_round_index = round_index
+        steps.append(step)
+    return steps
+
+
+def _bracket_simulation_forecast_lookup(rows: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
+    lookup = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        match_number = _simulation_forecast_match_number(row)
+        if match_number is None or ROUND_NAMES.get(f"M{match_number}") not in KNOCKOUT_BRACKET_ROUNDS:
+            continue
+        lookup.setdefault(match_number, row)
+    return lookup
+
+
+def _should_use_simulation_forecast(
+    row: dict[str, Any] | None,
+    prediction_row: dict[str, Any] | None,
+    home: BracketTeam,
+    away: BracketTeam,
+) -> bool:
+    if not row:
+        return False
+    if _most_likely_score_tip(prediction_row or {}) is not None:
+        return False
+    return _simulation_forecast_teams_match(row, home=home, away=away)
+
+
+def _simulation_forecast_teams_match(row: dict[str, Any], *, home: BracketTeam, away: BracketTeam) -> bool:
+    home_team = str(row.get("home_team") or "")
+    away_team = str(row.get("away_team") or "")
+    return bool(
+        home_team
+        and away_team
+        and _bracket_team_name_matches(home, home_team)
+        and _bracket_team_name_matches(away, away_team)
+    )
+
+
+def _simulation_forecast_match_number(row: dict[str, Any]) -> int | None:
+    match_id = str(row.get("match_id") or "")
+    if match_id.startswith("M"):
+        return _optional_int(match_id[1:])
+    return _optional_int(row.get("match_number"))
+
+
+def _forecast_bracket_projection(
+    row: dict[str, Any],
+    *,
+    country_registry: CountryRegistry,
+    locale: str,
+    catalog: TranslationCatalog,
+) -> BracketProjection:
+    home = _forecast_bracket_team(str(row.get("home_team") or ""), country_registry=country_registry, locale=locale)
+    away = _forecast_bracket_team(str(row.get("away_team") or ""), country_registry=country_registry, locale=locale)
+    home_score = _optional_int(row.get("home_score"))
+    away_score = _optional_int(row.get("away_score"))
+    if home_score is None or away_score is None:
+        home_score, away_score = _parse_score_text(str(row.get("score") or ""))
+    score = ScoreTip(home_score, away_score) if home_score is not None and away_score is not None else None
+    winner = _forecast_bracket_winner(str(row.get("winner") or ""), home=home, away=away)
+    if winner is None and score is not None:
+        winner = home if score.home >= score.away else away
+    return BracketProjection(
+        home=home,
+        away=away,
+        score=score,
+        winner=winner,
+        status=_bracket_winner_status(winner, catalog=catalog, fallback_key="tournament.bracket.status_open"),
+    )
+
+
+def _forecast_bracket_team(
+    name: str,
+    *,
+    country_registry: CountryRegistry,
+    locale: str,
+) -> BracketTeam:
+    resolved = country_registry.resolve(name, locale="en") or country_registry.resolve(name, locale="de")
+    if resolved and resolved.canonical_id in country_registry.countries:
+        ref = TeamRef(name, resolved.canonical_id)
+    else:
+        ref = TeamRef(name)
+    display = _bracket_team_display(ref, country_registry=country_registry, locale=locale)
+    return BracketTeam(id=display["id"], label=display["label"], ref=ref)
+
+
+def _forecast_bracket_winner(winner: str, *, home: BracketTeam, away: BracketTeam) -> BracketTeam | None:
+    if _bracket_team_name_matches(home, winner):
+        return home
+    if _bracket_team_name_matches(away, winner):
+        return away
+    return None
+
+
+def _bracket_team_name_matches(team: BracketTeam, value: str) -> bool:
+    normalized = _rating_key(value)
+    return normalized in {
+        _rating_key(team.id),
+        _rating_key(team.label),
+        _rating_key(team.ref.name),
+        _rating_key(team.ref.fifa_code or ""),
+    }
+
+
+def _parse_score_text(value: str) -> tuple[int | None, int | None]:
+    if ":" not in value:
+        return None, None
+    home, away = value.split(":", 1)
+    return _optional_int(home.strip()), _optional_int(away.strip())
+
+
+def _current_bracket_projection(
+    bracket_match: KnockoutBracketMatch,
+    *,
+    home: BracketTeam,
+    away: BracketTeam,
+    catalog: TranslationCatalog,
+) -> BracketProjection:
+    result = bracket_match.result
+    if result is None:
+        return BracketProjection(
+            home=home,
+            away=away,
+            score=None,
+            winner=None,
+            status=catalog.translate("tournament.bracket.status_open"),
+        )
+    home_score = _result_score_for_team(result, bracket_match.fixture.home_team)
+    away_score = _result_score_for_team(result, bracket_match.fixture.away_team)
+    score = ScoreTip(home_score, away_score) if home_score is not None and away_score is not None else None
+    winner = _result_winner(result, bracket_match.fixture, home=home, away=away)
+    return BracketProjection(
+        home=home,
+        away=away,
+        score=score,
+        winner=winner,
+        status=_bracket_winner_status(winner, catalog=catalog, fallback_key="tournament.bracket.status_final"),
+    )
+
+
+def _bracket_match_payload(
+    bracket_match: KnockoutBracketMatch,
+    *,
+    round_name: str,
+    projection: BracketProjection,
+    round_index: dict[str, int],
+    round_match_numbers: dict[str, list[int]],
+) -> dict[str, Any]:
+    return {
+        "roundIndex": round_index[round_name],
+        "order": round_match_numbers[round_name].index(bracket_match.match_number),
+        "matchStatus": projection.status,
+        "matchLabel": f"M{bracket_match.match_number}",
+        "sides": [
+            _bracket_side(
+                projection.home.id,
+                score=projection.score.home if projection.score else None,
+                is_winner=projection.winner == projection.home,
+            ),
+            _bracket_side(
+                projection.away.id,
+                score=projection.score.away if projection.score else None,
+                is_winner=projection.winner == projection.away,
+            ),
+        ],
+    }
+
+
+def _bracket_fallback_row(
+    projection: BracketProjection,
+    *,
+    round_name: str,
+    catalog: TranslationCatalog,
+) -> dict[str, str]:
+    return {
+        "round": catalog.translate(KNOCKOUT_ROUND_STAGE_KEYS[round_name]),
+        "match": f"{projection.home.label} - {projection.away.label}",
+        "status": projection.status,
+        "score": _score_text(
+            projection.score.home if projection.score else None,
+            projection.score.away if projection.score else None,
+        ),
+    }
+
+
+def _bracket_dependent_matches(
+    matches_by_number: dict[int, KnockoutBracketMatch],
+    match_number: int,
+) -> list[KnockoutBracketMatch]:
+    dependencies = []
+    for candidate in matches_by_number.values():
+        home_source = _slot_source_match_number(candidate.fixture.home_team)
+        away_source = _slot_source_match_number(candidate.fixture.away_team)
+        if match_number in {home_source, away_source}:
+            dependencies.append(candidate)
+    return sorted(dependencies, key=lambda match: match.match_number)
+
+
+def _slot_source_match_number(team: TeamRef) -> int | None:
+    slot_code = canonical_slot_code(team.key) or canonical_slot_code(team.name)
+    if slot_code and slot_code.startswith("W") and slot_code[1:].isdigit():
+        return int(slot_code[1:])
+    return None
+
+
+def _add_bracket_contestants(contestants: dict[str, dict[str, Any]], *teams: BracketTeam) -> None:
+    for team in teams:
+        contestants[team.id] = {"players": [{"title": team.label}]}
+
+
+def _bracket_team(
+    team: TeamRef,
+    projected_winners: dict[str, BracketTeam],
+    *,
+    country_registry: CountryRegistry,
+    locale: str,
+) -> BracketTeam:
+    source_number = _slot_source_match_number(team)
+    source_match = f"M{source_number}" if source_number is not None else ""
+    if source_match and source_match in projected_winners:
+        return projected_winners[source_match]
+    display = _bracket_team_display(team, country_registry=country_registry, locale=locale)
+    return BracketTeam(id=display["id"], label=display["label"], ref=team)
+
+
+def _bracket_projection(
+    bracket_match: KnockoutBracketMatch,
+    *,
+    home: BracketTeam,
+    away: BracketTeam,
+    prediction_row: dict[str, Any] | None,
+    team_ratings: dict[str, float],
+    catalog: TranslationCatalog,
+) -> BracketProjection:
+    result = bracket_match.result
+    if result is not None:
+        home_score = _result_score_for_team(result, bracket_match.fixture.home_team)
+        away_score = _result_score_for_team(result, bracket_match.fixture.away_team)
+        score = ScoreTip(home_score, away_score) if home_score is not None and away_score is not None else None
+        winner = _result_winner(result, bracket_match.fixture, home=home, away=away)
+        return BracketProjection(
+            home=home,
+            away=away,
+            score=score,
+            winner=winner,
+            status=_bracket_winner_status(winner, catalog=catalog, fallback_key="tournament.bracket.status_final"),
+        )
+
+    score = _most_likely_score_tip(prediction_row or {})
+    winner_side = _forecast_winner_side(prediction_row, score) if prediction_row and score else None
+    if winner_side is None:
+        score = score or _fallback_bracket_score(home, away, team_ratings)
+        winner_side = _rating_winner_side(home, away, team_ratings)
+    winner = _winner_from_side(winner_side, home=home, away=away)
+    return BracketProjection(
+        home=home,
+        away=away,
+        score=score,
+        winner=winner,
+        status=_bracket_winner_status(winner, catalog=catalog, fallback_key="tournament.bracket.status_open"),
+    )
+
+
+def _bracket_winner_status(
+    winner: BracketTeam | None,
+    *,
+    catalog: TranslationCatalog,
+    fallback_key: str,
+) -> str:
+    if winner is not None:
+        return winner.label
+    return catalog.translate(fallback_key)
+
+
+def _winner_from_side(side: str | None, *, home: BracketTeam, away: BracketTeam) -> BracketTeam | None:
+    if side == "home":
+        return home
+    if side == "away":
+        return away
+    return None
+
+
+def _result_winner(
+    result: ResultRecord | None,
+    fixture: FixtureRecord,
+    *,
+    home: BracketTeam,
+    away: BracketTeam,
+) -> BracketTeam | None:
+    winner_key = _result_winner_key(result)
+    if not winner_key:
+        return None
+    if _team_key_matches(fixture.home_team, winner_key):
+        return home
+    if _team_key_matches(fixture.away_team, winner_key):
+        return away
+    return None
+
+
+def _forecast_winner_side(row: dict[str, Any] | None, score: ScoreTip | None) -> str | None:
+    if score is None:
+        return None
+    if score.home > score.away:
+        return "home"
+    if score.away > score.home:
+        return "away"
+    probabilities = _forecast_advancement_probabilities(row)
+    home_probability = probabilities.get("home")
+    away_probability = probabilities.get("away")
+    if home_probability is None or away_probability is None:
+        return None
+    return "home" if home_probability >= away_probability else "away"
+
+
+def _forecast_advancement_probabilities(row: dict[str, Any] | None) -> dict[str, float | None]:
+    metadata = row.get("metadata") if row else {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+    prediction_metadata = metadata.get("prediction_metadata")
+    if not isinstance(prediction_metadata, dict):
+        current_metadata = metadata.get("current_prediction_ledger_metadata")
+        prediction_metadata = current_metadata.get("prediction_metadata") if isinstance(current_metadata, dict) else {}
+    advancement = prediction_metadata.get("advancement_probabilities") if isinstance(prediction_metadata, dict) else {}
+    if not isinstance(advancement, dict):
+        return {"home": None, "away": None}
+    return {
+        "home": _optional_float(advancement.get("home")),
+        "away": _optional_float(advancement.get("away")),
+    }
+
+
+def _fallback_bracket_score(home: BracketTeam, away: BracketTeam, team_ratings: dict[str, float]) -> ScoreTip:
+    home_rating = _bracket_team_rating(home, team_ratings)
+    away_rating = _bracket_team_rating(away, team_ratings)
+    if home_rating is None or away_rating is None:
+        return ScoreTip(1, 1)
+    difference = home_rating - away_rating
+    if abs(difference) < 75:
+        return ScoreTip(1, 1)
+    if difference > 175:
+        return ScoreTip(2, 0)
+    if difference > 0:
+        return ScoreTip(1, 0)
+    if difference < -175:
+        return ScoreTip(0, 2)
+    return ScoreTip(0, 1)
+
+
+def _rating_winner_side(home: BracketTeam, away: BracketTeam, team_ratings: dict[str, float]) -> str:
+    home_rating = _bracket_team_rating(home, team_ratings)
+    away_rating = _bracket_team_rating(away, team_ratings)
+    if home_rating is None and away_rating is None:
+        return "home" if home.id <= away.id else "away"
+    if away_rating is None:
+        return "home"
+    if home_rating is None:
+        return "away"
+    return "home" if home_rating >= away_rating else "away"
+
+
+def _bracket_prediction_lookup(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    lookup: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if _most_likely_score_tip(row) is None:
+            continue
+        event_date = normalize_datetime(str(row.get("event_date") or "")) or str(row.get("event_date") or "")
+        home_team = str(row.get("home_team") or "")
+        away_team = str(row.get("away_team") or "")
+        home_code = str(row.get("home_fifa_code") or "")
+        away_code = str(row.get("away_fifa_code") or "")
+        for key in (
+            str(row.get("fixture_key") or ""),
+            _bracket_prediction_key(event_date, home_team, away_team),
+            _bracket_prediction_key(event_date, home_code, away_code),
+        ):
+            if key:
+                lookup[key] = row
+    return lookup
+
+
+def _bracket_prediction_row(
+    fixture: FixtureRecord,
+    home: BracketTeam,
+    away: BracketTeam,
+    lookup: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    event_date = normalize_datetime(fixture.event_date) or fixture.event_date
+    candidates = (
+        fixture.key,
+        _bracket_prediction_key(event_date, fixture.home_team.key, fixture.away_team.key),
+        _bracket_prediction_key(event_date, fixture.home_team.name, fixture.away_team.name),
+        _bracket_prediction_key(event_date, home.ref.key, away.ref.key),
+        _bracket_prediction_key(event_date, home.ref.name, away.ref.name),
+        _bracket_prediction_key(event_date, home.id, away.id),
+    )
+    return next((lookup[key] for key in candidates if key in lookup), None)
+
+
+def _bracket_prediction_key(event_date: str, home: str, away: str) -> str:
+    if not event_date or not home or not away:
+        return ""
+    return f"{event_date}|{home}|{away}"
+
+
+def _bracket_team_ratings(rows: list[dict[str, Any]], *, country_registry: CountryRegistry) -> dict[str, float]:
+    ratings: dict[str, float] = {}
+    for row in rows:
+        features = _forecast_features(row)
+        for side in ("home", "away"):
+            rating = _optional_float(features.get(f"{side}_rating"))
+            if rating is None:
+                continue
+            name = str(row.get(f"{side}_team") or "")
+            code = str(row.get(f"{side}_fifa_code") or "")
+            resolved = country_registry.resolve(name, locale="en") or country_registry.resolve(name, locale="de")
+            for key in (name, code, resolved.canonical_id if resolved else ""):
+                if key:
+                    ratings[_rating_key(key)] = rating
+    return ratings
+
+
+def _forecast_features(row: dict[str, Any]) -> dict[str, Any]:
+    metadata = row.get("metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    prediction_metadata = metadata.get("prediction_metadata")
+    if not isinstance(prediction_metadata, dict):
+        current_metadata = metadata.get("current_prediction_ledger_metadata")
+        prediction_metadata = current_metadata.get("prediction_metadata") if isinstance(current_metadata, dict) else {}
+    features = prediction_metadata.get("features") if isinstance(prediction_metadata, dict) else {}
+    return features if isinstance(features, dict) else {}
+
+
+def _bracket_team_rating(team: BracketTeam, ratings: dict[str, float]) -> float | None:
+    for key in (team.id, team.ref.fifa_code or "", team.ref.key, team.ref.name, team.label):
+        rating = ratings.get(_rating_key(key))
+        if rating is not None:
+            return rating
+    return None
+
+
+def _rating_key(value: str) -> str:
+    return normalize_entity_text(str(value or "")).casefold()
+
+
+def _bracket_side(contestant_id: str, *, score: int | None, is_winner: bool) -> dict[str, Any]:
+    side: dict[str, Any] = {"contestantId": contestant_id}
+    if score is not None:
+        side["scores"] = [{"mainScore": score, "isWinner": is_winner}]
+    if is_winner:
+        side["isWinner"] = True
+    return side
+
+
+def _bracket_team_display(
+    team: TeamRef,
+    *,
+    country_registry: CountryRegistry,
+    locale: str,
+) -> dict[str, str]:
+    slot_label = slot_display_name(team.key, locale=locale) or slot_display_name(team.name, locale=locale)
+    if slot_label:
+        code = canonical_slot_code(team.key) or canonical_slot_code(team.name)
+        return {"id": code or f"slot:{slot_label}", "label": code or slot_label}
+    if team.fifa_code and team.fifa_code in country_registry.countries:
+        country = country_registry.countries[team.fifa_code]
+        label = country.names.get(locale) or country.names.get("en") or team.name
+        return {"id": team.fifa_code, "label": _flagged_label(FIFA_FLAG_EMOJIS.get(team.fifa_code, ""), label)}
+    resolved = country_registry.resolve(team.name, locale="en") or country_registry.resolve(team.name, locale="de")
+    if resolved and resolved.canonical_id in country_registry.countries:
+        country = country_registry.countries[resolved.canonical_id]
+        label = country.names.get(locale) or country.names.get("en") or team.name
+        return {"id": resolved.canonical_id, "label": _flagged_label(FIFA_FLAG_EMOJIS.get(resolved.canonical_id, ""), label)}
+    return {"id": f"name:{team.name}", "label": team.name}
+
+
+def _knockout_match_number(row: FixtureRecord | ResultRecord) -> int | None:
+    match_number = _optional_int(row.metadata.get("match_number"))
+    if match_number is None and isinstance(row, FixtureRecord):
+        match_number = _optional_int(row.source_id)
+    if match_number is None or ROUND_NAMES.get(f"M{match_number}") not in KNOCKOUT_BRACKET_ROUNDS:
+        return None
+    return match_number
+
+
+def _bracket_fixture_source_priority(fixture: FixtureRecord) -> tuple[int, int, str]:
+    metadata = fixture.metadata or {}
+    source = str(metadata.get("source") or "")
+    source_priority = 3 if source == "fifa_match_centre" else 2 if "football_data" in source else 1
+    officiality = _optional_int(metadata.get("officiality_status")) or 0
+    return (source_priority, officiality, normalize_datetime(fixture.event_date) or fixture.event_date)
+
+
+def _bracket_result_source_priority(result: ResultRecord) -> tuple[int, str]:
+    source = str(result.source or "")
+    source_priority = 3 if source == "fifa_match_centre" else 2 if "football_data" in source else 1
+    return (source_priority, normalize_datetime(result.event_date) or result.event_date)
+
+
+def _result_score_for_team(result: ResultRecord | None, team: TeamRef) -> int | None:
+    if result is None:
+        return None
+    if _team_key_matches(team, result.home_team.key) or _team_key_matches(team, result.home_team.name):
+        return result.score.home
+    if _team_key_matches(team, result.away_team.key) or _team_key_matches(team, result.away_team.name):
+        return result.score.away
+    return None
+
+
+def _result_winner_key(result: ResultRecord | None) -> str | None:
+    if result is None:
+        return None
+    if result.score.home > result.score.away:
+        return result.home_team.key
+    if result.score.away > result.score.home:
+        return result.away_team.key
+    home_penalty = _optional_int(result.metadata.get("home_penalty_score"))
+    away_penalty = _optional_int(result.metadata.get("away_penalty_score"))
+    if home_penalty is not None and away_penalty is not None:
+        if home_penalty > away_penalty:
+            return result.home_team.key
+        if away_penalty > home_penalty:
+            return result.away_team.key
+    return None
+
+
+def _team_key_matches(team: TeamRef, value: str) -> bool:
+    candidates = {team.key, team.name}
+    if team.fifa_code:
+        candidates.add(team.fifa_code)
+    return value in candidates
+
+
+def _score_text(home_score: int | None, away_score: int | None) -> str:
+    if home_score is None or away_score is None:
+        return ""
+    return f"{home_score}:{away_score}"
+
+
 def _simulation_champion_odds(
     storage,
     *,
@@ -568,6 +1453,7 @@ def _simulation_champion_odds(
         "iterations": _optional_int(payload.get("iterations")) or 0,
         "as_of": latest[0],
         "entries": entries,
+        "forecast_results": _simulation_forecast_results(payload),
     }
 
 
@@ -604,6 +1490,16 @@ def _market_champion_odds(
         "as_of": as_of,
         "entries": entries,
     }
+
+
+def _simulation_forecast_results(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return []
+    rows = metadata.get("forecast_results")
+    if not isinstance(rows, list):
+        return []
+    return [row for row in rows if isinstance(row, dict)]
 
 
 def _active_champion_team_codes(storage, *, country_registry: CountryRegistry) -> set[str]:
@@ -1127,7 +2023,9 @@ def _write_static_assets(output_dir: Path) -> None:
     static_dir = files("worldcup_predictions.site").joinpath("static")
     for asset_file in STATIC_ASSET_FILES:
         relative_path = Path(asset_file).relative_to("assets")
-        output_dir.joinpath(asset_file).write_bytes(static_dir.joinpath(*relative_path.parts).read_bytes())
+        target = output_dir.joinpath(asset_file)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(static_dir.joinpath(*relative_path.parts).read_bytes())
 
 
 def _provider_point_totals(storage) -> dict[str, float]:
@@ -1348,6 +2246,15 @@ def _optional_int(value: Any) -> int | None:
         return None
     try:
         return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
     except (TypeError, ValueError):
         return None
 

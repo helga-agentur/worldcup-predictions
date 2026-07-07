@@ -23,6 +23,7 @@ class SimulationResult:
     group: str | None = None
     winner: str | None = None
     source: str = "simulated"
+    matrix_source: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -36,6 +37,7 @@ class SimulationResult:
             "group": self.group,
             "winner": self.winner,
             "source": self.source,
+            "matrix_source": self.matrix_source,
         }
 
 

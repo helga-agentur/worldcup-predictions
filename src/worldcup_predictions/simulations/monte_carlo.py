@@ -6,7 +6,7 @@ import random
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from string import ascii_uppercase
-from typing import Any
+from typing import Any, Callable
 
 from worldcup_predictions.core.contracts import Fixture, ScoreMatrixEntry, ScoreTip
 from worldcup_predictions.simulations.contracts import (
@@ -45,6 +45,10 @@ def bucket_more_than_15(value: int) -> str:
     return str(value)
 
 
+ScoreMatrixProvider = Callable[[str, str, str], list[ScoreMatrixEntry]]
+ResultSignature = tuple[str, str, str, int, int, str, str | None, str | None, str | None]
+
+
 @dataclass(frozen=True)
 class SimulationInputs:
     """Inputs required to simulate the tournament from any current state."""
@@ -53,6 +57,7 @@ class SimulationInputs:
     known_results: dict[str, ScoreTip] = field(default_factory=dict)
     known_winners: dict[str, str] = field(default_factory=dict)
     score_matrices: dict[str, list[ScoreMatrixEntry]] = field(default_factory=dict)
+    score_matrix_provider: ScoreMatrixProvider | None = None
     team_strengths: dict[str, float] = field(default_factory=dict)
     team_ratings: dict[str, float] = field(default_factory=dict)
     top_scorer_goals_prior: tuple[int, ...] = DEFAULT_TOP_SCORER_GOALS
@@ -74,6 +79,8 @@ class TournamentSimulator:
         self.iterations = iterations
         self.seed = seed
         self._group_labels_cache: dict[str, str] | None = None
+        self._provided_score_matrices: dict[tuple[str, str, str], list[ScoreMatrixEntry]] = {}
+        self._matrix_source_counts: Counter[str] = Counter()
 
     def run(self) -> SimulationSummary:
         rng = random.Random(self.seed)
@@ -85,6 +92,7 @@ class TournamentSimulator:
         goals_counters: dict[str, Counter[str]] = defaultdict(Counter)
         group_rank_counters: dict[str, Counter[str]] = defaultdict(Counter)
         qualified_counters: dict[str, Counter[str]] = defaultdict(Counter)
+        forecast_counters: dict[str, dict[str, Counter[ResultSignature]]] = defaultdict(lambda: defaultdict(Counter))
         sample_results: list[SimulationResult] = []
 
         for iteration in range(self.iterations):
@@ -93,6 +101,8 @@ class TournamentSimulator:
                 sample_results = outcome.fixture_results
             if outcome.champion:
                 champion_counter[outcome.champion] += 1
+                for result in outcome.fixture_results:
+                    forecast_counters[outcome.champion][result.match_id][_result_signature(result)] += 1
             nil_nil_counter[bucket_more_than_15(outcome.nil_nil_count)] += 1
             top_scorer_counter[bucket_more_than_15(outcome.top_scorer_goals)] += 1
             for team, stage in outcome.team_stage.items():
@@ -134,6 +144,14 @@ class TournamentSimulator:
             "known_results": len(self.inputs.known_results),
             "known_winners": len(self.inputs.known_winners),
             "score_matrices": len(self.inputs.score_matrices),
+            "generated_score_matrices": len([matrix for matrix in self._provided_score_matrices.values() if matrix]),
+            "matrix_source_counts": dict(sorted(self._matrix_source_counts.items())),
+            "forecast_basis": "modal_path_for_modal_champion",
+            "forecast_champion": self._modal_champion(champion_counter) or "",
+            "forecast_results": [
+                result.to_dict()
+                for result in self._forecast_results(champion_counter, forecast_counters)
+            ],
             "sample_results": [result.to_dict() for result in sample_results],
         }
         return SimulationSummary(
@@ -157,7 +175,7 @@ class TournamentSimulator:
             group = group_labels.get(fixture.key, "")
             team_stage.setdefault(home, STAGE_GROUP)
             team_stage.setdefault(away, STAGE_GROUP)
-            score, source = self._score_for_fixture(
+            score, source, matrix_source = self._score_for_fixture(
                 fixture.key,
                 home,
                 away,
@@ -173,6 +191,7 @@ class TournamentSimulator:
                 group=group,
                 winner=winner,
                 source=source,
+                matrix_source=matrix_source,
             )
             fixture_results.append(result)
             team_goals[home] += score.home
@@ -382,7 +401,7 @@ class TournamentSimulator:
             if winner:
                 team_stage[winner] = self._next_stage(stage)
             return winner
-        score, source = self._score_for_fixture(match_id, home, away, rng)
+        score, source, matrix_source = self._score_for_fixture(match_id, home, away, rng)
         winner: str | None = None
         if source == "fixed" and score.home == score.away:
             winner = self._known_winner(match_id, home, away)
@@ -402,6 +421,7 @@ class TournamentSimulator:
                 stage=stage,
                 winner=winner,
                 source=source,
+                matrix_source=matrix_source,
             )
         )
         return winner
@@ -412,14 +432,17 @@ class TournamentSimulator:
         home: str,
         away: str,
         rng: random.Random,
-    ) -> tuple[ScoreTip, str]:
+    ) -> tuple[ScoreTip, str, str]:
         known = self._known_result(fixture_key, home, away)
         if known is not None:
-            return known, "fixed"
-        matrix = self._score_matrix(fixture_key, home, away)
+            self._matrix_source_counts["fixed"] += 1
+            return known, "fixed", "fixed"
+        matrix, matrix_source = self._score_matrix(fixture_key, home, away)
         if not matrix:
             matrix = fallback_score_matrix()
-        return sample_score(matrix, rng), "simulated"
+            matrix_source = "fallback"
+        self._matrix_source_counts[matrix_source] += 1
+        return sample_score(matrix, rng), "simulated", matrix_source
 
     def _known_result(self, fixture_key: str, home: str, away: str) -> ScoreTip | None:
         candidates = [
@@ -453,7 +476,7 @@ class TournamentSimulator:
                 return winner
         return None
 
-    def _score_matrix(self, fixture_key: str, home: str, away: str) -> list[ScoreMatrixEntry]:
+    def _score_matrix(self, fixture_key: str, home: str, away: str) -> tuple[list[ScoreMatrixEntry], str]:
         candidates = [
             fixture_key,
             pair_key(home, away),
@@ -461,7 +484,7 @@ class TournamentSimulator:
         for candidate in candidates:
             matrix = self.inputs.score_matrices.get(candidate)
             if matrix:
-                return matrix
+                return matrix, "stored"
         reverse_matrix = self.inputs.score_matrices.get(pair_key(away, home))
         if reverse_matrix:
             return [
@@ -472,8 +495,60 @@ class TournamentSimulator:
                     metadata=entry.metadata,
                 )
                 for entry in reverse_matrix
-            ]
-        return []
+            ], "stored"
+        provided = self._provided_matrix(fixture_key, home, away)
+        if provided:
+            return provided, "generated"
+        return [], "fallback"
+
+    def _provided_matrix(self, fixture_key: str, home: str, away: str) -> list[ScoreMatrixEntry]:
+        provider = self.inputs.score_matrix_provider
+        if provider is None:
+            return []
+        cache_key = (fixture_key, home, away)
+        if cache_key not in self._provided_score_matrices:
+            try:
+                self._provided_score_matrices[cache_key] = list(provider(fixture_key, home, away) or [])
+            except Exception:
+                self._provided_score_matrices[cache_key] = []
+        return self._provided_score_matrices[cache_key]
+
+    def _modal_champion(self, champion_counter: Counter[str]) -> str | None:
+        if not champion_counter:
+            return None
+        return champion_counter.most_common(1)[0][0]
+
+    def _forecast_results(
+        self,
+        champion_counter: Counter[str],
+        forecast_counters: dict[str, dict[str, Counter[ResultSignature]]],
+    ) -> list[SimulationResult]:
+        champion = self._modal_champion(champion_counter)
+        if not champion:
+            return []
+        counters = forecast_counters.get(champion) or {}
+        dependencies = {
+            match_id: (home_source, away_source)
+            for round_template in NEXT_ROUNDS
+            for match_id, home_source, away_source in round_template
+        }
+        winners: dict[str, str] = {}
+        results = []
+        for match_id in sorted(counters, key=_forecast_match_sort_key):
+            counter = counters[match_id]
+            if not counter:
+                continue
+            expected_home = expected_away = None
+            if match_id in dependencies:
+                home_source, away_source = dependencies[match_id]
+                expected_home = winners.get(home_source)
+                expected_away = winners.get(away_source)
+            signature = _most_common_signature(counter, expected_home=expected_home, expected_away=expected_away)
+            result = _result_from_signature(signature)
+            if result.winner and match_id.startswith("M"):
+                winners[match_id] = result.winner
+            results.append(result)
+        return results
 
     def _winner_from_score(
         self,
@@ -630,3 +705,62 @@ def fallback_score_matrix() -> list[ScoreMatrixEntry]:
         ScoreMatrixEntry(0, 2, 0.07, {"fallback": True}),
         ScoreMatrixEntry(2, 2, 0.05, {"fallback": True}),
     ]
+
+
+def _result_signature(result: SimulationResult) -> ResultSignature:
+    return (
+        result.match_id,
+        result.home_team,
+        result.away_team,
+        result.score.home,
+        result.score.away,
+        result.winner or "",
+        result.stage,
+        result.group,
+        result.matrix_source,
+    )
+
+
+def _result_from_signature(signature: ResultSignature) -> SimulationResult:
+    (
+        match_id,
+        home_team,
+        away_team,
+        home_score,
+        away_score,
+        winner,
+        stage,
+        group,
+        matrix_source,
+    ) = signature
+    return SimulationResult(
+        match_id=match_id,
+        home_team=home_team,
+        away_team=away_team,
+        score=ScoreTip(home_score, away_score),
+        stage=stage,
+        group=group,
+        winner=winner or None,
+        source="simulated" if matrix_source != "fixed" else "fixed",
+        matrix_source=matrix_source,
+    )
+
+
+def _most_common_signature(
+    counter: Counter[ResultSignature],
+    *,
+    expected_home: str | None,
+    expected_away: str | None,
+) -> ResultSignature:
+    signatures = counter.most_common()
+    if expected_home and expected_away:
+        for signature, _count in signatures:
+            if signature[1] == expected_home and signature[2] == expected_away:
+                return signature
+    return signatures[0][0]
+
+
+def _forecast_match_sort_key(match_id: str) -> tuple[int, int, str]:
+    if match_id.startswith("M") and match_id[1:].isdigit():
+        return (1, int(match_id[1:]), match_id)
+    return (0, 0, match_id)

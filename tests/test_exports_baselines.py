@@ -27,6 +27,7 @@ from worldcup_predictions.core.datasets import (
     PREDICTIONS,
     SIMULATION_SUMMARY,
     TOURNAMENT_FIXTURES,
+    TOURNAMENT_RESULTS,
 )
 from worldcup_predictions.core.events import EventName, event_value
 from worldcup_predictions.core.plugin import BasePlugin, PluginManager, PluginResult
@@ -254,6 +255,332 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn("France", en_tournament_html)
             self.assertNotIn("Germany", en_tournament_html)
             self.assertNotIn("Brazil", en_tournament_html)
+
+    def test_tournament_forecast_includes_bracketry_knockout_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            storage = DuckDBStorage.at_data_root(root / "data")
+            storage.write_records(
+                TOURNAMENT_FIXTURES,
+                [
+                    {
+                        "record_key": "2026-07-03T18:00:00Z|RSA|CAN",
+                        "fixture_key": "2026-07-03T18:00:00Z|RSA|CAN",
+                        "event_date": "2026-07-03T18:00:00Z",
+                        "home_team": "South Africa",
+                        "away_team": "Canada",
+                        "home_fifa_code": "RSA",
+                        "away_fifa_code": "CAN",
+                        "stage": "Round of 32",
+                        "status": "final",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 73},
+                    },
+                    {
+                        "record_key": "2026-07-06T19:00:00Z|POR|ESP",
+                        "fixture_key": "2026-07-06T19:00:00Z|POR|ESP",
+                        "event_date": "2026-07-06T19:00:00Z",
+                        "home_team": "Portugal",
+                        "away_team": "Spain",
+                        "home_fifa_code": "POR",
+                        "away_fifa_code": "ESP",
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 93},
+                    },
+                    {
+                        "record_key": "2026-07-06T17:00:00Z|POR|ESP",
+                        "fixture_key": "2026-07-06T17:00:00Z|POR|ESP",
+                        "event_date": "2026-07-06T17:00:00Z",
+                        "home_team": "Portugal",
+                        "away_team": "Spain",
+                        "home_fifa_code": "POR",
+                        "away_fifa_code": "ESP",
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "metadata": {"source": "openfootball", "match_number": 93},
+                    },
+                    {
+                        "record_key": "2026-07-07T00:00:00Z|USA|BEL",
+                        "fixture_key": "2026-07-07T00:00:00Z|USA|BEL",
+                        "event_date": "2026-07-07T00:00:00Z",
+                        "home_team": "United States",
+                        "away_team": "Belgium",
+                        "home_fifa_code": "USA",
+                        "away_fifa_code": "BEL",
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 94},
+                    },
+                    {
+                        "record_key": "2026-07-06T16:00:00Z|BRA|NOR",
+                        "fixture_key": "2026-07-06T16:00:00Z|BRA|NOR",
+                        "event_date": "2026-07-06T16:00:00Z",
+                        "home_team": "Brazil",
+                        "away_team": "Norway",
+                        "home_fifa_code": "BRA",
+                        "away_fifa_code": "NOR",
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 91},
+                    },
+                    {
+                        "record_key": "2026-07-06T18:00:00Z|MEX|ENG",
+                        "fixture_key": "2026-07-06T18:00:00Z|MEX|ENG",
+                        "event_date": "2026-07-06T18:00:00Z",
+                        "home_team": "Mexico",
+                        "away_team": "England",
+                        "home_fifa_code": "MEX",
+                        "away_fifa_code": "ENG",
+                        "stage": "Round of 16",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 92},
+                    },
+                    {
+                        "record_key": "2026-07-10T19:00:00Z|W93|W94",
+                        "fixture_key": "2026-07-10T19:00:00Z|W93|W94",
+                        "event_date": "2026-07-10T19:00:00Z",
+                        "home_team": "W93",
+                        "away_team": "W94",
+                        "home_fifa_code": None,
+                        "away_fifa_code": None,
+                        "stage": "Quarter-final",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 98},
+                    },
+                    {
+                        "record_key": "2026-07-11T21:00:00Z|W91|W92",
+                        "fixture_key": "2026-07-11T21:00:00Z|W91|W92",
+                        "event_date": "2026-07-11T21:00:00Z",
+                        "home_team": "W91",
+                        "away_team": "W92",
+                        "home_fifa_code": None,
+                        "away_fifa_code": None,
+                        "stage": "Quarter-final",
+                        "status": "scheduled",
+                        "metadata": {"source": "fifa_match_centre", "match_number": 99},
+                    },
+                ],
+                source="fifa_match_centre",
+            )
+            storage.write_records(
+                TOURNAMENT_RESULTS,
+                [
+                    {
+                        "record_key": "result-fifa-m73",
+                        "fixture_key": "2026-07-03T18:00:00Z|RSA|CAN",
+                        "event_date": "2026-07-03T18:00:00Z",
+                        "home_team": "South Africa",
+                        "away_team": "Canada",
+                        "home_fifa_code": "RSA",
+                        "away_fifa_code": "CAN",
+                        "home_score": 0,
+                        "away_score": 1,
+                        "status": "final",
+                        "source": "fifa_match_centre",
+                        "metadata": {"match_number": 73},
+                    },
+                    {
+                        "record_key": "result-football-data-m73",
+                        "fixture_key": "2026-07-03T18:00:00Z|RSA|CAN",
+                        "event_date": "2026-07-03T18:00:00Z",
+                        "home_team": "South Africa",
+                        "away_team": "Canada",
+                        "home_fifa_code": "RSA",
+                        "away_fifa_code": "CAN",
+                        "home_score": 0,
+                        "away_score": 1,
+                        "status": "final",
+                        "source": "football_data_org",
+                        "metadata": {"match_number": 73},
+                    },
+                ],
+                source="test",
+            )
+            storage.write_records(
+                PUBLISHED_PREDICTION_LEDGER,
+                [
+                    {
+                        "record_key": "published-m93",
+                        "fixture_key": "2026-07-06T19:00:00Z|POR|ESP",
+                        "event_date": "2026-07-06T19:00:00Z",
+                        "home_team": "Portugal",
+                        "away_team": "Spain",
+                        "status": "future",
+                        "most_likely_score": "1:1",
+                        "most_likely_home": 1,
+                        "most_likely_away": 1,
+                        "metadata": {
+                            "prediction_metadata": {
+                                "advancement_probabilities": {"home": 0.37, "away": 0.63},
+                                "features": {"home_rating": 2014, "away_rating": 2122},
+                            }
+                        },
+                    },
+                    {
+                        "record_key": "published-m94",
+                        "fixture_key": "2026-07-07T00:00:00Z|USA|BEL",
+                        "event_date": "2026-07-07T00:00:00Z",
+                        "home_team": "United States",
+                        "away_team": "Belgium",
+                        "status": "future",
+                        "most_likely_score": "1:1",
+                        "most_likely_home": 1,
+                        "most_likely_away": 1,
+                        "metadata": {
+                            "prediction_metadata": {
+                                "advancement_probabilities": {"home": 0.34, "away": 0.66},
+                                "features": {"home_rating": 1889, "away_rating": 1962},
+                            }
+                        },
+                    },
+                ],
+                source="test",
+            )
+            storage.write_records(
+                SIMULATION_SUMMARY,
+                [
+                    {
+                        "record_key": "sim-bracket-path",
+                        "simulation_id": "sim-bracket-path",
+                        "iterations": 20000,
+                        "distributions": {
+                            "champion": [
+                                {"answer": "Belgium", "probability": 0.55},
+                                {"answer": "Portugal", "probability": 0.45},
+                            ]
+                        },
+                        "metadata": {
+                            "forecast_champion": "Belgium",
+                            "forecast_results": [
+                                {
+                                    "match_id": "M93",
+                                    "home_team": "Portugal",
+                                    "away_team": "Spain",
+                                    "score": "2:0",
+                                    "home_score": 2,
+                                    "away_score": 0,
+                                    "stage": "Round of 16",
+                                    "winner": "Portugal",
+                                    "source": "simulated",
+                                    "matrix_source": "generated",
+                                },
+                                {
+                                    "match_id": "M94",
+                                    "home_team": "United States",
+                                    "away_team": "Belgium",
+                                    "score": "0:1",
+                                    "home_score": 0,
+                                    "away_score": 1,
+                                    "stage": "Round of 16",
+                                    "winner": "Belgium",
+                                    "source": "simulated",
+                                    "matrix_source": "stored",
+                                },
+                                {
+                                    "match_id": "M98",
+                                    "home_team": "Spain",
+                                    "away_team": "Belgium",
+                                    "score": "0:1",
+                                    "home_score": 0,
+                                    "away_score": 1,
+                                    "stage": "Quarter-final",
+                                    "winner": "Belgium",
+                                    "source": "simulated",
+                                    "matrix_source": "generated",
+                                },
+                            ],
+                        },
+                    }
+                ],
+                source="simulate_tournament",
+            )
+
+            result = build_site(project_root=root, storage=storage, gtm_container_id="", base_url="http://127.0.0.1:8000/")
+            tournament_html = (result.output_dir / "en" / "tournament-forecast" / "index.html").read_text(encoding="utf-8")
+            bracket_json = tournament_html.split(
+                '<script type="application/json" id="tournament-bracket-data">',
+                1,
+            )[1]
+            bracket_json = bracket_json.split("</script>", 1)[0]
+            bracket_data = json.loads(bracket_json)
+            timeline_json = tournament_html.split(
+                '<script type="application/json" id="tournament-bracket-timeline">',
+                1,
+            )[1]
+            timeline_json = timeline_json.split("</script>", 1)[0]
+            timeline_data = json.loads(timeline_json)
+
+            self.assertTrue((result.output_dir / "assets" / "vendor" / "bracketry-1.1.3.esm.js").exists())
+            self.assertTrue((result.output_dir / "assets" / "vendor" / "canvas-confetti-1.9.4.module.mjs").exists())
+            self.assertIn('import { createBracket } from "/assets/vendor/bracketry-1.1.3.esm.js";', tournament_html)
+            self.assertIn('import confetti from "/assets/vendor/canvas-confetti-1.9.4.module.mjs";', tournament_html)
+            self.assertIn('class="bracket-tree" data-bracketry-root', tournament_html)
+            self.assertNotIn('"matchLabel": "M73"', tournament_html)
+            self.assertNotIn('"name": "Round of 32"', tournament_html)
+            self.assertIn('"matchStatus": "Open"', tournament_html)
+            self.assertNotIn('"matchStatus": "Forecast"', tournament_html)
+            self.assertIn('"matchLabel": "M93"', tournament_html)
+            self.assertIn("Forecast simulation", tournament_html)
+            self.assertNotIn("Projected knockout path", tournament_html)
+            self.assertNotIn("Winner Round of 16 match 5", tournament_html)
+            self.assertNotIn("bracket-tree__match-label", tournament_html)
+            self.assertIn('data-bracket-play', tournament_html)
+            self.assertIn('data-bracket-reset disabled', tournament_html)
+            self.assertIn("bracket.setBaseRoundIndex(step.preAdvanceToRoundIndex)", tournament_html)
+            self.assertIn("const focusSimulatedMatch = (step) =>", tournament_html)
+            self.assertIn("verticalScrollMode: initialVerticalScrollMode()", tournament_html)
+            self.assertIn("focusSimulatedMatch(step)", tournament_html)
+            self.assertIn("const celebrateChampion = (step) =>", tournament_html)
+            self.assertIn('step.matchLabel !== "M104"', tournament_html)
+            self.assertIn("disableForReducedMotion: true", tournament_html)
+            self.assertIn(">Play<", tournament_html)
+            self.assertIn(">Pause<", tournament_html)
+            self.assertIn(">Reset<", tournament_html)
+            self.assertIn("🇵🇹 Portugal", tournament_html)
+            self.assertIn("🇪🇸 Spain", tournament_html)
+            self.assertIn("🇧🇪 Belgium", tournament_html)
+            self.assertEqual(bracket_data["contestants"]["W93"]["players"][0]["title"], "W93")
+            self.assertEqual(bracket_data["contestants"]["W94"]["players"][0]["title"], "W94")
+            self.assertEqual(bracket_data["contestants"]["W91"]["players"][0]["title"], "W91")
+            self.assertEqual(bracket_data["contestants"]["W92"]["players"][0]["title"], "W92")
+            m91 = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M91")
+            m92 = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M92")
+            m93_initial = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M93")
+            m94_initial = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M94")
+            self.assertEqual(m93_initial["order"], 2)
+            self.assertEqual(m94_initial["order"], 3)
+            self.assertEqual(m91["order"], 4)
+            self.assertEqual(m92["order"], 5)
+            initial_m98 = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M98")
+            initial_m99 = next(match for match in bracket_data["matches"] if match["matchLabel"] == "M99")
+            self.assertEqual(initial_m98["order"], 1)
+            self.assertEqual(initial_m99["order"], 2)
+            self.assertEqual([side["contestantId"] for side in initial_m98["sides"]], ["W93", "W94"])
+            self.assertEqual([side["contestantId"] for side in initial_m99["sides"]], ["W91", "W92"])
+            self.assertEqual(initial_m98["matchStatus"], "Open")
+            self.assertFalse(any("scores" in side for side in initial_m98["sides"]))
+            m93_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M93")
+            self.assertEqual(m93_step["winner"], "ESP")
+            self.assertNotIn("preAdvanceToRoundIndex", m93_step)
+            m93 = next(match for match in m93_step["matches"] if match["matchLabel"] == "M93")
+            self.assertEqual(m93["matchStatus"], "🇪🇸 Spain")
+            self.assertEqual([side["scores"][0]["mainScore"] for side in m93["sides"]], [1, 1])
+            m93_carry = next(match for match in m93_step["matches"] if match["matchLabel"] == "M98")
+            self.assertEqual([side["contestantId"] for side in m93_carry["sides"]], ["ESP", "W94"])
+            self.assertEqual(m93_carry["matchStatus"], "Open")
+            m94_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M94")
+            self.assertEqual(m94_step["winner"], "BEL")
+            self.assertNotIn("preAdvanceToRoundIndex", m94_step)
+            m94 = next(match for match in m94_step["matches"] if match["matchLabel"] == "M94")
+            self.assertEqual(m94["matchStatus"], "🇧🇪 Belgium")
+            self.assertEqual([side["scores"][0]["mainScore"] for side in m94["sides"]], [1, 1])
+            m98_step = next(step for step in timeline_data["steps"] if step["matchLabel"] == "M98")
+            self.assertEqual(m98_step["preAdvanceToRoundIndex"], 1)
+            m98 = next(match for match in m98_step["matches"] if match["matchLabel"] == "M98")
+            self.assertEqual([side["contestantId"] for side in m98["sides"]], ["ESP", "BEL"])
+            self.assertEqual(m98["matchStatus"], "🇧🇪 Belgium")
+            self.assertEqual([side["scores"][0]["mainScore"] for side in m98["sides"]], [0, 1])
+            self.assertTrue(m98["sides"][1]["isWinner"])
 
     def test_published_ledger_replaces_stale_shifted_fixture_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1094,6 +1421,10 @@ class ExportAndBaselineTest(unittest.TestCase):
             )
             self.assertIn(".odds__row {\n  display: contents;", css)
             self.assertIn(".odds__track {\n  display: block;\n  width: 100%;\n  min-width: 0;", css)
+            self.assertIn(".bracket-tree .match-status {\n  font-size: 0.82rem;\n  font-weight: 500;", css)
+            self.assertIn(".bracket-tree .match-body:has(.side-wrapper.winner) .match-status", css)
+            self.assertIn("font-size: 0.9rem;\n  color: var(--ink);", css)
+            self.assertNotIn(".bracket-tree__match-label", css)
             self.assertIn(".match-card", css)
             self.assertIn(".match-card__details", css)
             self.assertIn(".match-card__team-identity", css)
