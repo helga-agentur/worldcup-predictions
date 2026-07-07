@@ -376,7 +376,19 @@ def _latest_current_state_simulation_fixture_fingerprint(storage) -> str:
     if latest is None:
         return ""
     metadata = latest[1].get("metadata") if isinstance(latest[1].get("metadata"), dict) else {}
+    if _simulation_summary_needs_forecast_refresh(metadata):
+        return ""
     return str(metadata.get("active_fixture_fingerprint") or "")
+
+
+def _simulation_summary_needs_forecast_refresh(metadata: dict) -> bool:
+    try:
+        active_fixture_count = int(metadata.get("active_fixture_count") or 0)
+    except (TypeError, ValueError):
+        active_fixture_count = 0
+    if active_fixture_count <= 0:
+        return False
+    return not isinstance(metadata.get("forecast_results"), list) or not isinstance(metadata.get("matrix_source_counts"), dict)
 
 
 def _simulation_fixture_metadata(state) -> dict:

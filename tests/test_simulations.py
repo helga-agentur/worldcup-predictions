@@ -33,6 +33,7 @@ from worldcup_predictions.plugins.providers.ch_srf import (
     evaluate_srf_bonus_questions,
 )
 from worldcup_predictions.simulations import SimulationInputs, TournamentSimulator, pair_key
+from worldcup_predictions.simulations.worldcup_2026 import NEXT_ROUNDS, ROUND_OF_32
 from worldcup_predictions.storage import DuckDBStorage
 
 
@@ -183,6 +184,58 @@ class TournamentSimulationSamplingRegressionTest(unittest.TestCase):
         self.assertIn("fixed", sources)
         self.assertIn("simulated", sources)
         self.assertIn("Final", stages)
+
+    def test_knockout_dependency_map_matches_fixture_slots(self) -> None:
+        round_of_16, quarter_finals, semi_finals, final = NEXT_ROUNDS
+
+        self.assertEqual(
+            ROUND_OF_32,
+            [
+                ("M73", "2A", "2B"),
+                ("M74", "1E", "3A/B/C/D/F"),
+                ("M75", "1F", "2C"),
+                ("M76", "1C", "2F"),
+                ("M77", "1I", "3C/D/F/G/H"),
+                ("M78", "2E", "2I"),
+                ("M79", "1A", "3C/E/F/H/I"),
+                ("M80", "1L", "3E/H/I/J/K"),
+                ("M81", "1D", "3B/E/F/I/J"),
+                ("M82", "1G", "3A/E/H/I/J"),
+                ("M83", "2K", "2L"),
+                ("M84", "1H", "2J"),
+                ("M85", "1B", "3E/F/G/I/J"),
+                ("M86", "1J", "2H"),
+                ("M87", "1K", "3D/E/I/J/L"),
+                ("M88", "2D", "2G"),
+            ],
+        )
+        self.assertEqual(
+            round_of_16,
+            [
+                ("M89", "M74", "M77"),
+                ("M90", "M73", "M75"),
+                ("M91", "M76", "M78"),
+                ("M92", "M79", "M80"),
+                ("M93", "M83", "M84"),
+                ("M94", "M81", "M82"),
+                ("M95", "M86", "M88"),
+                ("M96", "M85", "M87"),
+            ],
+        )
+        self.assertEqual(
+            quarter_finals,
+            [
+                ("M97", "M89", "M90"),
+                ("M98", "M93", "M94"),
+                ("M99", "M91", "M92"),
+                ("M100", "M95", "M96"),
+            ],
+        )
+        self.assertEqual(
+            semi_finals,
+            [("M101", "M97", "M98"), ("M102", "M99", "M100")],
+        )
+        self.assertEqual(final, [("M104", "M101", "M102")])
 
     def test_hypothetical_knockout_pairs_use_generated_matrices_before_fallback(self) -> None:
         def provider(_match_id: str, _home: str, _away: str) -> list[ScoreMatrixEntry]:
@@ -401,7 +454,12 @@ class SimulationInputWiringTest(unittest.TestCase):
                 return [
                     {
                         "mode": "current_state",
-                        "metadata": {"active_fixture_fingerprint": "older"},
+                        "metadata": {
+                            "active_fixture_count": 1,
+                            "active_fixture_fingerprint": "older",
+                            "forecast_results": [],
+                            "matrix_source_counts": {},
+                        },
                         "_record": {"observed_at_utc": "2026-07-06T07:00:00Z"},
                     },
                     {
@@ -411,12 +469,33 @@ class SimulationInputWiringTest(unittest.TestCase):
                     },
                     {
                         "mode": "current_state",
-                        "metadata": {"active_fixture_fingerprint": "newer"},
+                        "metadata": {
+                            "active_fixture_count": 1,
+                            "active_fixture_fingerprint": "newer",
+                            "forecast_results": [],
+                            "matrix_source_counts": {},
+                        },
                         "_record": {"observed_at_utc": "2026-07-06T08:00:00Z"},
                     },
                 ]
 
         self.assertEqual(_latest_current_state_simulation_fixture_fingerprint(FakeStorage()), "newer")
+
+    def test_latest_fixture_fingerprint_treats_missing_forecast_path_as_stale(self) -> None:
+        class FakeStorage:
+            def read_records(self, dataset: str, *, latest_only: bool = False) -> list[dict]:
+                return [
+                    {
+                        "mode": "current_state",
+                        "metadata": {
+                            "active_fixture_count": 1,
+                            "active_fixture_fingerprint": "old-format",
+                        },
+                        "_record": {"observed_at_utc": "2026-07-06T08:00:00Z"},
+                    },
+                ]
+
+        self.assertEqual(_latest_current_state_simulation_fixture_fingerprint(FakeStorage()), "")
 
 
 if __name__ == "__main__":
