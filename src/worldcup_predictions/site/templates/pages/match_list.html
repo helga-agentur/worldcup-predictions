@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/hit_explainer.html" import hit_prompt, hit_tooltip, hit_trigger with context %}
 {% from "partials/icons.html" import icon %}
 {% from "partials/page_intro.html" import page_intro %}
 
@@ -10,12 +11,21 @@
 </nav>
 
 <section class="section" aria-labelledby="page-title">
+  {% if list_kind == "past" %}
+  <header class="page-intro hit-explainer hit-explainer--page-intro" aria-labelledby="page-title">
+    <div class="page-intro__kicker">{{ t("site.kicker") }}</div>
+    <h1 id="page-title">{{ page_title }}</h1>
+    <p class="page-intro__lead">{{ page_description }} {{ hit_prompt() }} {{ hit_trigger("past-list-hit-tooltip", "hit-chip-help hit-chip-help--inline") }}</p>
+    {{ hit_tooltip("past-list-hit-tooltip", extra_class="summary-tooltip--inline") }}
+  </header>
+  {% else %}
   {{ page_intro(
     "page-title",
     page_title,
     page_description,
     t("site.kicker")
   ) }}
+  {% endif %}
 </section>
 
 <section class="section" aria-label="{{ page_title }}">

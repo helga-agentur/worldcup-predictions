@@ -1,0 +1,42 @@
+{% from "partials/icons.html" import icon %}
+
+{% macro hit_trigger(tooltip_id, class_name, label=None, show_icon=True) -%}
+<button class="{{ class_name }}" type="button" aria-label="{{ t('summary.hit_method_aria') }}" aria-haspopup="dialog" aria-controls="{{ tooltip_id }}" aria-expanded="false" data-tooltip-trigger="{{ tooltip_id }}">
+  {% if show_icon %}{{ icon("circle-help") }}{% endif %}
+  {% if label %}<span>{{ label }}</span>{% endif %}
+</button>
+{%- endmacro %}
+
+{% macro hit_prompt() -%}
+<span class="hit-prompt">
+  {{ t("summary.hit_method_prompt_intro") }}
+  <span class="hit-prompt__label"><span class="bar__dot" data-state="strong" aria-hidden="true"></span>{{ t("summary.exact_short") }}</span>{{ t("summary.hit_method_prompt_separator") }}
+  <span class="hit-prompt__label"><span class="bar__dot" data-state="good" aria-hidden="true"></span>{{ t("summary.correct_short") }}</span>{{ t("summary.hit_method_prompt_final_separator") }}
+  {{ t("summary.hit_method_prompt_conjunction") }}
+  <span class="hit-prompt__label"><span class="bar__dot" data-state="bad" aria-hidden="true"></span>{{ t("summary.wrong_short") }}</span>
+  {{ t("summary.hit_method_prompt_end") }}
+</span>
+{%- endmacro %}
+
+{% macro hit_tooltip(tooltip_id, tag_name="div", extra_class="") -%}
+<{{ tag_name }} class="summary-tooltip{% if extra_class %} {{ extra_class }}{% endif %}" id="{{ tooltip_id }}" role="dialog" aria-labelledby="{{ tooltip_id }}-title" data-tooltip hidden>
+  <button class="summary-tooltip__close" type="button" aria-label="{{ t('summary.hit_method_close') }}" data-tooltip-close>
+    {{ icon("x") }}
+  </button>
+  <h3 id="{{ tooltip_id }}-title" class="summary-tooltip__title">{{ t("summary.hit_method_title") }}</h3>
+  <ul class="summary-tooltip__list">
+    <li class="summary-tooltip__item">
+      <span class="bar__dot" data-state="strong" aria-hidden="true"></span>
+      <span><strong>{{ t("summary.exact_short") }}:</strong> {{ t("summary.hit_method_exact") }}</span>
+    </li>
+    <li class="summary-tooltip__item">
+      <span class="bar__dot" data-state="good" aria-hidden="true"></span>
+      <span><strong>{{ t("summary.correct_short") }}:</strong> {{ t("summary.hit_method_correct") }}</span>
+    </li>
+    <li class="summary-tooltip__item">
+      <span class="bar__dot" data-state="bad" aria-hidden="true"></span>
+      <span><strong>{{ t("summary.wrong_short") }}:</strong> {{ t("summary.hit_method_wrong") }}</span>
+    </li>
+  </ul>
+</{{ tag_name }}>
+{%- endmacro %}

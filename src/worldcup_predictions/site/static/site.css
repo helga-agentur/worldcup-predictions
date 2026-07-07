@@ -423,6 +423,7 @@ html[data-js="true"] .site-menu[data-state="open"] .site-menu__footer {
 .breadcrumb__link:focus-visible,
 .resources__link:focus-visible,
 .summary__help-button:focus-visible,
+.hit-chip-help:focus-visible,
 .summary-tooltip__close:focus-visible,
 .bracket-control:focus-visible,
 main p a:focus-visible {
@@ -674,6 +675,105 @@ h2 {
 
 .summary-tooltip__list strong {
   color: var(--ink);
+}
+
+.hit-explainer {
+  position: relative;
+  min-width: 0;
+}
+
+.hit-explainer--section {
+  margin-top: var(--space-sm);
+  color: var(--muted);
+}
+
+.hit-explainer--section > p {
+  margin: 0;
+}
+
+.hit-explainer--page-intro {
+  display: block;
+}
+
+.hit-explainer--chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.hit-prompt__label {
+  white-space: nowrap;
+}
+
+.hit-prompt__label .bar__dot {
+  margin-right: var(--space-4);
+  vertical-align: 0.08em;
+}
+
+.hit-chip-help {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  color: var(--helga-blue);
+  background: transparent;
+  cursor: pointer;
+}
+
+.hit-chip-help:hover {
+  color: var(--ink);
+}
+
+.hit-chip-help .icon {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.2;
+}
+
+.hit-chip-help--inline {
+  vertical-align: -0.38em;
+}
+
+.hit-chip-help:hover .icon circle,
+.hit-chip-help:focus-visible .icon circle {
+  fill: var(--hover-row);
+}
+
+.summary-tooltip--inline,
+.summary-tooltip--chip {
+  left: var(--tooltip-inline-left, 0);
+  width: min(340px, calc(100vw - (var(--space-lg) * 2)));
+  transform: none;
+}
+
+.summary-tooltip--inline {
+  top: auto;
+  bottom: calc(100% + var(--space-md));
+}
+
+.summary-tooltip--chip {
+  top: calc(100% + var(--space-md));
+  bottom: auto;
+}
+
+.summary-tooltip--inline::before,
+.summary-tooltip--chip::before {
+  left: var(--tooltip-inline-arrow-left, var(--space-lg));
+}
+
+.summary-tooltip--inline::before {
+  top: 100%;
+  bottom: auto;
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+}
+
+.summary-tooltip--chip::before {
+  top: auto;
+  bottom: 100%;
+  clip-path: polygon(50% 0, 0 100%, 100% 100%);
 }
 
 .summary__value {
@@ -1691,6 +1791,19 @@ html[data-theme="dark"] .tag[data-result="trend"] {
     right: calc(var(--tooltip-trigger-center) - var(--space-8));
     left: auto;
     transform: translateX(50%);
+  }
+
+  .summary-tooltip--inline,
+  .summary-tooltip--chip {
+    right: auto;
+    left: var(--tooltip-inline-left, 0);
+  }
+
+  .summary-tooltip--inline::before,
+  .summary-tooltip--chip::before {
+    right: auto;
+    left: var(--tooltip-inline-arrow-left, var(--space-lg));
+    transform: translateX(-50%);
   }
 
   .homepage-grid__aside .odds__row {

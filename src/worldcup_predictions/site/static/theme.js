@@ -186,13 +186,52 @@
     }
   }
 
+  function alignTooltip(trigger, tooltip) {
+    if (
+      !trigger ||
+      !tooltip ||
+      !tooltip.classList ||
+      (!tooltip.classList.contains("summary-tooltip--inline") &&
+        !tooltip.classList.contains("summary-tooltip--chip"))
+    ) {
+      return;
+    }
+
+    var anchor = trigger.closest ? trigger.closest(".hit-explainer") : null;
+    if (!anchor) {
+      return;
+    }
+
+    var gutter = 16;
+    var arrowInset = 14;
+    var anchorRect = anchor.getBoundingClientRect();
+    var triggerRect = trigger.getBoundingClientRect();
+    var tooltipRect = tooltip.getBoundingClientRect();
+    var triggerCenter = triggerRect.left + triggerRect.width / 2 - anchorRect.left;
+    var minLeft = gutter - anchorRect.left;
+    var maxLeft = window.innerWidth - tooltipRect.width - gutter - anchorRect.left;
+    var preferredArrowLeft = 28;
+    var tooltipLeft = triggerCenter - preferredArrowLeft;
+
+    tooltipLeft = Math.max(minLeft, Math.min(tooltipLeft, maxLeft));
+
+    var arrowLeft = triggerCenter - tooltipLeft;
+    var maxArrowLeft = Math.max(arrowInset, tooltipRect.width - arrowInset);
+    arrowLeft = Math.max(arrowInset, Math.min(arrowLeft, maxArrowLeft));
+
+    tooltip.style.setProperty("--tooltip-inline-left", tooltipLeft.toFixed(2) + "px");
+    tooltip.style.setProperty("--tooltip-inline-arrow-left", arrowLeft.toFixed(2) + "px");
+  }
+
   function setTooltip(trigger, tooltip, open, pinned) {
     if (!trigger || !tooltip) {
       return;
     }
     clearTooltipTimer(tooltip);
     if (open) {
+      hideAllTooltips(tooltip);
       tooltip.hidden = false;
+      alignTooltip(trigger, tooltip);
       tooltip.dataset.state = pinned ? "pinned" : "hover";
       trigger.setAttribute("aria-expanded", "true");
     } else {
@@ -209,10 +248,10 @@
     setTooltip(trigger, tooltip, false, false);
   }
 
-  function hideAllTooltips() {
+  function hideAllTooltips(exceptTooltip) {
     tooltipTriggers.forEach(function (trigger) {
       var tooltip = tooltipForTrigger(trigger);
-      if (tooltip && !tooltip.hidden) {
+      if (tooltip && tooltip !== exceptTooltip && !tooltip.hidden) {
         hideTooltip(trigger, tooltip, true);
       }
     });
