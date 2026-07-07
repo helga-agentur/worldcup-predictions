@@ -108,6 +108,7 @@
     menuToggle.setAttribute("aria-expanded", open ? "true" : "false");
     menuToggle.setAttribute("aria-label", menuToggle.getAttribute(open ? "data-close-label" : "data-open-label") || "");
     if (open) {
+      hideAllTooltips();
       focusBeforeMenu = document.activeElement;
       document.body.dataset.menuOpen = "true";
       menu.dataset.state = "opening";
@@ -169,6 +170,158 @@
       });
     }
   }
+
+  var tooltipTriggers = Array.prototype.slice.call(document.querySelectorAll("[data-tooltip-trigger]"));
+  var tooltipTimers = new WeakMap();
+
+  function tooltipForTrigger(trigger) {
+    return trigger ? document.getElementById(trigger.getAttribute("data-tooltip-trigger")) : null;
+  }
+
+  function clearTooltipTimer(tooltip) {
+    var timer = tooltipTimers.get(tooltip);
+    if (timer) {
+      window.clearTimeout(timer);
+      tooltipTimers.delete(tooltip);
+    }
+  }
+
+  function alignTooltip(trigger, tooltip) {
+    if (
+      !trigger ||
+      !tooltip ||
+      !tooltip.classList ||
+      (!tooltip.classList.contains("summary-tooltip--inline") &&
+        !tooltip.classList.contains("summary-tooltip--chip"))
+    ) {
+      return;
+    }
+
+    var anchor = trigger.closest ? trigger.closest(".hit-explainer") : null;
+    if (!anchor) {
+      return;
+    }
+
+    var gutter = 16;
+    var arrowInset = 14;
+    var anchorRect = anchor.getBoundingClientRect();
+    var triggerRect = trigger.getBoundingClientRect();
+    var tooltipRect = tooltip.getBoundingClientRect();
+    var triggerCenter = triggerRect.left + triggerRect.width / 2 - anchorRect.left;
+    var minLeft = gutter - anchorRect.left;
+    var maxLeft = window.innerWidth - tooltipRect.width - gutter - anchorRect.left;
+    var preferredArrowLeft = 28;
+    var tooltipLeft = triggerCenter - preferredArrowLeft;
+
+    tooltipLeft = Math.max(minLeft, Math.min(tooltipLeft, maxLeft));
+
+    var arrowLeft = triggerCenter - tooltipLeft;
+    var maxArrowLeft = Math.max(arrowInset, tooltipRect.width - arrowInset);
+    arrowLeft = Math.max(arrowInset, Math.min(arrowLeft, maxArrowLeft));
+
+    tooltip.style.setProperty("--tooltip-inline-left", tooltipLeft.toFixed(2) + "px");
+    tooltip.style.setProperty("--tooltip-inline-arrow-left", arrowLeft.toFixed(2) + "px");
+  }
+
+  function setTooltip(trigger, tooltip, open, pinned) {
+    if (!trigger || !tooltip) {
+      return;
+    }
+    clearTooltipTimer(tooltip);
+    if (open) {
+      hideAllTooltips(tooltip);
+      tooltip.hidden = false;
+      alignTooltip(trigger, tooltip);
+      tooltip.dataset.state = pinned ? "pinned" : "hover";
+      trigger.setAttribute("aria-expanded", "true");
+    } else {
+      tooltip.hidden = true;
+      delete tooltip.dataset.state;
+      trigger.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function hideTooltip(trigger, tooltip, force) {
+    if (!force && tooltip && tooltip.dataset.state === "pinned") {
+      return;
+    }
+    setTooltip(trigger, tooltip, false, false);
+  }
+
+  function hideAllTooltips(exceptTooltip) {
+    tooltipTriggers.forEach(function (trigger) {
+      var tooltip = tooltipForTrigger(trigger);
+      if (tooltip && tooltip !== exceptTooltip && !tooltip.hidden) {
+        hideTooltip(trigger, tooltip, true);
+      }
+    });
+  }
+
+  function scheduleTooltipHide(trigger, tooltip) {
+    if (!trigger || !tooltip || tooltip.dataset.state === "pinned") {
+      return;
+    }
+    clearTooltipTimer(tooltip);
+    tooltipTimers.set(tooltip, window.setTimeout(function () {
+      if (!trigger.matches(":hover") && !tooltip.matches(":hover")) {
+        hideTooltip(trigger, tooltip, true);
+      }
+    }, 80));
+  }
+
+  tooltipTriggers.forEach(function (trigger) {
+    var tooltip = tooltipForTrigger(trigger);
+    if (!tooltip) {
+      return;
+    }
+
+    trigger.addEventListener("mouseenter", function () {
+      if (tooltip.dataset.state !== "pinned") {
+        setTooltip(trigger, tooltip, true, false);
+      }
+    });
+
+    trigger.addEventListener("mouseleave", function () {
+      scheduleTooltipHide(trigger, tooltip);
+    });
+
+    trigger.addEventListener("click", function () {
+      if (tooltip.dataset.state === "pinned") {
+        hideTooltip(trigger, tooltip, true);
+        return;
+      }
+      setTooltip(trigger, tooltip, true, true);
+    });
+
+    tooltip.addEventListener("mouseenter", function () {
+      clearTooltipTimer(tooltip);
+    });
+
+    tooltip.addEventListener("mouseleave", function () {
+      scheduleTooltipHide(trigger, tooltip);
+    });
+
+    tooltip.addEventListener("click", function (event) {
+      var closeButton = event.target && event.target.closest ? event.target.closest("[data-tooltip-close]") : null;
+      if (closeButton) {
+        hideTooltip(trigger, tooltip, true);
+        trigger.focus();
+      }
+    });
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape") {
+      return;
+    }
+    tooltipTriggers.forEach(function (trigger) {
+      var tooltip = tooltipForTrigger(trigger);
+      if (tooltip && !tooltip.hidden) {
+        hideTooltip(trigger, tooltip, true);
+        trigger.focus();
+      }
+    });
+  });
 
   if (media && media.addEventListener) {
     media.addEventListener("change", function () {

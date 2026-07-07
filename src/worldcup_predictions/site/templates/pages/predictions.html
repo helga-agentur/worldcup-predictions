@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/hit_explainer.html" import hit_prompt, hit_tooltip, hit_trigger with context %}
 {% from "partials/icons.html" import icon %}
 {% from "partials/page_intro.html" import page_intro %}
 {% from "partials/champion_odds.html" import champion_bars %}
@@ -73,7 +74,11 @@
         {% endif %}
       </div>
       <div class="summary__card">
-        <dt class="summary__label">{{ t("summary.hit_rate") }}</dt>
+        <dt class="summary__label">
+          <span>{{ t("summary.hit_rate") }}</span>
+          {{ hit_trigger("hit-rate-tooltip", "summary__help-button") }}
+        </dt>
+        {{ hit_tooltip("hit-rate-tooltip", tag_name="dd") }}
         <dd class="summary__value">{{ summary_extras.hit_rate_text }}</dd>
         {% if summary_extras.has_hits %}
         <dd class="summary__bar">
@@ -143,7 +148,10 @@
       <header class="section__heading">
         <div class="section__heading-copy">
           <h2 id="past-title">{{ t("section.tipped.title") }}</h2>
-          <p>{{ t("section.tipped.description") }}</p>
+          <div class="hit-explainer hit-explainer--section">
+            <p>{{ t("section.tipped.description") }} {{ hit_prompt() }} {{ hit_trigger("past-section-hit-tooltip", "hit-chip-help hit-chip-help--inline") }}</p>
+            {{ hit_tooltip("past-section-hit-tooltip", extra_class="summary-tooltip--inline") }}
+          </div>
         </div>
       </header>
       {% if tipped_preview_rows %}

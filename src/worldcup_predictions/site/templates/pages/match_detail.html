@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "partials/country_name.html" import country_name %}
+{% from "partials/hit_explainer.html" import hit_tooltip, hit_trigger with context %}
 {% from "partials/icons.html" import icon %}
 {% from "partials/match_name.html" import match_name %}
 {% from "partials/probability_bar.html" import prob_bar %}
@@ -29,7 +30,11 @@
         {% if row.status == "final" and row.actual_score %}
         <span class="tag numeric"{% if row.hit_result %} data-result="{{ row.hit_result }}"{% endif %}>{{ t("label.result") }}: {{ row.actual_score }}</span>
         {% if row.hit_label %}
-        <span class="hit-chip" data-result="{{ row.hit_result }}">{{ row.hit_label }}</span>
+        <div class="hit-explainer hit-explainer--chip">
+          <span class="hit-chip" data-result="{{ row.hit_result }}">{{ row.hit_label }}</span>
+          {{ hit_trigger("match-hit-tooltip", "hit-chip-help") }}
+          {{ hit_tooltip("match-hit-tooltip", extra_class="summary-tooltip--chip") }}
+        </div>
         {% endif %}
         {% endif %}
         {% if row.expected_score_display and "-" not in row.expected_score_display %}

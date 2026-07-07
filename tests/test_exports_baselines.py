@@ -41,7 +41,7 @@ from worldcup_predictions.plugins.providers import SrfChProviderOptimizerPlugin
 from worldcup_predictions.plugins.sources.enrichment.public_analysis.plugin import public_analysis_rows_with_diagnostics
 from worldcup_predictions.plugins.workflow.structured_output import StructuredOutputPlugin
 from worldcup_predictions.site import build_site
-from worldcup_predictions.site.generator import normalized_base_url
+from worldcup_predictions.site.generator import _hit_category, normalized_base_url
 from worldcup_predictions.storage import DuckDBStorage
 from worldcup_predictions.tournament import FixtureRecord, TeamResolver
 
@@ -143,6 +143,100 @@ class ExportAndBaselineTest(unittest.TestCase):
     def test_site_base_url_normalization_accepts_trailing_slash(self) -> None:
         self.assertEqual(normalized_base_url("http://127.0.0.1:8000/"), "http://127.0.0.1:8000")
         self.assertEqual(normalized_base_url("https://tippspiel.helga.ch"), "https://tippspiel.helga.ch")
+
+    def test_site_hit_category_uses_neutral_model_prediction(self) -> None:
+        base = {
+            "status": "final",
+            "srf_tip": "0:0",
+        }
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_home": 2,
+                    "most_likely_away": 1,
+                    "actual_home": 2,
+                    "actual_away": 1,
+                }
+            ),
+            "exact",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "1:0",
+                    "actual_score": "2:0",
+                }
+            ),
+            "trend",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "2:0",
+                    "actual_score": "3:1",
+                }
+            ),
+            "trend",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "1:1",
+                    "actual_score": "2:2",
+                }
+            ),
+            "trend",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "1:1",
+                    "prob_home": 0.58,
+                    "prob_draw": 0.24,
+                    "prob_away": 0.18,
+                    "actual_score": "4:1",
+                }
+            ),
+            "trend",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "1:1",
+                    "prob_home": 0.58,
+                    "prob_draw": 0.24,
+                    "prob_away": 0.18,
+                    "actual_score": "4:2",
+                }
+            ),
+            "trend",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "0:2",
+                    "actual_score": "0:0",
+                }
+            ),
+            "miss",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "1:0",
+                    "actual_score": "3:1",
+                }
+            ),
+            "trend",
+        )
 
     def test_tournament_forecast_filters_eliminated_teams_and_formats_percentages(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1215,12 +1309,20 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('<dd class="summary__value">5</dd>', html)
             self.assertIn('<div class="bar bar--series" role="img" aria-label="5/5 aus gespielten Spielen">', html)
             self.assertIn('<span class="bar__legend-item numeric">5/5 aus gespielten Spielen</span>', html)
-            self.assertIn('<dt class="summary__label">Trefferquote</dt>', html)
+            self.assertIn("<span>Trefferquote</span>", html)
+            self.assertIn(
+                'class="summary__help-button" type="button" aria-label="Wie die Trefferquote berechnet wird" aria-haspopup="dialog" aria-controls="hit-rate-tooltip" aria-expanded="false" data-tooltip-trigger="hit-rate-tooltip"',
+                html,
+            )
             self.assertIn('<dd class="summary__value">100%</dd>', html)
             hit_bar_html = '<div class="bar bar--status" aria-hidden="true">'
             hit_legend_html = '<div class="bar__legend" aria-label="0 exakt · 1 teilweise richtig · 0 falsch">'
             self.assertIn(hit_legend_html, html)
             self.assertIn('<span class="bar__dot" data-state="good"></span><span class="numeric">1</span> Teilweise richtig', html)
+            self.assertIn('<dd class="summary-tooltip" id="hit-rate-tooltip" role="dialog" aria-labelledby="hit-rate-tooltip-title" data-tooltip hidden>', html)
+            self.assertIn('<button class="summary-tooltip__close" type="button" aria-label="Tooltip schliessen" data-tooltip-close>', html)
+            self.assertIn('<h3 id="hit-rate-tooltip-title" class="summary-tooltip__title">Wie das berechnet wird</h3>', html)
+            self.assertIn("<strong>Teilweise richtig:</strong> der vom Modell erwartete Heimsieg, das Remis oder der Auswärtssieg stimmt", html)
             self.assertIn(hit_bar_html, html)
             self.assertLess(html.index(hit_bar_html), html.index(hit_legend_html))
             self.assertIn('<span class="bar__segment" data-state="strong" style="width: 0.00%"></span>', html)
@@ -1233,10 +1335,19 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertNotIn('<dt class="summary__label">Offene Tipps</dt>', html)
             self.assertNotIn("Ø 6.0/Spiel", html)
             self.assertIn("Hit rate", en_html)
-            self.assertIn('<div class="bar__legend" aria-label="0 exact scores · 1 partially correct · 0 wrong outcomes">', en_html)
+            self.assertIn('aria-label="How hit rate is calculated"', en_html)
+            self.assertIn('<div class="bar__legend" aria-label="0 exact · 1 partially correct · 0 wrong">', en_html)
             self.assertIn('<span class="bar__dot" data-state="good"></span><span class="numeric">1</span> Partially correct', en_html)
+            self.assertIn('<h3 id="hit-rate-tooltip-title" class="summary-tooltip__title">How this is calculated</h3>', en_html)
+            self.assertIn("<strong>Partially correct:</strong> the model&#39;s predicted home win, draw, or away win matches the actual outcome.", en_html)
             self.assertIn("prefers-color-scheme", js)
             self.assertIn("Max-Age=31536000", js)
+            self.assertIn("[data-tooltip-trigger]", js)
+            self.assertIn("[data-tooltip-close]", js)
+            self.assertIn("function alignTooltip(trigger, tooltip)", js)
+            self.assertIn('trigger.closest(".hit-explainer")', js)
+            self.assertIn('tooltip.style.setProperty("--tooltip-inline-arrow-left"', js)
+            self.assertIn("hideAllTooltips(tooltip)", js)
             self.assertIn("/assets/fonts/CadizWeb-Regular.woff2", css)
             self.assertIn("/assets/fonts/Degular-Regular.woff2", css)
             self.assertNotIn("helga.ch/themes/custom/customer/dist/webfonts", css)
@@ -1274,6 +1385,13 @@ class ExportAndBaselineTest(unittest.TestCase):
                 1,
             )[0]
             past_section = html.split('<section class="homepage-panel" aria-labelledby="past-title">', 1)[1]
+            self.assertIn('data-tooltip-trigger="past-section-hit-tooltip"', past_section)
+            self.assertIn('<span class="hit-prompt">', past_section)
+            self.assertIn('<span class="hit-prompt__label"><span class="bar__dot" data-state="strong" aria-hidden="true"></span>Exakt</span>', past_section)
+            self.assertIn('<span class="hit-prompt__label"><span class="bar__dot" data-state="good" aria-hidden="true"></span>Teilweise richtig</span>', past_section)
+            self.assertIn('<span class="hit-prompt__label"><span class="bar__dot" data-state="bad" aria-hidden="true"></span>Falsch</span>', past_section)
+            self.assertIn('class="hit-chip-help hit-chip-help--inline" type="button"', past_section)
+            self.assertIn('<div class="summary-tooltip summary-tooltip--inline" id="past-section-hit-tooltip"', past_section)
             self.assertIn('<div class="section__actions">', future_section)
             self.assertIn(
                 '<a class="action-link" href="/de/spiele/kommende"><span>Alle kommenden Spiele</span>',
@@ -1306,6 +1424,12 @@ class ExportAndBaselineTest(unittest.TestCase):
                 '<a class="match-card" href="/de/spiele/2026-07-10-bra-jpn/" data-analytics-event="helga_match_open" aria-label="Brasilien - Japan, Anpfiff Fr, 10.07.2026, 20:00, Schlussresultat 2:0, Prognose-Ergebnis Teilweise richtig." data-variant="past">',
                 de_past_html,
             )
+            self.assertIn('<header class="page-intro hit-explainer hit-explainer--page-intro" aria-labelledby="page-title">', de_past_html)
+            self.assertIn('data-tooltip-trigger="past-list-hit-tooltip"', de_past_html)
+            self.assertIn('<div class="summary-tooltip summary-tooltip--inline" id="past-list-hit-tooltip"', de_past_html)
+            self.assertIn('<span class="hit-prompt__label"><span class="bar__dot" data-state="strong" aria-hidden="true"></span>Exact</span>', en_past_html)
+            self.assertIn('<span class="hit-prompt__label"><span class="bar__dot" data-state="good" aria-hidden="true"></span>Partially correct</span>', en_past_html)
+            self.assertIn('<span class="hit-prompt__label"><span class="bar__dot" data-state="bad" aria-hidden="true"></span>Wrong</span>', en_past_html)
             self.assertNotIn('<a class="match-row"', de_past_html)
             self.assertNotIn('href="/">Home</a>', html)
             self.assertIn('href="/de/" lang="de"', html)
@@ -1383,6 +1507,9 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn('Sicherheit: <span class="numeric">Mittel (52.0%)</span>', detail)
             self.assertIn('<span class="tag numeric" data-result="trend">Resultat: 2:0</span>', detail)
             self.assertIn('<span class="hit-chip" data-result="trend">Teilweise richtig</span>', detail)
+            self.assertIn('<div class="hit-explainer hit-explainer--chip">', detail)
+            self.assertIn('class="hit-chip-help" type="button" aria-label="Wie die Trefferquote berechnet wird"', detail)
+            self.assertIn('<div class="summary-tooltip summary-tooltip--chip" id="match-hit-tooltip"', detail)
             self.assertNotIn('<span class="status" data-status="final">Getippt</span>', detail)
             self.assertIn('<section class="detail-picks" aria-labelledby="detail-picks-title">', detail)
             self.assertIn('<h3 class="detail-pick__label">SRF Tipp</h3>', detail)
@@ -1519,6 +1646,16 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertIn(".status,\n.hit-chip", css)
             self.assertIn('.status[data-status="future"] {\n  color: var(--helga-blue);\n  border-color: var(--hover-row);\n  background: var(--hover-row);', css)
             self.assertIn(".hit-chip", css)
+            self.assertIn(".hit-chip-help", css)
+            self.assertIn(".hit-chip-help--inline", css)
+            self.assertIn(".hit-prompt__label", css)
+            self.assertIn("white-space: nowrap;", css)
+            self.assertIn("vertical-align: 0.08em;", css)
+            self.assertIn(".summary-tooltip--inline,\n.summary-tooltip--chip", css)
+            self.assertIn(".summary-tooltip--inline {\n  top: auto;\n  bottom: calc(100% + var(--space-md));", css)
+            self.assertIn(".summary-tooltip--inline::before {\n  top: 100%;\n  bottom: auto;", css)
+            self.assertIn("left: var(--tooltip-inline-left, 0);", css)
+            self.assertIn("left: var(--tooltip-inline-arrow-left, var(--space-lg));", css)
             self.assertIn('.hit-chip[data-result="exact"],\n.tag[data-result="exact"]', css)
             self.assertIn('.hit-chip[data-result="trend"],\n.tag[data-result="trend"]', css)
             self.assertIn('.hit-chip[data-result="miss"],\n.tag[data-result="miss"]', css)

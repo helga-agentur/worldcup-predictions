@@ -2786,20 +2786,33 @@ def _score_tip_from_text(value: Any) -> ScoreTip | None:
 def _hit_category(row: dict[str, Any]) -> str | None:
     if str(row.get("status") or "") != "final":
         return None
-    tip = str(row.get("srf_tip") or "")
-    if ":" not in tip:
+    prediction = _most_likely_score_tip(row)
+    actual = _actual_score_from_row(row)
+    if prediction is None or actual is None:
         return None
-    tip_home = _optional_int(tip.split(":", 1)[0])
-    tip_away = _optional_int(tip.split(":", 1)[1])
-    actual_home = _optional_int(row.get("actual_home"))
-    actual_away = _optional_int(row.get("actual_away"))
-    if None in (tip_home, tip_away, actual_home, actual_away):
-        return None
-    if (tip_home, tip_away) == (actual_home, actual_away):
+    if prediction == actual:
         return "exact"
-    tip_sign = (tip_home > tip_away) - (tip_home < tip_away)
-    actual_sign = (actual_home > actual_away) - (actual_home < actual_away)
-    return "trend" if tip_sign == actual_sign else "miss"
+    predicted_outcome = _hda_prediction_outcome(row)
+    if predicted_outcome is None:
+        predicted_outcome = _score_outcome(prediction)
+    if predicted_outcome != _score_outcome(actual):
+        return "miss"
+    return "trend"
+
+
+def _hda_prediction_outcome(row: dict[str, Any]) -> int | None:
+    values = _probability_values(row)
+    if values is None:
+        return None
+    home, draw, away = values
+    probability, outcome = max((home, 1), (draw, 0), (away, -1), key=lambda item: item[0])
+    if probability <= 0:
+        return None
+    return outcome
+
+
+def _score_outcome(score: ScoreTip) -> int:
+    return (score.home > score.away) - (score.home < score.away)
 
 
 def _hit_label(category: Any, *, catalog: TranslationCatalog) -> str:
