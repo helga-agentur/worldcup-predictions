@@ -41,7 +41,7 @@ from worldcup_predictions.plugins.providers import SrfChProviderOptimizerPlugin
 from worldcup_predictions.plugins.sources.enrichment.public_analysis.plugin import public_analysis_rows_with_diagnostics
 from worldcup_predictions.plugins.workflow.structured_output import StructuredOutputPlugin
 from worldcup_predictions.site import build_site
-from worldcup_predictions.site.generator import normalized_base_url
+from worldcup_predictions.site.generator import _hit_category, normalized_base_url
 from worldcup_predictions.storage import DuckDBStorage
 from worldcup_predictions.tournament import FixtureRecord, TeamResolver
 
@@ -143,6 +143,74 @@ class ExportAndBaselineTest(unittest.TestCase):
     def test_site_base_url_normalization_accepts_trailing_slash(self) -> None:
         self.assertEqual(normalized_base_url("http://127.0.0.1:8000/"), "http://127.0.0.1:8000")
         self.assertEqual(normalized_base_url("https://tippspiel.helga.ch"), "https://tippspiel.helga.ch")
+
+    def test_site_hit_category_uses_neutral_model_prediction(self) -> None:
+        base = {
+            "status": "final",
+            "srf_tip": "0:0",
+        }
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_home": 2,
+                    "most_likely_away": 1,
+                    "actual_home": 2,
+                    "actual_away": 1,
+                }
+            ),
+            "exact",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "1:0",
+                    "actual_score": "2:0",
+                }
+            ),
+            "trend",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "2:0",
+                    "actual_score": "3:1",
+                }
+            ),
+            "trend",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "1:1",
+                    "actual_score": "2:2",
+                }
+            ),
+            "trend",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "0:2",
+                    "actual_score": "0:0",
+                }
+            ),
+            "miss",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "1:0",
+                    "actual_score": "3:1",
+                }
+            ),
+            "miss",
+        )
 
     def test_tournament_forecast_filters_eliminated_teams_and_formats_percentages(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

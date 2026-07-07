@@ -2786,20 +2786,29 @@ def _score_tip_from_text(value: Any) -> ScoreTip | None:
 def _hit_category(row: dict[str, Any]) -> str | None:
     if str(row.get("status") or "") != "final":
         return None
-    tip = str(row.get("srf_tip") or "")
-    if ":" not in tip:
+    prediction = _most_likely_score_tip(row)
+    actual = _actual_score_from_row(row)
+    if prediction is None or actual is None:
         return None
-    tip_home = _optional_int(tip.split(":", 1)[0])
-    tip_away = _optional_int(tip.split(":", 1)[1])
-    actual_home = _optional_int(row.get("actual_home"))
-    actual_away = _optional_int(row.get("actual_away"))
-    if None in (tip_home, tip_away, actual_home, actual_away):
-        return None
-    if (tip_home, tip_away) == (actual_home, actual_away):
+    if prediction == actual:
         return "exact"
-    tip_sign = (tip_home > tip_away) - (tip_home < tip_away)
-    actual_sign = (actual_home > actual_away) - (actual_home < actual_away)
-    return "trend" if tip_sign == actual_sign else "miss"
+    if _score_outcome(prediction) != _score_outcome(actual):
+        return "miss"
+    if (
+        prediction.home == actual.home
+        or prediction.away == actual.away
+        or _score_margin(prediction) == _score_margin(actual)
+    ):
+        return "trend"
+    return "miss"
+
+
+def _score_outcome(score: ScoreTip) -> int:
+    return (score.home > score.away) - (score.home < score.away)
+
+
+def _score_margin(score: ScoreTip) -> int:
+    return score.home - score.away
 
 
 def _hit_label(category: Any, *, catalog: TranslationCatalog) -> str:
