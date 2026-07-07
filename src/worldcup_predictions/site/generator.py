@@ -2792,23 +2792,27 @@ def _hit_category(row: dict[str, Any]) -> str | None:
         return None
     if prediction == actual:
         return "exact"
-    if _score_outcome(prediction) != _score_outcome(actual):
+    predicted_outcome = _hda_prediction_outcome(row)
+    if predicted_outcome is None:
+        predicted_outcome = _score_outcome(prediction)
+    if predicted_outcome != _score_outcome(actual):
         return "miss"
-    if (
-        prediction.home == actual.home
-        or prediction.away == actual.away
-        or _score_margin(prediction) == _score_margin(actual)
-    ):
-        return "trend"
-    return "miss"
+    return "trend"
+
+
+def _hda_prediction_outcome(row: dict[str, Any]) -> int | None:
+    values = _probability_values(row)
+    if values is None:
+        return None
+    home, draw, away = values
+    probability, outcome = max((home, 1), (draw, 0), (away, -1), key=lambda item: item[0])
+    if probability <= 0:
+        return None
+    return outcome
 
 
 def _score_outcome(score: ScoreTip) -> int:
     return (score.home > score.away) - (score.home < score.away)
-
-
-def _score_margin(score: ScoreTip) -> int:
-    return score.home - score.away
 
 
 def _hit_label(category: Any, *, catalog: TranslationCatalog) -> str:

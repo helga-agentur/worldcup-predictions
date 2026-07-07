@@ -195,6 +195,32 @@ class ExportAndBaselineTest(unittest.TestCase):
             _hit_category(
                 {
                     **base,
+                    "most_likely_score": "1:1",
+                    "prob_home": 0.58,
+                    "prob_draw": 0.24,
+                    "prob_away": 0.18,
+                    "actual_score": "4:1",
+                }
+            ),
+            "trend",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
+                    "most_likely_score": "1:1",
+                    "prob_home": 0.58,
+                    "prob_draw": 0.24,
+                    "prob_away": 0.18,
+                    "actual_score": "4:2",
+                }
+            ),
+            "trend",
+        )
+        self.assertEqual(
+            _hit_category(
+                {
+                    **base,
                     "most_likely_score": "0:2",
                     "actual_score": "0:0",
                 }
@@ -209,7 +235,7 @@ class ExportAndBaselineTest(unittest.TestCase):
                     "actual_score": "3:1",
                 }
             ),
-            "miss",
+            "trend",
         )
 
     def test_tournament_forecast_filters_eliminated_teams_and_formats_percentages(self) -> None:
