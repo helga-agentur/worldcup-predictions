@@ -1417,6 +1417,13 @@ html[data-theme="dark"] .tag[data-result="trend"] {
   border: 0;
 }
 
+.bracket-tree .matches-positioner,
+.bracket-tree .round-titles-wrapper {
+  transition:
+    margin-left 0.46s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.46s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .bracket-tree .match-body {
   background: var(--paper);
   transition: background-color 0.24s ease, border-color 0.24s ease;
@@ -1627,6 +1634,8 @@ html[data-theme="dark"] .tag[data-result="trend"] {
 @media (prefers-reduced-motion: reduce) {
   .match-card,
   .action-link .icon,
+  .bracket-tree .matches-positioner,
+  .bracket-tree .round-titles-wrapper,
   html[data-js="true"] .site-menu,
   html[data-js="true"] .site-menu__surface,
   html[data-js="true"] .site-menu__list,

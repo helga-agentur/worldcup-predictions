@@ -159,6 +159,11 @@
           if (step.winner) {
             bracket.highlightContestantHistory(step.winner);
           }
+          if (Number.isInteger(step.advanceToRoundIndex)) {
+            bracket.setBaseRoundIndex(step.advanceToRoundIndex);
+            return true;
+          }
+          return false;
         };
         const resetSimulation = () => {
           window.clearTimeout(timelineTimer);
@@ -184,9 +189,9 @@
             setSimulationState("done");
             return;
           }
-          applyStep(step);
+          const advancedRound = applyStep(step);
           timelineIndex += 1;
-          scheduleNextStep(1100);
+          scheduleNextStep(advancedRound ? 1400 : 1100);
         };
         const playTimeline = () => {
           if (!timelineSteps.length) {

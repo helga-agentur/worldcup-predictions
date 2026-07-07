@@ -125,7 +125,7 @@
   "tournament.bracket.play": "Play",
   "tournament.bracket.reset": "Reset",
   "tournament.bracket.status_final": "Final",
-  "tournament.bracket.status_projected": "Forecast",
+  "tournament.bracket.status_open": "Open",
   "tournament.bracket.title": "Forecast simulation",
   "tournament.empty": "No tournament probabilities available right now.",
   "tournament.lead": "Per-team probabilities across all open matches — played results stay fixed.",
