@@ -237,6 +237,10 @@
     });
 
     trigger.addEventListener("click", function () {
+      if (tooltip.dataset.state === "pinned") {
+        hideTooltip(trigger, tooltip, true);
+        return;
+      }
       setTooltip(trigger, tooltip, true, true);
     });
 
