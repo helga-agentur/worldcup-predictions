@@ -107,6 +107,7 @@ Generated files include:
 - `public/current/assets/favicon.svg`
 - `public/current/sitemap.xml`
 - `public/current/robots.txt`
+- `public/current/llms.txt`
 
 Legacy redirect pages are also emitted for `public/current/de/turnier/index.html` and `public/current/en/tournament/index.html`.
 

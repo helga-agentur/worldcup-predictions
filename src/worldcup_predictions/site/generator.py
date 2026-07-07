@@ -1858,6 +1858,7 @@ def _write_site_files(
     )
     (output_dir / "robots.txt").write_text("User-agent: *\nAllow: /\nSitemap: /sitemap.xml\n", encoding="utf-8")
     (output_dir / "sitemap.xml").write_text(_sitemap_xml(localized_contexts), encoding="utf-8")
+    (output_dir / "llms.txt").write_text(_llms_txt(localized_contexts), encoding="utf-8")
 
 
 def _write_match_list_page(
@@ -3316,6 +3317,48 @@ def _sitemap_xml(localized_contexts: dict[str, dict[str, Any]]) -> str:
 {url_nodes}
 </urlset>
 """
+
+
+def _llms_txt(localized_contexts: dict[str, dict[str, Any]]) -> str:
+    context = localized_contexts.get(DEFAULT_SITE_LOCALE) or next(iter(localized_contexts.values()))
+    base_url = str(context["base_url"])
+    return "\n".join(
+        (
+            "# Helga World Cup Predictions",
+            "",
+            "> Data-driven FIFA World Cup 2026 forecasts from Helga: match score probabilities, provider-neutral predictions, SRF and 20min tip recommendations, result history, tournament probabilities, and a machine-readable JSON API.",
+            "",
+            "This static site publishes localized HTML pages for humans and a JSON feed for agents. Treat the JSON API as the freshest structured source. HTML pages provide canonical URLs, hreflang alternates, OpenGraph/Twitter metadata, and SportsEvent JSON-LD on match detail pages.",
+            "",
+            "Display times are formatted for Europe/Zurich. API timestamps and fixture dates use UTC where available. Predictions and provider-specific tips can change until kickoff; final rows include confirmed results and scoring outcomes.",
+            "",
+            "## Primary pages",
+            "",
+            f"- [English overview]({_absolute_site_url('/en/', base_url=base_url)}): Current prediction dashboard with upcoming matches, past matches, and tournament forecast preview.",
+            f"- [German overview]({_absolute_site_url('/de/', base_url=base_url)}): Localized German prediction dashboard.",
+            f"- [Upcoming matches]({_absolute_site_url(LOCALE_MATCH_LIST_PATHS['en']['future'], base_url=base_url)}): Open fixtures with score probabilities and SRF/20min recommendations.",
+            f"- [Past matches]({_absolute_site_url(LOCALE_MATCH_LIST_PATHS['en']['past'], base_url=base_url)}): Locked or played fixtures with published tips, results, points, and hit quality where available.",
+            f"- [Tournament forecast]({_absolute_site_url(LOCALE_TOURNAMENT_PATHS['en'], base_url=base_url)}): Remaining-team title probabilities and knockout forecast simulation.",
+            "",
+            "## Structured data",
+            "",
+            f"- [Predictions JSON API]({_absolute_site_url(JSON_FEED_PATH, base_url=base_url)}): Canonical machine-readable prediction feed. Includes summary totals, fixture keys, team ids, probabilities, provider tips, result state, and localized detail URLs.",
+            f"- [Sitemap]({_absolute_site_url('/sitemap.xml', base_url=base_url)}): Indexable localized HTML pages.",
+            "",
+            "## Source and methodology",
+            "",
+            "- [GitHub repository](https://github.com/helga-agentur/worldcup-predictions): Full source code for ingestion, modeling, provider optimization, tournament simulation, static export, and deployment automation.",
+            "- [Data vs gut feeling](https://blog.helga.ch/wer-tippt-besser-bauchgef%C3%BChl-oder-daten-97f7cf1bbdc8): Background article explaining the motivation for the forecasts.",
+            "",
+            "## Notes for LLMs",
+            "",
+            "- The core forecast is provider-neutral; SRF and 20min tips are optimization layers on top of the neutral prediction data.",
+            "- Prefer fixture keys, FIFA team codes, and JSON fields over localized display labels when comparing rows.",
+            "- Use localized HTML pages for human-readable summaries and the JSON API for exact current values.",
+            "- Do not infer that predictions are final before kickoff; open and locked matches can still differ from confirmed results.",
+            "",
+        )
+    )
 
 
 class _CacheAwareStaticHandler(SimpleHTTPRequestHandler):
