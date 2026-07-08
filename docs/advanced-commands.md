@@ -48,13 +48,13 @@ Run the standard source/signal/prediction/provider-tip workflow:
 worldcup-predictions workflow --limit 4
 ```
 
-Run the hourly-style full update:
+Run the scheduled full update:
 
 ```bash
 worldcup-predictions scheduled-update
 ```
 
-This is the production cron entrypoint. It applies pending one-shot data hooks, writes the normal prediction and provider outputs, refreshes the current-state simulation when the fixture state, simulation logic, or a committed automation hook requires it, and then rebuilds the static site.
+This is the production cron entrypoint. It applies pending one-shot data hooks, writes the normal prediction and provider outputs, refreshes the current-state simulation when fixture/result state, simulation logic, six-hour freshness, or a committed automation hook requires it, runs entity maintenance when due, and then rebuilds the static site.
 
 Export one comparison-friendly JSON file with predictions, score matrices, provider tips, diagnostics, signal impacts, and run summaries:
 
@@ -164,7 +164,7 @@ Generate entity alias candidates from stored structured data:
 worldcup-predictions generate-entity-aliases
 ```
 
-The daily simulation/maintenance cadence should keep entity maintenance fresh for normal server operation.
+Scheduled updates keep current-state simulations fresh during normal server operation. The manual simulation command is mainly for ad-hoc review, forced local runs, or `--from-day-one` comparisons.
 
 ## Tournament Simulation
 

@@ -53,7 +53,7 @@ KNOWN_PUBLISHED_CONTEXTS = {
 def build_published_prediction_ledger_rows(storage, *, now: dt.datetime | None = None) -> list[dict[str, Any]]:
     """Build website-facing ledger rows from the latest model ledger.
 
-    Future rows keep updating between hourly runs. Rows that are inside the tip
+    Future rows keep updating between scheduled runs. Rows that are inside the tip
     close buffer or already final are frozen so the website can keep an honest
     public archive while the model continues to learn.
     """

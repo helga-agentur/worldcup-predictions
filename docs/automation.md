@@ -4,21 +4,18 @@ The project is designed to run unattended on a server. Runtime data is local and
 
 ## Server Cadence
 
-Run two recurring jobs:
+Run one recurring job:
 
 ```bash
-# Half-hourly prediction/update workflow
+# Half-hourly prediction/update workflow, with heavier simulation and
+# entity maintenance folded in when due.
 worldcup-predictions scheduled-update
-
-# Daily heavier maintenance workflow
-worldcup-predictions simulate-tournament
 ```
 
 With Docker:
 
 ```bash
 docker compose run --rm predictions worldcup-predictions scheduled-update
-docker compose run --rm predictions worldcup-predictions simulate-tournament
 ```
 
 ## Scheduled Update Job
@@ -56,27 +53,22 @@ Each scheduled run stores a source-ledger summary in `prediction_run_summaries`.
 
 For HTTP sources using the shared source runtime, response headers are stored in source-ledger metadata with `Set-Cookie` redacted. `ETag` and `Last-Modified` headers are reused as conditional request validators on the next eligible request for the same source request key. A `not_modified` ledger row means the upstream source explicitly said the content has not changed, so the run intentionally writes no new structured source facts for that request.
 
-## Daily Job
+## Scheduled Simulation And Maintenance
 
-Command:
+`scheduled-update` is the only production cron entrypoint. It rebuilds predictions from the latest available structured data every half hour and refreshes heavier derived artifacts only when needed.
 
-```bash
-worldcup-predictions simulate-tournament
-```
+Current-state tournament simulation runs inside `scheduled-update` when one of these conditions is true:
 
-Responsibilities:
+- unresolved fixture participants or confirmed results changed
+- the simulation logic version changed
+- the latest current-state simulation is more than six hours old
+- a pending scheduled automation hook requests a refresh
 
-- rebuild predictions on the latest available structured data
-- run the 20,000-iteration tournament simulation
-- refresh champion, stage, team-goal, group, and bonus-question distributions
-- regenerate simulation-derived provider bonus views
-- refresh entity alias candidates and entity validation where needed
+When a simulation refresh runs, the same cron run refreshes champion, stage, team-goal, group, bonus-question, and simulation-derived provider-bonus distributions before rebuilding the static site. If the state, logic, freshness interval, and automation hooks are all current, the simulation is skipped for that run.
 
-The daily job is intentionally separate from the half-hourly job because tournament simulation and maintenance work can be slower and changes less frequently.
+Entity alias candidates and entity validation also run inside `scheduled-update`, but only when their 24-hour freshness interval has elapsed. In normal runs where entity maintenance is fresh, this is a cheap no-op check.
 
-The half-hourly `scheduled-update` command also checks whether the unresolved fixture state or simulation-logic version has changed since the latest current-state simulation. If a result removes an open fixture, resolves a future knockout participant, the simulation logic was upgraded, or a pending scheduled automation hook requests it, the same cron run immediately runs the current-state 20,000-iteration simulation before rebuilding the static site. If the fixture fingerprint and simulation version are unchanged and no pending automation hook requests a refresh, it skips this simulation refresh.
-
-The daily simulation starts from the current confirmed tournament state. For analysis or retrospective comparison, run `worldcup-predictions simulate-tournament --from-day-one` to ignore stored final scores and simulate from the initial fixture plan.
+For ad-hoc analysis or retrospective comparison, run `worldcup-predictions simulate-tournament --from-day-one` manually to ignore stored final scores and simulate from the initial fixture plan. The plain `worldcup-predictions simulate-tournament` command remains useful for manual current-state reviews, but it is not scheduled separately on production.
 
 For future knockout rounds, the simulator advances winners round by round. Existing score matrices are used for known/current fixtures; if a simulated pairing did not already have a published matrix, the simulator generates a matchup-specific baseline matrix on demand, applies the same bounded tournament-outright prior used by published predictions, and caches it for the run before falling back to the neutral matrix. Each summary stores `metadata.matrix_source_counts`, `metadata.market_adjustment_counts`, and a coherent `metadata.forecast_results` path for the modal champion.
 
@@ -151,11 +143,10 @@ When GTM is enabled, the static theme script pushes these custom events to `data
 Example host cron shape:
 
 ```cron
-0,30 * * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-scheduled.lock ./scripts/run-with-timing.sh scheduled-update ./scripts/run-live-scheduled-update.sh >> logs/scheduled-update.log 2>&1
-15 7 * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-simulate.lock ./scripts/run-with-timing.sh simulate-tournament ./scripts/run-prod-compose.sh run --rm predictions worldcup-predictions simulate-tournament >> logs/simulate-tournament.log 2>&1
+0,30 * * * * cd /opt/worldcup-predictions && flock -n /tmp/worldcup-predictions-data.lock ./scripts/run-with-timing.sh scheduled-update ./scripts/run-live-scheduled-update.sh >> logs/scheduled-update.log 2>&1
 ```
 
-Use whatever process supervisor fits the deployment. The important part is the cadence: prediction updates twice per hour, daily simulation maintenance. The `0,30` schedule is intentional because a 10-15 minute update run should finish roughly 15 minutes before common `:00` and `:30` kickoff times.
+Use whatever process supervisor fits the deployment. The important part is the cadence: prediction updates twice per hour, and heavier simulation/entity maintenance runs inside that same locked update only when policy says it is due. The `0,30` schedule is intentional because a typical update run should finish roughly 15 minutes before common `:00` and `:30` kickoff times. Runs that include a six-hour simulation refresh can take longer; the shared non-blocking `flock` skips overlapping starts instead of allowing concurrent DuckDB writers.
 
 ## Helper Scripts
 
@@ -286,14 +277,14 @@ git reset --hard <image-revision>
 
 This means a successful image publish is picked up on the next half-hourly cron run. If the image build fails, live keeps using the previous image. If cron runs before GitHub Actions has finished pushing the new image, live keeps using the previous image and tries again on the next cron run.
 
-Scheduled-update logs include the pulled image digest, image revision, checkout reset target, and normal prediction/site-build output. The scheduled-update cron lock still serializes code/image promotion with runtime data writes.
+Scheduled-update logs include the pulled image digest, image revision, checkout reset target, and normal prediction/site-build output. The shared cron lock serializes code/image promotion with runtime data writes.
 
 One-time migration for an existing live server:
 
 1. Wait for a successful image publish from this commit.
 2. Under the scheduled-update lock, update `/opt/worldcup-predictions` to `origin/main` once so `scripts/run-live-scheduled-update.sh` exists.
-3. Update the scheduled-update crontab line to call `./scripts/run-live-scheduled-update.sh` as shown above.
-4. Leave the daily `simulate-tournament` cron line on `./scripts/run-prod-compose.sh`.
+3. Update crontab to the single shared-lock `scheduled-update` line shown above.
+4. Remove the old daily `simulate-tournament` cron line.
 
 ## Failure Behavior
 

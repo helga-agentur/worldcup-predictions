@@ -36,7 +36,7 @@ class OpenFootballSourcePlugin(BasePlugin):
         quota_policy=QuotaPolicy(
             quota_limited=False,
             ledger_required=True,
-            description="Public GitHub raw files are refreshed through the source ledger so hourly cron runs do not refetch unchanged inputs.",
+            description="Public GitHub raw files are refreshed through the source ledger so scheduled cron runs do not refetch unchanged inputs.",
         ),
         confidence_policy="openfootball fixtures/results are useful public fallbacks; result rows enter tournament state only after the central source-consensus policy confirms them.",
     )

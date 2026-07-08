@@ -20,7 +20,7 @@ Created and maintained by [David Pacassi Torrico](https://github.com/dpacassi) a
 - Keeps the football model provider-neutral, then applies separate optimizer plugins for Tippspiel rules.
 - Stores structured facts, prediction ledgers, diagnostics, source health, and provider-point ledgers.
 - Publishes a no-JavaScript-required static Webseite plus a JSON API.
-- Supports hourly automation and daily tournament simulation through Docker-friendly CLI commands.
+- Supports half-hourly automation with scheduled tournament simulation refreshes through Docker-friendly CLI commands.
 
 ## Outputs
 

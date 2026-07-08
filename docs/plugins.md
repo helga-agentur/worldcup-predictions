@@ -64,7 +64,7 @@ Fetch openfootball/worldcup fixture and result data into tournament state.
 - Writes: `tournament_fixtures`, `tournament_results`
 - Signals: -
 - Locales: `en`, `de`
-- Quota: not limited and ledger-required - Public GitHub raw files are refreshed through the source ledger so hourly cron runs do not refetch unchanged inputs.
+- Quota: not limited and ledger-required - Public GitHub raw files are refreshed through the source ledger so scheduled cron runs do not refetch unchanged inputs.
 - Confidence policy: openfootball fixtures/results are useful public fallbacks; result rows enter tournament state only after the central source-consensus policy confirms them.
 
 ### `srf_public`

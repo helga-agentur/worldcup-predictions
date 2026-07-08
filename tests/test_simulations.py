@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import itertools
 import math
 import tempfile
@@ -10,6 +11,8 @@ from unittest.mock import patch
 
 from worldcup_predictions.cli import (
     SIMULATION_LOGIC_VERSION,
+    _current_state_simulation_refresh_decision,
+    _entity_maintenance_decision,
     _latest_current_state_simulation_fixture_fingerprint,
     _run_scheduled_automation_hooks,
     _simulation_fixture_metadata,
@@ -26,7 +29,7 @@ from worldcup_predictions.core.contracts import (
     ScoreMatrixEntry,
     ScoreTip,
 )
-from worldcup_predictions.core.datasets import AUTOMATION_HOOKS
+from worldcup_predictions.core.datasets import AUTOMATION_HOOKS, PREDICTION_RUN_SUMMARIES, SIMULATION_SUMMARY
 from worldcup_predictions.tournament.contracts import FixtureRecord, ResultRecord, TeamRef, TournamentState
 from worldcup_predictions.plugins.providers.ch_20min import (
     best_twenty_min_bonus_answers,
@@ -490,6 +493,52 @@ class SimulationInputWiringTest(unittest.TestCase):
         self.assertNotEqual(current["active_fixture_fingerprint"], changed["active_fixture_fingerprint"])
         self.assertNotEqual(current["active_fixture_fingerprint"], finished["active_fixture_fingerprint"])
 
+    def test_simulation_state_fingerprint_tracks_confirmed_result_changes(self) -> None:
+        open_fixture = FixtureRecord(
+            event_date="2026-07-14T20:00:00Z",
+            home_team=TeamRef("Spain", "ESP"),
+            away_team=TeamRef("France", "FRA"),
+            stage="Semi-final",
+        )
+        played_fixture = FixtureRecord(
+            event_date="2026-07-07T20:00:00Z",
+            home_team=TeamRef("Argentina", "ARG"),
+            away_team=TeamRef("Egypt", "EGY"),
+            stage="Round of 16",
+        )
+        original = _simulation_fixture_metadata(
+            TournamentState(
+                fixtures=[open_fixture, played_fixture],
+                results=[
+                    ResultRecord(
+                        event_date=played_fixture.event_date,
+                        home_team=played_fixture.home_team,
+                        away_team=played_fixture.away_team,
+                        score=ScoreTip(2, 0),
+                    )
+                ],
+                standings={},
+            )
+        )
+        corrected = _simulation_fixture_metadata(
+            TournamentState(
+                fixtures=[open_fixture, played_fixture],
+                results=[
+                    ResultRecord(
+                        event_date=played_fixture.event_date,
+                        home_team=played_fixture.home_team,
+                        away_team=played_fixture.away_team,
+                        score=ScoreTip(2, 1),
+                    )
+                ],
+                standings={},
+            )
+        )
+
+        self.assertEqual(original["active_fixture_fingerprint"], corrected["active_fixture_fingerprint"])
+        self.assertNotEqual(original["confirmed_result_fingerprint"], corrected["confirmed_result_fingerprint"])
+        self.assertNotEqual(original["active_state_fingerprint"], corrected["active_state_fingerprint"])
+
     def test_latest_fixture_fingerprint_uses_current_state_simulations_only(self) -> None:
         class FakeStorage:
             def read_records(self, dataset: str, *, latest_only: bool = False) -> list[dict]:
@@ -580,6 +629,106 @@ class SimulationInputWiringTest(unittest.TestCase):
 
         self.assertEqual(_latest_current_state_simulation_fixture_fingerprint(FakeStorage()), "")
 
+    def test_current_state_simulation_refreshes_when_interval_elapsed(self) -> None:
+        current = {
+            "active_fixture_count": 1,
+            "active_fixture_fingerprint": "fixtures",
+            "active_state_fingerprint": "state",
+        }
+        storage = FakeDatasetStorage(
+            {
+                SIMULATION_SUMMARY: [
+                    {
+                        "mode": "current_state",
+                        "metadata": {
+                            "active_fixture_count": 1,
+                            "active_fixture_fingerprint": "fixtures",
+                            "active_state_fingerprint": "state",
+                            "forecast_results": [],
+                            "matrix_source_counts": {},
+                            "simulation_logic_version": SIMULATION_LOGIC_VERSION,
+                        },
+                        "_record": {"observed_at_utc": "2026-07-08T00:00:00Z"},
+                    }
+                ]
+            }
+        )
+
+        fresh = _current_state_simulation_refresh_decision(
+            storage,
+            current,
+            now=dt.datetime(2026, 7, 8, 5, 59, tzinfo=dt.timezone.utc),
+        )
+        stale = _current_state_simulation_refresh_decision(
+            storage,
+            current,
+            now=dt.datetime(2026, 7, 8, 6, 0, tzinfo=dt.timezone.utc),
+        )
+
+        self.assertFalse(fresh["refresh"])
+        self.assertEqual(fresh["reason"], "simulation_fresh")
+        self.assertTrue(stale["refresh"])
+        self.assertEqual(stale["trigger"], "scheduled_simulation_interval")
+
+    def test_current_state_simulation_refreshes_when_result_state_changes(self) -> None:
+        storage = FakeDatasetStorage(
+            {
+                SIMULATION_SUMMARY: [
+                    {
+                        "mode": "current_state",
+                        "metadata": {
+                            "active_fixture_count": 1,
+                            "active_fixture_fingerprint": "fixtures",
+                            "active_state_fingerprint": "old-state",
+                            "forecast_results": [],
+                            "matrix_source_counts": {},
+                            "simulation_logic_version": SIMULATION_LOGIC_VERSION,
+                        },
+                        "_record": {"observed_at_utc": "2026-07-08T05:00:00Z"},
+                    }
+                ]
+            }
+        )
+
+        decision = _current_state_simulation_refresh_decision(
+            storage,
+            {
+                "active_fixture_count": 1,
+                "active_fixture_fingerprint": "fixtures",
+                "active_state_fingerprint": "new-state",
+            },
+            now=dt.datetime(2026, 7, 8, 5, 30, tzinfo=dt.timezone.utc),
+        )
+
+        self.assertTrue(decision["refresh"])
+        self.assertEqual(decision["trigger"], "scheduled_simulation_state_change")
+
+    def test_entity_maintenance_runs_every_24_hours(self) -> None:
+        storage = FakeDatasetStorage(
+            {
+                PREDICTION_RUN_SUMMARIES: [
+                    {
+                        "maintenance": {"entity_maintenance": {"ran": True}},
+                        "_record": {"observed_at_utc": "2026-07-08T00:00:00Z"},
+                    }
+                ]
+            }
+        )
+
+        fresh = _entity_maintenance_decision(
+            storage,
+            now=dt.datetime(2026, 7, 8, 23, 59, tzinfo=dt.timezone.utc),
+        )
+        stale = _entity_maintenance_decision(
+            storage,
+            now=dt.datetime(2026, 7, 9, 0, 0, tzinfo=dt.timezone.utc),
+        )
+
+        self.assertFalse(fresh["run"])
+        self.assertEqual(fresh["reason"], "entity_maintenance_fresh")
+        self.assertTrue(stale["run"])
+        self.assertEqual(stale["reason"], "entity_maintenance_interval_elapsed")
+
     def test_scheduled_automation_hook_forces_current_state_simulation_once(self) -> None:
         storage = FakeAutomationStorage()
         workflow = SimpleNamespace(context=SimpleNamespace(storage=storage, run_id="test_run"))
@@ -669,6 +818,14 @@ class FakeAutomationStorage:
             row["_record"] = {"source": source, "run_id": run_id}
         self.rows.extend(prepared)
         return len(prepared)
+
+
+class FakeDatasetStorage:
+    def __init__(self, rows_by_dataset: dict[str, list[dict]]) -> None:
+        self.rows_by_dataset = rows_by_dataset
+
+    def read_records(self, dataset: str, *, latest_only: bool = False) -> list[dict]:
+        return list(self.rows_by_dataset.get(dataset, []))
 
 
 if __name__ == "__main__":

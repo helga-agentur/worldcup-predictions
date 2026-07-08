@@ -160,7 +160,7 @@ def _track_swiss_stage(row: dict[str, Any], state: TournamentState, sim_distribu
 
 
 def _latest_simulation_distributions(storage) -> dict[str, Any]:
-    """Distributions from the most recent stored daily simulation, or empty if none."""
+    """Distributions from the most recent stored current-state simulation, or empty if none."""
 
     rows = storage.read_records(SIMULATION_SUMMARY, latest_only=True)
     if not rows:

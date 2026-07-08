@@ -291,7 +291,7 @@ class FootballDataPlugin(BasePlugin):
         # Open fixtures (kickoff-ordered) come first, and each detail fetch is
         # ledger-gated so already-fresh fixtures cost no quota; this per-run cap only
         # bounds bursts against the rate-limited free tier. Raised from 12 so a busy
-        # match day's open set is covered across consecutive hourly runs.
+        # match day's open set is covered across consecutive scheduled runs.
         fetch_limit = 16
         written = 0
         diagnostics: list[Diagnostic] = []

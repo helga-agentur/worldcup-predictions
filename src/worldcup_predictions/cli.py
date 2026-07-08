@@ -13,6 +13,7 @@ from worldcup_predictions.core.datasets import (
     MODEL_CALIBRATION,
     PREDICTION_BACKTEST,
     PREDICTION_LEDGER,
+    PREDICTION_RUN_SUMMARIES,
     SIMULATION_RUNS,
     SIMULATION_SUMMARY,
 )
@@ -66,7 +67,7 @@ from worldcup_predictions.simulations import SimulationInputs, TournamentSimulat
 from worldcup_predictions.simulations.worldcup_2026 import ROUND_NAMES
 from worldcup_predictions.site import build_site, serve_site
 from worldcup_predictions.site.generator import gtm_container_id_from_env
-from worldcup_predictions.storage.ledger import stable_hash
+from worldcup_predictions.storage.ledger import parse_datetime, stable_hash, utc_now
 from worldcup_predictions.tournament.repository import (
     load_results,
     load_tournament_state,
@@ -75,6 +76,8 @@ from worldcup_predictions.tournament import FixtureRecord, TeamRef
 
 
 SIMULATION_LOGIC_VERSION = "outright-matrix-prior-v2"
+SCHEDULED_SIMULATION_REFRESH_INTERVAL = dt.timedelta(hours=6)
+ENTITY_MAINTENANCE_INTERVAL = dt.timedelta(hours=24)
 
 
 def build_manager(project_root: Path | None = None) -> PluginManager:
@@ -269,7 +272,7 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
         export_id=f"{snapshot_id}:export",
         run_id=workflow.context.run_id,
     )
-    simulation_refresh = _run_simulation_if_fixture_state_changed(workflow, refreshed_state, run)
+    simulation_refresh = _run_simulation_if_needed(workflow, refreshed_state, run)
     automation_hook_results, simulation_refresh = _run_scheduled_automation_hooks(
         workflow,
         refreshed_state,
@@ -284,6 +287,12 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
             print(f"{row['hook_id']}: applied ({result['simulation_id']}).")
         else:
             print(f"{row['hook_id']}: applied.")
+    entity_maintenance = _run_entity_maintenance_if_due(workflow)
+    if entity_maintenance.get("ran"):
+        print(
+            "Entity maintenance: {alias_rows} alias candidate(s); "
+            "{validation_rows} entity label(s) validated ({unresolved_rows} unresolved).".format(**entity_maintenance)
+        )
     site_build = build_site(
         project_root=project_root,
         storage=workflow.context.storage,
@@ -320,6 +329,7 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
         "prediction_export": export_manifest,
         "simulation_refresh": simulation_refresh,
         "automation_hooks": automation_hook_results,
+        "entity_maintenance": entity_maintenance,
         "site_build": site_build.to_dict(),
         "diagnostics_completeness_rows": len(diagnostics_completeness_rows),
         "reports": [report["path"] for report in reports],
@@ -357,23 +367,160 @@ def _workflow_signals(workflow) -> list:
     return signals
 
 
-def _run_simulation_if_fixture_state_changed(workflow: PredictionWorkflow, state, run) -> dict:
-    current = _simulation_fixture_metadata(state)
-    previous_fingerprint = _latest_current_state_simulation_fixture_fingerprint(workflow.context.storage)
-    if previous_fingerprint == current["active_fixture_fingerprint"]:
+def _run_entity_maintenance_if_due(workflow: PredictionWorkflow, *, now: dt.datetime | None = None) -> dict:
+    decision = _entity_maintenance_decision(workflow.context.storage, now=now)
+    if not decision["run"]:
         return {
             "ran": False,
-            "reason": "fixture_state_unchanged",
+            "reason": decision["reason"],
+            **({"latest_maintenance_at_utc": decision["latest_maintenance_at_utc"]} if decision.get("latest_maintenance_at_utc") else {}),
+        }
+    alias_rows = build_generated_alias_rows(workflow.context.storage, run_id=workflow.context.run_id)
+    validation_rows = build_entity_validation_rows(workflow.context.storage, run_id=workflow.context.run_id)
+    unresolved = sum(1 for row in validation_rows if row.get("status") == "unresolved")
+    return {
+        "ran": True,
+        "reason": decision["reason"],
+        "alias_rows": len(alias_rows),
+        "validation_rows": len(validation_rows),
+        "unresolved_rows": unresolved,
+        **({"latest_maintenance_at_utc": decision["latest_maintenance_at_utc"]} if decision.get("latest_maintenance_at_utc") else {}),
+    }
+
+
+def _entity_maintenance_decision(storage, *, now: dt.datetime | None = None) -> dict:
+    now = now or utc_now()
+    latest_at = _latest_entity_maintenance_at(storage)
+    if latest_at is None:
+        return {"run": True, "reason": "missing_entity_maintenance"}
+    latest_at_text = latest_at.isoformat().replace("+00:00", "Z")
+    if latest_at + ENTITY_MAINTENANCE_INTERVAL <= now:
+        return {
+            "run": True,
+            "reason": "entity_maintenance_interval_elapsed",
+            "latest_maintenance_at_utc": latest_at_text,
+        }
+    return {
+        "run": False,
+        "reason": "entity_maintenance_fresh",
+        "latest_maintenance_at_utc": latest_at_text,
+    }
+
+
+def _latest_entity_maintenance_at(storage) -> dt.datetime | None:
+    latest_at = None
+    for row in storage.read_records(PREDICTION_RUN_SUMMARIES, latest_only=True):
+        maintenance = row.get("maintenance") if isinstance(row.get("maintenance"), dict) else {}
+        entity_maintenance = maintenance.get("entity_maintenance") if isinstance(maintenance.get("entity_maintenance"), dict) else {}
+        if not entity_maintenance.get("ran"):
+            continue
+        observed_at = _prediction_run_observed_at(row)
+        if observed_at is not None and (latest_at is None or observed_at > latest_at):
+            latest_at = observed_at
+    return latest_at
+
+
+def _prediction_run_observed_at(row: dict) -> dt.datetime | None:
+    record = row.get("_record") if isinstance(row.get("_record"), dict) else {}
+    return parse_datetime(
+        str(record.get("observed_at_utc") or row.get("finished_at_utc") or row.get("started_at_utc") or "") or None
+    )
+
+
+def _run_simulation_if_needed(workflow: PredictionWorkflow, state, run) -> dict:
+    current = _simulation_fixture_metadata(state)
+    decision = _current_state_simulation_refresh_decision(workflow.context.storage, current)
+    if not decision["refresh"]:
+        return {
+            "ran": False,
+            "reason": decision["reason"],
             "active_fixture_count": current["active_fixture_count"],
             "active_fixture_fingerprint": current["active_fixture_fingerprint"],
+            "active_state_fingerprint": current["active_state_fingerprint"],
+            **({"latest_simulation_at_utc": decision["latest_simulation_at_utc"]} if decision.get("latest_simulation_at_utc") else {}),
         }
-    return _run_current_state_simulation(
+    result = _run_current_state_simulation(
         workflow,
         state,
         run,
-        trigger="scheduled_fixture_state_change",
-        previous_fingerprint=previous_fingerprint,
+        trigger=decision["trigger"],
+        previous_fingerprint=decision.get("previous_fixture_fingerprint"),
     )
+    if decision.get("previous_state_fingerprint") is not None:
+        result["previous_active_state_fingerprint"] = decision["previous_state_fingerprint"]
+    if decision.get("latest_simulation_at_utc") is not None:
+        result["latest_simulation_at_utc"] = decision["latest_simulation_at_utc"]
+    return result
+
+
+def _current_state_simulation_refresh_decision(storage, current: dict, *, now: dt.datetime | None = None) -> dict:
+    now = now or utc_now()
+    latest = _latest_current_state_simulation(storage)
+    if latest is None:
+        return {"refresh": True, "reason": "missing_current_state_simulation", "trigger": "scheduled_missing_simulation"}
+
+    metadata = latest.get("metadata") if isinstance(latest.get("metadata"), dict) else {}
+    latest_at = _simulation_summary_observed_at(latest)
+    latest_at_text = latest_at.isoformat().replace("+00:00", "Z") if latest_at is not None else ""
+    previous_fixture_fingerprint = str(metadata.get("active_fixture_fingerprint") or "")
+    previous_state_fingerprint = str(metadata.get("active_state_fingerprint") or previous_fixture_fingerprint)
+    base = {
+        "latest_simulation_at_utc": latest_at_text,
+        "previous_fixture_fingerprint": previous_fixture_fingerprint,
+        "previous_state_fingerprint": previous_state_fingerprint,
+    }
+
+    if _simulation_summary_needs_forecast_refresh(metadata):
+        return {
+            **base,
+            "refresh": True,
+            "reason": "forecast_results_or_matrix_counts_missing",
+            "trigger": "scheduled_forecast_format_refresh",
+        }
+    if str(metadata.get("simulation_logic_version") or "") != SIMULATION_LOGIC_VERSION:
+        return {
+            **base,
+            "refresh": True,
+            "reason": "simulation_logic_version_changed",
+            "trigger": "scheduled_simulation_logic_change",
+        }
+    if previous_state_fingerprint != current["active_state_fingerprint"]:
+        return {
+            **base,
+            "refresh": True,
+            "reason": "simulation_state_changed",
+            "trigger": "scheduled_simulation_state_change",
+        }
+    if latest_at is None:
+        return {
+            **base,
+            "refresh": True,
+            "reason": "latest_simulation_timestamp_missing",
+            "trigger": "scheduled_simulation_timestamp_refresh",
+        }
+    if latest_at + SCHEDULED_SIMULATION_REFRESH_INTERVAL <= now:
+        return {
+            **base,
+            "refresh": True,
+            "reason": "simulation_refresh_interval_elapsed",
+            "trigger": "scheduled_simulation_interval",
+        }
+    return {
+        **base,
+        "refresh": False,
+        "reason": "simulation_fresh",
+    }
+
+
+def _latest_current_state_simulation(storage) -> dict | None:
+    latest = None
+    for row in storage.read_records(SIMULATION_SUMMARY, latest_only=True):
+        if str(row.get("mode") or "") != "current_state":
+            continue
+        observed = str((row.get("_record") or {}).get("observed_at_utc") or row.get("simulation_id") or "")
+        if latest is None or observed > latest[0]:
+            latest = (observed, row)
+    return latest[1] if latest is not None else None
 
 
 def _run_scheduled_automation_hooks(
@@ -442,21 +589,20 @@ def _run_current_state_simulation(
 
 
 def _latest_current_state_simulation_fixture_fingerprint(storage) -> str:
-    latest = None
-    for row in storage.read_records(SIMULATION_SUMMARY, latest_only=True):
-        if str(row.get("mode") or "") != "current_state":
-            continue
-        observed = str((row.get("_record") or {}).get("observed_at_utc") or row.get("simulation_id") or "")
-        if latest is None or observed > latest[0]:
-            latest = (observed, row)
+    latest = _latest_current_state_simulation(storage)
     if latest is None:
         return ""
-    metadata = latest[1].get("metadata") if isinstance(latest[1].get("metadata"), dict) else {}
+    metadata = latest.get("metadata") if isinstance(latest.get("metadata"), dict) else {}
     if _simulation_summary_needs_forecast_refresh(metadata):
         return ""
     if str(metadata.get("simulation_logic_version") or "") != SIMULATION_LOGIC_VERSION:
         return ""
     return str(metadata.get("active_fixture_fingerprint") or "")
+
+
+def _simulation_summary_observed_at(row: dict) -> dt.datetime | None:
+    record = row.get("_record") if isinstance(row.get("_record"), dict) else {}
+    return parse_datetime(str(record.get("observed_at_utc") or "") or None)
 
 
 def _simulation_summary_needs_forecast_refresh(metadata: dict) -> bool:
@@ -470,10 +616,14 @@ def _simulation_summary_needs_forecast_refresh(metadata: dict) -> bool:
 
 
 def _simulation_fixture_metadata(state) -> dict:
-    entries = _simulation_fixture_state_entries(state)
+    fixture_entries = _simulation_fixture_state_entries(state)
+    result_entries = _simulation_result_state_entries(state)
     return {
-        "active_fixture_count": len(entries),
-        "active_fixture_fingerprint": stable_hash(entries),
+        "active_fixture_count": len(fixture_entries),
+        "active_fixture_fingerprint": stable_hash(fixture_entries),
+        "confirmed_result_count": len(result_entries),
+        "confirmed_result_fingerprint": stable_hash(result_entries),
+        "active_state_fingerprint": stable_hash({"fixtures": fixture_entries, "results": result_entries}),
         "simulation_logic_version": SIMULATION_LOGIC_VERSION,
     }
 
@@ -492,6 +642,21 @@ def _simulation_fixture_state_entries(state) -> list[dict]:
             }
         )
     return sorted(rows, key=lambda item: (item["event_date"], item["source_id"], item["home"], item["away"]))
+
+
+def _simulation_result_state_entries(state) -> list[dict]:
+    rows = []
+    for result in state.results:
+        rows.append(
+            {
+                "event_date": result.event_date,
+                "home": result.home_team.key,
+                "away": result.away_team.key,
+                "score": result.score.as_text(),
+                "status": result.status,
+            }
+        )
+    return sorted(rows, key=lambda item: (item["event_date"], item["home"], item["away"], item["score"]))
 
 
 def _write_simulation_outputs(
@@ -548,6 +713,9 @@ def _write_simulation_outputs(
         "iterations": summary.iterations,
         "active_fixture_count": metadata["active_fixture_count"],
         "active_fixture_fingerprint": metadata["active_fixture_fingerprint"],
+        "confirmed_result_count": metadata["confirmed_result_count"],
+        "confirmed_result_fingerprint": metadata["confirmed_result_fingerprint"],
+        "active_state_fingerprint": metadata["active_state_fingerprint"],
         "trigger": trigger,
     }
 
@@ -826,10 +994,9 @@ def command_simulate_tournament(args: argparse.Namespace) -> int:
         trigger="manual",
     )
 
-    # Daily maintenance: regenerate entity-alias candidates and revalidate stored team
-    # labels. These change rarely (squads are fixed during the tournament), so daily
-    # cadence is sufficient and keeps the hourly prediction run lean. The regenerated
-    # aliases are read by subsequent hourly predictions.
+    # Maintenance: regenerate entity-alias candidates and revalidate stored team
+    # labels. Scheduled updates run this on a 24-hour cadence; the manual simulation
+    # command keeps doing it too so ad-hoc simulation runs leave diagnostics fresh.
     alias_rows = build_generated_alias_rows(workflow.context.storage, run_id=workflow.context.run_id)
     validation_rows = build_entity_validation_rows(workflow.context.storage, run_id=workflow.context.run_id)
     unresolved = sum(1 for row in validation_rows if row.get("status") == "unresolved")
@@ -837,7 +1004,7 @@ def command_simulate_tournament(args: argparse.Namespace) -> int:
     print(f"Ran {summary.iterations} tournament simulations ({simulation_id}).")
     print(f"Simulation mode: {mode}.")
     print(
-        f"Daily maintenance: {len(alias_rows)} alias candidate(s); "
+        f"Entity maintenance: {len(alias_rows)} alias candidate(s); "
         f"{len(validation_rows)} entity label(s) validated ({unresolved} unresolved)."
     )
     print(f"SRF best bonus answers: {best_srf_bonus_answers(summary)}")

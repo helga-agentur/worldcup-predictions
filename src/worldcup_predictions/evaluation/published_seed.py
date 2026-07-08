@@ -1,7 +1,7 @@
 """Archived published prediction seed rows.
 
 The seed preserves pre-refactor published tips for matches that were already
-finished before the new hourly snapshot history existed. It is not a model
+finished before the scheduled snapshot history existed. It is not a model
 input for future matches; it only keeps public historical accounting stable.
 """
 

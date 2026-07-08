@@ -1,6 +1,6 @@
 """Market movement signals derived from the stored odds snapshot history.
 
-Each hourly run appends a timestamped ``market_odds`` row per fixture, so the
+Each scheduled run appends a timestamped ``market_odds`` row per fixture, so the
 append-only store holds a time series. This plugin reads that history (not just the
 latest snapshot), measures totals-line drift, cross-snapshot disagreement, and the
 favorite-probability move, and emits a small total-goals trend factor. It replaces the

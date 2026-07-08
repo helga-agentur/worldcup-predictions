@@ -27,7 +27,7 @@ The refactored project uses a plugin-oriented workflow inspired by Drupal's exte
 
 The package provides the workflow shell, plugin contracts, shared source runtime, quota-aware storage, country and generic entity identity, generated alias candidates, tournament state/result recording, automatic openfootball support, automatic historical-result/shootout fetching, SRF public fixture/bonus/result imports, football-data.org enrichment, robots-aware public score/page-analysis sources, dynamic public-source claim consensus and reputation tracking, Kaggle/Wikipedia/robots-aware Transfermarkt optional enrichment, a transparent baseline Elo/goal-profile prediction model with explicit signal policy, capped mismatch/blowout adjustment, public market-odds and outright facts, high-confidence public market observations, match-window weather, reliable public analysis, structured postmatch causes/team adjustments, lineup availability signals, automatic match notes, postmatch stats normalization from public notes, player-impact signals, sklearn ML outcome calibration with fallback, team/global live calibration, explicit model calibration reports, SRF expert consensus/performance, group-state motivation signals, SRF and 20min tip optimization, provider-neutral tournament simulation, provider-specific bonus-question adapters, provider-ready structured output persistence, published website-ledger freezing, static site generation, match-intel review rows, core plugin IO diagnostics, prediction signal-impact rows, source diagnostics, extraction diagnostics, one-file prediction exports, refactor baseline bundles, prediction debug reports, prediction snapshots/comparisons/audits, Markdown report generation, postmatch learning/review queues, virtual provider point tracking, entity validation, and SRF backtesting.
 
-The modeling layer restores and extends the legacy forecasting features: historical World Cup backtesting with expected points and ranked probability score (RPS), an ML-weight calibration grid, Bayesian-shrinkage live calibration, an expected-goal-share mismatch trigger, an Elo-logistic penalty-shootout model, market weights raised toward the dominant public signal with a totals line shift, a market-movement signal from odds snapshot history, tournament-outright priors folded into match matrices, a feature-rich ML outcome model with goal-profile inputs, accuracy-weighted SRF expert consensus, continuous source-reliability weighting above a spam floor, and a two-command server cadence for hourly predictions plus daily simulation/entity maintenance.
+The modeling layer restores and extends the legacy forecasting features: historical World Cup backtesting with expected points and ranked probability score (RPS), an ML-weight calibration grid, Bayesian-shrinkage live calibration, an expected-goal-share mismatch trigger, an Elo-logistic penalty-shootout model, market weights raised toward the dominant public signal with a totals line shift, a market-movement signal from odds snapshot history, tournament-outright priors folded into match matrices, a feature-rich ML outcome model with goal-profile inputs, accuracy-weighted SRF expert consensus, continuous source-reliability weighting above a spam floor, and a single scheduled-update server cadence for predictions, periodic simulation refreshes, and entity maintenance.
 
 ## Core Events
 
@@ -132,9 +132,9 @@ worldcup-predictions export-predictions
 worldcup-predictions baseline-bundle before-refactor
 ```
 
-`scheduled-update` runs the prediction workflow for every open fixture with defined opponents, stores a timestamped prediction snapshot, refreshes backtest/audit/postmatch/provider-point/report artifacts, writes the public published-prediction ledger, applies pending one-shot data and automation hooks, builds the static website, exports the source ledger, and writes a `prediction_run_summaries` manifest so hourly probability and score-matrix movement can be inspected later. Provider points in the scheduled path are virtual points from optimized recommendations, not personal submitted tips.
+`scheduled-update` runs the prediction workflow for every open fixture with defined opponents, stores a timestamped prediction snapshot, refreshes backtest/audit/postmatch/provider-point/report artifacts, writes the public published-prediction ledger, applies pending one-shot data and automation hooks, refreshes the current-state simulation when policy requires it, runs entity maintenance when due, builds the static website, exports the source ledger, and writes a `prediction_run_summaries` manifest so probability, score-matrix, simulation, and maintenance movement can be inspected later. Provider points in the scheduled path are virtual points from optimized recommendations, not personal submitted tips.
 
-`site-build` regenerates `public/current/` from `published_prediction_ledger`. Future rows update hourly; locked/final rows preserve the prediction values that were published before kickoff while final score fields are added after the match. The generated website is server-rendered HTML plus JSON and hashed CSS assets, so it can be served without an application backend.
+`site-build` regenerates `public/current/` from `published_prediction_ledger`. Future rows update on each scheduled run; locked/final rows preserve the prediction values that were published before kickoff while final score fields are added after the match. The generated website is server-rendered HTML plus JSON and hashed CSS assets, so it can be served without an application backend.
 
 `export-predictions` writes a single JSON file under `data/exports/` by default. It is meant for external comparison and refactor review: every match row includes neutral predictions, score matrices, provider-optimized tips, debug rows, signal impacts, source diagnostics, extraction diagnostics, and recent run summaries.
 
@@ -260,7 +260,7 @@ Source extraction should explain both usable data and rejected candidates. Publi
 
 Tournament simulation is provider-neutral. It consumes fixtures, already-known scores, tournament-outright team strengths, and exact-score matrices from the prediction model. Known scores are fixed; only unresolved fixtures are sampled. The same outright prior that adjusts published match matrices also adjusts generated hypothetical knockout matrices, so champion probabilities and the bracket forecast come from one sampled path instead of a separate champion/market blend. This lets the same simulator run before the first match or midway through the tournament without changing provider code.
 
-The half-hourly scheduled update refreshes the current-state simulation when the unresolved fixture fingerprint changes, when the simulation logic version changes, or when a committed one-shot automation hook explicitly requests a simulation refresh. Applied automation-hook state is stored in the `automation_hooks` structured dataset under the normal runtime `data/` root.
+The half-hourly scheduled update refreshes the current-state simulation when the unresolved fixture/result fingerprint changes, when the simulation logic version changes, when the latest current-state simulation is more than six hours old, or when a committed one-shot automation hook explicitly requests a simulation refresh. Applied automation-hook state is stored in the `automation_hooks` structured dataset under the normal runtime `data/` root.
 
 The neutral simulation output includes:
 
@@ -314,7 +314,7 @@ Default storage:
 Storage contracts:
 
 - Raw API and scraped response bodies are not persisted by default.
-- Structured records are append-only. Latest-read paths collapse records by stable `record_key`, so an hourly run that receives no new facts from a source naturally falls back to the last available structured facts.
+- Structured records are append-only. Latest-read paths collapse records by stable `record_key`, so a scheduled run that receives no new facts from a source naturally falls back to the last available structured facts.
 - Fetcher plugins must create a `SourceRequest` and call `storage.should_fetch(...)` before spending quota.
 - Fetcher plugins must call `storage.record_fetch(...)` after a source attempt, including rate-limit headers or next-safe-fetch times when available.
 - Plugins write normalized facts/signals through `storage.write_records(...)`.
@@ -347,7 +347,7 @@ The source ledger stores request intent and quota facts:
 - quota cost, remaining quota, status, message
 - fetched time, rate-limit reset time, next safe fetch time
 
-This is intentionally different from a response cache: it helps the workflow avoid unnecessary calls without treating raw responses as canonical data. Scheduled-update manifests include a compact source-ledger summary with per-source status counts, failures, and zero-row successes so hourly reliability trends can be inspected without parsing terminal output.
+This is intentionally different from a response cache: it helps the workflow avoid unnecessary calls without treating raw responses as canonical data. Scheduled-update manifests include a compact source-ledger summary with per-source status counts, failures, and zero-row successes so scheduled-run reliability trends can be inspected without parsing terminal output.
 
 ## Project Defaults
 

@@ -19,7 +19,7 @@ The source ledger protects API limits and makes skipped calls auditable. A sourc
 - quota remaining and next safe fetch time when known
 - source-specific metadata such as extracted row counts
 
-Skipped calls are recorded with status `skipped`, so daily reports can show calls made, calls avoided, quota cost spent, and quota cost avoided.
+Skipped calls are recorded with status `skipped`, so diagnostic reports can show calls made, calls avoided, quota cost spent, and quota cost avoided.
 
 Exact request keys still control ordinary freshness and HTTP cache validators. When a plugin declares a shared quota scope, provider-level blocks are also reused across sibling requests: one NewsAPI 429, Odds API quota exhaustion, or football-data.org rate-limit response prevents different fixture queries in the same scope from immediately spending more calls. Freshness skips for one exact request do not block sibling requests.
 
