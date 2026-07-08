@@ -82,6 +82,7 @@ MARKET_TRENDS = "market_trends"
 SIMULATION_RUNS = "simulation_runs"
 SIMULATION_SUMMARY = "simulation_summary"
 DATA_UPDATE_HOOKS = "data_update_hooks"
+AUTOMATION_HOOKS = "automation_hooks"
 
 
 DATASET_CONTRACTS: dict[str, DatasetContract] = {
@@ -162,6 +163,7 @@ DATASET_CONTRACTS: dict[str, DatasetContract] = {
     SIMULATION_RUNS: DatasetContract(SIMULATION_RUNS, "Monte Carlo tournament simulation rows or compressed sample facts.", ("simulation_id",)),
     SIMULATION_SUMMARY: DatasetContract(SIMULATION_SUMMARY, "Aggregated tournament simulation outputs for provider bonus optimization.", ("simulation_id",)),
     DATA_UPDATE_HOOKS: DatasetContract(DATA_UPDATE_HOOKS, "Applied one-shot runtime data update hooks.", ("hook_id", "status")),
+    AUTOMATION_HOOKS: DatasetContract(AUTOMATION_HOOKS, "Applied one-shot scheduled automation hooks.", ("hook_id", "action", "status")),
 }
 
 

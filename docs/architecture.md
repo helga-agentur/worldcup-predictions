@@ -132,7 +132,7 @@ worldcup-predictions export-predictions
 worldcup-predictions baseline-bundle before-refactor
 ```
 
-`scheduled-update` runs the prediction workflow for every open fixture with defined opponents, stores a timestamped prediction snapshot, refreshes backtest/audit/postmatch/provider-point/report artifacts, writes the public published-prediction ledger, builds the static website, exports the source ledger, and writes a `prediction_run_summaries` manifest so hourly probability and score-matrix movement can be inspected later. Provider points in the scheduled path are virtual points from optimized recommendations, not personal submitted tips.
+`scheduled-update` runs the prediction workflow for every open fixture with defined opponents, stores a timestamped prediction snapshot, refreshes backtest/audit/postmatch/provider-point/report artifacts, writes the public published-prediction ledger, applies pending one-shot data and automation hooks, builds the static website, exports the source ledger, and writes a `prediction_run_summaries` manifest so hourly probability and score-matrix movement can be inspected later. Provider points in the scheduled path are virtual points from optimized recommendations, not personal submitted tips.
 
 `site-build` regenerates `public/current/` from `published_prediction_ledger`. Future rows update hourly; locked/final rows preserve the prediction values that were published before kickoff while final score fields are added after the match. The generated website is server-rendered HTML plus JSON and hashed CSS assets, so it can be served without an application backend.
 
@@ -259,6 +259,8 @@ Source extraction should explain both usable data and rejected candidates. Publi
 ## Tournament Simulation And Bonus Questions
 
 Tournament simulation is provider-neutral. It consumes fixtures, already-known scores, tournament-outright team strengths, and exact-score matrices from the prediction model. Known scores are fixed; only unresolved fixtures are sampled. The same outright prior that adjusts published match matrices also adjusts generated hypothetical knockout matrices, so champion probabilities and the bracket forecast come from one sampled path instead of a separate champion/market blend. This lets the same simulator run before the first match or midway through the tournament without changing provider code.
+
+The half-hourly scheduled update refreshes the current-state simulation when the unresolved fixture fingerprint changes, when the simulation logic version changes, or when a committed one-shot automation hook explicitly requests a simulation refresh. Applied automation-hook state is stored in the `automation_hooks` structured dataset under the normal runtime `data/` root.
 
 The neutral simulation output includes:
 

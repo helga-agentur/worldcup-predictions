@@ -32,6 +32,11 @@ from worldcup_predictions.evaluation import (
     summarize_backtest_rows,
     write_provider_knockout_audit,
 )
+from worldcup_predictions.evaluation.automation_hooks import (
+    ACTION_TRIGGER_CURRENT_STATE_SIMULATION,
+    AutomationHook,
+    run_automation_hooks,
+)
 from worldcup_predictions.evaluation.baseline_bundle import create_baseline_bundle
 from worldcup_predictions.evaluation.model_calibration import calibrate_baseline_model, write_model_calibration
 from worldcup_predictions.evaluation.audit import build_prediction_audit_rows
@@ -69,7 +74,7 @@ from worldcup_predictions.tournament.repository import (
 from worldcup_predictions.tournament import FixtureRecord, TeamRef
 
 
-SIMULATION_LOGIC_VERSION = "outright-matrix-prior-v1"
+SIMULATION_LOGIC_VERSION = "outright-matrix-prior-v2"
 
 
 def build_manager(project_root: Path | None = None) -> PluginManager:
@@ -265,6 +270,20 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
         run_id=workflow.context.run_id,
     )
     simulation_refresh = _run_simulation_if_fixture_state_changed(workflow, refreshed_state, run)
+    automation_hook_results, simulation_refresh = _run_scheduled_automation_hooks(
+        workflow,
+        refreshed_state,
+        run,
+        simulation_refresh=simulation_refresh,
+    )
+    for row in automation_hook_results:
+        if row.get("status") != "success":
+            continue
+        result = row.get("result") if isinstance(row.get("result"), dict) else {}
+        if result.get("simulation_id"):
+            print(f"{row['hook_id']}: applied ({result['simulation_id']}).")
+        else:
+            print(f"{row['hook_id']}: applied.")
     site_build = build_site(
         project_root=project_root,
         storage=workflow.context.storage,
@@ -300,6 +319,7 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
         "published_prediction_ledger_rows": published_ledger_count,
         "prediction_export": export_manifest,
         "simulation_refresh": simulation_refresh,
+        "automation_hooks": automation_hook_results,
         "site_build": site_build.to_dict(),
         "diagnostics_completeness_rows": len(diagnostics_completeness_rows),
         "reports": [report["path"] for report in reports],
@@ -323,7 +343,7 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
     )
     if simulation_refresh.get("ran"):
         print(
-            "Simulation refresh: {iterations} run(s) ({simulation_id}) after fixture-state change.".format(
+            "Simulation refresh: {iterations} run(s) ({simulation_id}, trigger: {trigger}).".format(
                 **simulation_refresh
             )
         )
@@ -347,7 +367,58 @@ def _run_simulation_if_fixture_state_changed(workflow: PredictionWorkflow, state
             "active_fixture_count": current["active_fixture_count"],
             "active_fixture_fingerprint": current["active_fixture_fingerprint"],
         }
+    return _run_current_state_simulation(
+        workflow,
+        state,
+        run,
+        trigger="scheduled_fixture_state_change",
+        previous_fingerprint=previous_fingerprint,
+    )
 
+
+def _run_scheduled_automation_hooks(
+    workflow: PredictionWorkflow,
+    state,
+    run,
+    *,
+    simulation_refresh: dict,
+) -> tuple[list[dict], dict]:
+    """Run committed one-shot scheduled hooks and return the current simulation result."""
+
+    current_simulation = dict(simulation_refresh)
+
+    def trigger_current_state_simulation(_hook: AutomationHook) -> dict:
+        nonlocal current_simulation
+        if current_simulation.get("ran"):
+            return {
+                "satisfied_by": "scheduled_simulation_refresh",
+                "simulation_id": current_simulation.get("simulation_id"),
+                "trigger": current_simulation.get("trigger"),
+            }
+        current_simulation = _run_current_state_simulation(
+            workflow,
+            state,
+            run,
+            trigger="automation_hook:trigger_current_state_simulation",
+        )
+        return dict(current_simulation)
+
+    results = run_automation_hooks(
+        workflow.context.storage,
+        handlers={ACTION_TRIGGER_CURRENT_STATE_SIMULATION: trigger_current_state_simulation},
+        run_id=workflow.context.run_id,
+    )
+    return results, current_simulation
+
+
+def _run_current_state_simulation(
+    workflow: PredictionWorkflow,
+    state,
+    run,
+    *,
+    trigger: str,
+    previous_fingerprint: str | None = None,
+) -> dict:
     simulation_inputs = _simulation_inputs_from_state(
         workflow,
         state,
@@ -363,9 +434,10 @@ def _run_simulation_if_fixture_state_changed(workflow: PredictionWorkflow, state
         simulation_id=simulation_id,
         mode="current_state",
         state=state,
-        trigger="scheduled_fixture_state_change",
+        trigger=trigger,
     )
-    result["previous_active_fixture_fingerprint"] = previous_fingerprint
+    if previous_fingerprint is not None:
+        result["previous_active_fixture_fingerprint"] = previous_fingerprint
     return result
 
 

@@ -74,7 +74,7 @@ Responsibilities:
 
 The daily job is intentionally separate from the half-hourly job because tournament simulation and maintenance work can be slower and changes less frequently.
 
-The half-hourly `scheduled-update` command also checks whether the unresolved fixture state or simulation-logic version has changed since the latest current-state simulation. If a result removes an open fixture, resolves a future knockout participant, or the simulation logic was upgraded, it immediately runs the same current-state 20,000-iteration simulation before rebuilding the static site. If the fixture fingerprint and simulation version are unchanged, it skips this simulation refresh.
+The half-hourly `scheduled-update` command also checks whether the unresolved fixture state or simulation-logic version has changed since the latest current-state simulation. If a result removes an open fixture, resolves a future knockout participant, the simulation logic was upgraded, or a pending scheduled automation hook requests it, the same cron run immediately runs the current-state 20,000-iteration simulation before rebuilding the static site. If the fixture fingerprint and simulation version are unchanged and no pending automation hook requests a refresh, it skips this simulation refresh.
 
 The daily simulation starts from the current confirmed tournament state. For analysis or retrospective comparison, run `worldcup-predictions simulate-tournament --from-day-one` to ignore stored final scores and simulate from the initial fixture plan.
 
@@ -176,6 +176,21 @@ Each hook records a successful run in the `data_update_hooks` structured dataset
 
 The scheduled `scheduled-update` command runs pending data update hooks before it reads tournament state or writes new prediction outputs. In normal runs where all hooks are already applied, this is just a cheap no-op check.
 
+## Scheduled Automation Hooks
+
+Operational one-shot requests are handled by versioned scheduled automation hooks. They use the same structured-storage pattern as data update hooks, but they are intentionally separate because they may trigger derived work such as a current-state tournament simulation instead of mutating persisted source data.
+
+Applied automation hooks are recorded in the `automation_hooks` structured dataset under the normal live runtime data root:
+
+```text
+/opt/worldcup-predictions/data/worldcup_predictions.duckdb
+/opt/worldcup-predictions/data/structured/automation_hooks.parquet
+```
+
+The scheduled `scheduled-update` command checks committed automation hooks after the normal prediction/export work and before the static site build. A pending `trigger_current_state_simulation_*` hook forces the same current-state 20,000-iteration simulation used for fixture-state changes, records the hook as successful, and lets the same cron run publish a site built from the refreshed simulation. Later cron runs skip successful hook ids.
+
+Use automation hooks for explicit one-time operational triggers that should be picked up by live cron after deployment. Use runtime data update hooks only for cleanup or migration of persisted runtime data.
+
 ## Production Compose
 
 Local development uses `compose.yaml`, which bind-mounts the full repository into the container and can use a repository-local `.env`. Production uses `compose.prod.yaml`, which runs the immutable GHCR image, receives supported variables from the host environment, and mounts only runtime state:
@@ -244,7 +259,7 @@ Deployment follows a pull-on-cron model:
 2. The image is pushed to GitHub Container Registry as `ghcr.io/helga-agentur/worldcup-predictions:main` and tagged with the source commit SHA.
 3. The next live `scheduled-update` cron run pulls the production image.
 4. The server reads the image's `org.opencontainers.image.revision` label and resets `/opt/worldcup-predictions` to that exact commit.
-5. The same cron run applies pending data update hooks, runs `scheduled-update`, and publishes the regenerated site.
+5. The same cron run runs `scheduled-update`, which applies pending data update hooks and scheduled automation hooks before publishing the regenerated site.
 
 The workflow uses the built-in `GITHUB_TOKEN` to push the image to GHCR. The production server pulls the image as the `deploy` user, so that user must be logged in to GHCR when the package is private or organization policy blocks public package visibility.
 

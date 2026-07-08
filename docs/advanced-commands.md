@@ -54,6 +54,8 @@ Run the hourly-style full update:
 worldcup-predictions scheduled-update
 ```
 
+This is the production cron entrypoint. It applies pending one-shot data hooks, writes the normal prediction and provider outputs, refreshes the current-state simulation when the fixture state, simulation logic, or a committed automation hook requires it, and then rebuilds the static site.
+
 Export one comparison-friendly JSON file with predictions, score matrices, provider tips, diagnostics, signal impacts, and run summaries:
 
 ```bash

@@ -6,10 +6,12 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from worldcup_predictions.cli import (
     SIMULATION_LOGIC_VERSION,
     _latest_current_state_simulation_fixture_fingerprint,
+    _run_scheduled_automation_hooks,
     _simulation_fixture_metadata,
     _simulation_known_results,
     _simulation_known_winners,
@@ -24,6 +26,7 @@ from worldcup_predictions.core.contracts import (
     ScoreMatrixEntry,
     ScoreTip,
 )
+from worldcup_predictions.core.datasets import AUTOMATION_HOOKS
 from worldcup_predictions.tournament.contracts import FixtureRecord, ResultRecord, TeamRef, TournamentState
 from worldcup_predictions.plugins.providers.ch_20min import (
     best_twenty_min_bonus_answers,
@@ -542,6 +545,25 @@ class SimulationInputWiringTest(unittest.TestCase):
 
         self.assertEqual(_latest_current_state_simulation_fixture_fingerprint(FakeStorage()), "")
 
+    def test_latest_fixture_fingerprint_treats_previous_outright_guard_version_as_stale(self) -> None:
+        class FakeStorage:
+            def read_records(self, dataset: str, *, latest_only: bool = False) -> list[dict]:
+                return [
+                    {
+                        "mode": "current_state",
+                        "metadata": {
+                            "active_fixture_count": 1,
+                            "active_fixture_fingerprint": "stale-v1",
+                            "forecast_results": [],
+                            "matrix_source_counts": {},
+                            "simulation_logic_version": "outright-matrix-prior-v1",
+                        },
+                        "_record": {"observed_at_utc": "2026-07-06T08:00:00Z"},
+                    },
+                ]
+
+        self.assertEqual(_latest_current_state_simulation_fixture_fingerprint(FakeStorage()), "")
+
     def test_latest_fixture_fingerprint_treats_missing_forecast_path_as_stale(self) -> None:
         class FakeStorage:
             def read_records(self, dataset: str, *, latest_only: bool = False) -> list[dict]:
@@ -557,6 +579,96 @@ class SimulationInputWiringTest(unittest.TestCase):
                 ]
 
         self.assertEqual(_latest_current_state_simulation_fixture_fingerprint(FakeStorage()), "")
+
+    def test_scheduled_automation_hook_forces_current_state_simulation_once(self) -> None:
+        storage = FakeAutomationStorage()
+        workflow = SimpleNamespace(context=SimpleNamespace(storage=storage, run_id="test_run"))
+        state = object()
+        run = object()
+        forced_refresh = {
+            "ran": True,
+            "simulation_id": "simulation_forced",
+            "trigger": "automation_hook:trigger_current_state_simulation",
+            "iterations": 20000,
+        }
+
+        with patch("worldcup_predictions.cli._run_current_state_simulation", return_value=forced_refresh) as runner:
+            hook_results, simulation_refresh = _run_scheduled_automation_hooks(
+                workflow,
+                state,
+                run,
+                simulation_refresh={"ran": False, "reason": "fixture_state_unchanged"},
+            )
+
+        runner.assert_called_once_with(
+            workflow,
+            state,
+            run,
+            trigger="automation_hook:trigger_current_state_simulation",
+        )
+        self.assertEqual(simulation_refresh, forced_refresh)
+        self.assertEqual(hook_results[0]["status"], "success")
+        self.assertEqual(hook_results[0]["result"]["simulation_id"], "simulation_forced")
+
+        skipped_results, skipped_refresh = _run_scheduled_automation_hooks(
+            workflow,
+            state,
+            run,
+            simulation_refresh={"ran": False, "reason": "fixture_state_unchanged"},
+        )
+
+        self.assertEqual(skipped_results[0]["status"], "skipped")
+        self.assertEqual(skipped_refresh["reason"], "fixture_state_unchanged")
+
+    def test_scheduled_automation_hook_reuses_existing_simulation_refresh(self) -> None:
+        storage = FakeAutomationStorage()
+        workflow = SimpleNamespace(context=SimpleNamespace(storage=storage, run_id="test_run"))
+        existing_refresh = {
+            "ran": True,
+            "simulation_id": "simulation_existing",
+            "trigger": "scheduled_fixture_state_change",
+            "iterations": 20000,
+        }
+
+        with patch("worldcup_predictions.cli._run_current_state_simulation") as runner:
+            hook_results, simulation_refresh = _run_scheduled_automation_hooks(
+                workflow,
+                object(),
+                object(),
+                simulation_refresh=existing_refresh,
+            )
+
+        runner.assert_not_called()
+        self.assertEqual(simulation_refresh, existing_refresh)
+        self.assertEqual(hook_results[0]["status"], "success")
+        self.assertEqual(hook_results[0]["result"]["satisfied_by"], "scheduled_simulation_refresh")
+
+
+class FakeAutomationStorage:
+    def __init__(self) -> None:
+        self.rows: list[dict] = []
+
+    def read_records(self, dataset: str, *, latest_only: bool = False) -> list[dict]:
+        if dataset != AUTOMATION_HOOKS:
+            return []
+        return list(self.rows)
+
+    def write_records(
+        self,
+        dataset: str,
+        rows,
+        *,
+        source: str,
+        run_id: str | None = None,
+        **_kwargs,
+    ) -> int:
+        if dataset != AUTOMATION_HOOKS:
+            return 0
+        prepared = [dict(row) for row in rows]
+        for row in prepared:
+            row["_record"] = {"source": source, "run_id": run_id}
+        self.rows.extend(prepared)
+        return len(prepared)
 
 
 if __name__ == "__main__":
