@@ -13,6 +13,7 @@ from worldcup_predictions.core.datasets import (
     PREDICTION_SNAPSHOTS,
     PREDICTIONS,
     PUBLISHED_PREDICTION_SEED,
+    TOURNAMENT_RESULTS,
 )
 from worldcup_predictions.evaluation.published_seed import load_published_prediction_seed_rows
 from worldcup_predictions.model.score_matrix import build_score_matrix, outcome_probabilities
@@ -32,6 +33,7 @@ def build_prediction_ledger_rows(storage) -> list[dict[str, Any]]:
     frozen_snapshots = _frozen_snapshot_rows(storage)
     seed_rows = _published_seed_rows(storage)
     active_fixture_keys = _active_fixture_keys(storage)
+    current_result_fixture_keys = _current_result_fixture_keys(storage)
 
     tips_by_fixture: dict[str, list[dict[str, Any]]] = {}
     for tip in optimized_tips:
@@ -42,6 +44,8 @@ def build_prediction_ledger_rows(storage) -> list[dict[str, Any]]:
     for row in sorted(backtest_rows, key=lambda item: str(item.get("event_date") or "")):
         fixture_key = str(row.get("fixture_key") or "")
         if not fixture_key or not _valid_defined_fixture_key(fixture_key):
+            continue
+        if current_result_fixture_keys is not None and fixture_key not in current_result_fixture_keys:
             continue
         past_fixture_keys.add(fixture_key)
         frozen_snapshot = frozen_snapshots.get(fixture_key)
@@ -401,6 +405,19 @@ def _active_fixture_keys(storage) -> set[str]:
         return {fixture.key for fixture in load_tournament_state(storage).fixtures}
     except Exception:
         return set()
+
+
+def _current_result_fixture_keys(storage) -> set[str] | None:
+    try:
+        result_rows = storage.read_records(TOURNAMENT_RESULTS, latest_only=True)
+    except Exception:
+        return None
+    if not result_rows:
+        return None
+    try:
+        return {result.fixture_key for result in load_tournament_state(storage).results}
+    except Exception:
+        return None
 
 
 def _split_score(value: Any) -> tuple[int | None, int | None]:

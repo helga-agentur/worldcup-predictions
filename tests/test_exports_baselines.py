@@ -995,6 +995,79 @@ class ExportAndBaselineTest(unittest.TestCase):
             self.assertEqual(future["srf_tip"], "2:1")
             self.assertEqual(future["twenty_min_tip"], "Brazil")
 
+    def test_prediction_ledger_ignores_stale_backtest_without_current_result(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            fixture_key = "2099-07-11T21:00:00Z|NOR|ENG"
+            storage.write_records(
+                PREDICTION_BACKTEST,
+                [
+                    {
+                        "record_key": fixture_key,
+                        "fixture_key": fixture_key,
+                        "event_date": "2099-07-11T21:00:00Z",
+                        "home_team": "Norway",
+                        "away_team": "England",
+                        "actual": "3:2",
+                        "actual_home": 3,
+                        "actual_away": 2,
+                        "most_likely": "1:1",
+                        "points": 0.0,
+                        "prob_home": 0.21,
+                        "prob_draw": 0.24,
+                        "prob_away": 0.55,
+                    }
+                ],
+                source="stale-backtest",
+            )
+            storage.write_records(
+                TOURNAMENT_RESULTS,
+                [
+                    {
+                        "record_key": fixture_key,
+                        "fixture_key": fixture_key,
+                        "event_date": "2099-07-11T21:00:00Z",
+                        "home_team": "Norway",
+                        "away_team": "England",
+                        "home_fifa_code": "NOR",
+                        "away_fifa_code": "ENG",
+                        "home_score": 3,
+                        "away_score": 2,
+                        "status": "final",
+                        "source": "srf_public",
+                    }
+                ],
+                source="stale-result",
+            )
+            storage.write_records(
+                PREDICTIONS,
+                [
+                    {
+                        "record_key": fixture_key,
+                        "fixture_key": fixture_key,
+                        "event_date": "2099-07-11T21:00:00Z",
+                        "home_team": "Norway",
+                        "away_team": "England",
+                        "most_likely_home": 1,
+                        "most_likely_away": 1,
+                        "expected_home_goals": 1.0,
+                        "expected_away_goals": 1.7,
+                        "prob_home": 0.21,
+                        "prob_draw": 0.24,
+                        "prob_away": 0.55,
+                    }
+                ],
+                source="current-prediction",
+            )
+
+            write_prediction_ledger(storage, run_id="test-run")
+
+            rows = storage.read_records(PREDICTION_LEDGER, latest_only=True)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["fixture_key"], fixture_key)
+            self.assertEqual(rows[0]["status"], "future")
+            self.assertIsNone(rows[0]["actual_score"])
+
     def test_prediction_ledger_prefers_published_seed_over_retrospective_backtest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
