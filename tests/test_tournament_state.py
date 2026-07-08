@@ -209,6 +209,81 @@ class TournamentStateTest(unittest.TestCase):
         self.assertEqual(state.result_checks[0]["status"], "confirmed")
         self.assertEqual(state.result_checks[0]["high_authority_source_count"], 2)
 
+    def test_scraped_source_family_counts_as_one_witness(self) -> None:
+        resolver = TeamResolver.default()
+        fixture = FixtureRecord(
+            event_date="2026-07-05T20:00:00Z",
+            home_team=resolver.resolve("Brazil"),
+            away_team=resolver.resolve("Norway"),
+            stage="Round of 16",
+        )
+        wrong = [
+            ResultRecord(fixture.event_date, fixture.home_team, fixture.away_team, ScoreTip(3, 2), source=f"dynamic_public:{domain}")
+            for domain in ("goal.com", "apnews.com", "livescore.com", "nbcsports.com", "theanalyst.com", "onefootball.com")
+        ]
+        right = [
+            ResultRecord(fixture.event_date, fixture.home_team, fixture.away_team, ScoreTip(1, 2), source=source)
+            for source in ("srf_public", "fifa_match_centre", "football_data_org", "openfootball/worldcup:cup_finals.txt")
+        ]
+
+        state = build_tournament_state([fixture], [*wrong, *right])
+
+        self.assertEqual(len(state.results), 1)
+        self.assertEqual(state.results[0].score.as_text(), "1:2")
+        self.assertEqual(state.result_checks[0]["selected_score"], "1:2")
+
+    def test_scraped_domains_alone_do_not_confirm_a_result(self) -> None:
+        resolver = TeamResolver.default()
+        fixture = FixtureRecord(
+            event_date="2026-07-05T20:00:00Z",
+            home_team=resolver.resolve("Brazil"),
+            away_team=resolver.resolve("Norway"),
+            stage="Round of 16",
+        )
+        results = [
+            ResultRecord(fixture.event_date, fixture.home_team, fixture.away_team, ScoreTip(3, 2), source=f"dynamic_public:{domain}")
+            for domain in ("goal.com", "apnews.com", "livescore.com", "nbcsports.com")
+        ]
+
+        state = build_tournament_state([fixture], results)
+
+        self.assertEqual(state.results, [])
+        self.assertEqual(state.result_checks[0]["status"], "unconfirmed")
+
+    def test_result_kickoff_variants_share_one_consensus_pool(self) -> None:
+        resolver = TeamResolver.default()
+        canonical = FixtureRecord(
+            event_date="2026-07-06T01:00:00Z",
+            home_team=resolver.resolve("Mexico"),
+            away_team=resolver.resolve("England"),
+            stage="Round of 16",
+            metadata={"source": "fifa_match_centre"},
+        )
+        drifted = FixtureRecord(
+            event_date="2026-07-06T00:00:00Z",
+            home_team=resolver.resolve("Mexico"),
+            away_team=resolver.resolve("England"),
+            stage="Round of 16",
+            metadata={"source": "openfootball/worldcup"},
+        )
+        results = [
+            ResultRecord("2026-07-06T01:00:00Z", canonical.home_team, canonical.away_team, ScoreTip(2, 3), source="srf_public"),
+            ResultRecord("2026-07-06T01:00:00Z", canonical.home_team, canonical.away_team, ScoreTip(2, 3), source="fifa_match_centre"),
+            ResultRecord("2026-07-06T00:00:00Z", canonical.home_team, canonical.away_team, ScoreTip(2, 3), source="openfootball/worldcup:cup_finals.txt"),
+            ResultRecord("2026-07-06T00:00:00Z", canonical.home_team, canonical.away_team, ScoreTip(3, 2), source="dynamic_public:apnews.com"),
+            ResultRecord("2026-07-06T00:00:00Z", canonical.home_team, canonical.away_team, ScoreTip(3, 2), source="dynamic_public:koreatimes.co.kr"),
+            ResultRecord("2026-07-06T00:00:00Z", canonical.home_team, canonical.away_team, ScoreTip(3, 2), source="dynamic_public:nbcsports.com"),
+        ]
+
+        state = build_tournament_state([canonical, drifted], results)
+
+        self.assertEqual(len(state.results), 1)
+        confirmed = state.results[0]
+        self.assertEqual(confirmed.event_date, "2026-07-06T01:00:00Z")
+        self.assertEqual(confirmed.score.as_text(), "2:3")
+        confirmed_keys = {check["fixture_key"] for check in state.result_checks if check["status"] == "confirmed"}
+        self.assertEqual(len(confirmed_keys), 1)
+
     def test_future_result_consensus_is_ignored_until_kickoff(self) -> None:
         resolver = TeamResolver.default()
         fixture = FixtureRecord(

@@ -10,6 +10,7 @@ from typing import Iterable
 from worldcup_predictions.core.contracts import parse_utc_datetime
 from worldcup_predictions.core.constants import (
     CONFIRMED_RESULT_HIGH_AUTHORITY_MIN_SOURCES,
+    CONFIRMED_RESULT_KICKOFF_WINDOW_HOURS,
     CONFIRMED_RESULT_MIN_SOURCES,
     HIGH_AUTHORITY_RESULT_SOURCES,
 )
@@ -32,9 +33,9 @@ def build_tournament_state(
     """Reconcile fixtures/results and compute current group standings."""
 
     now = _normalize_now(now)
-    all_result_rows = list(results)
-    result_rows = _preferred_results(all_result_rows, now=now)
     valid_fixtures = [fixture for fixture in fixtures if _valid_fixture(fixture)]
+    all_result_rows = _normalized_results(list(results), valid_fixtures)
+    result_rows = _preferred_results(all_result_rows, now=now)
     fixture_rows = _latest_fixtures(_canonicalize_fixtures(valid_fixtures, result_rows))
     standings = _build_standings(fixture_rows, result_rows)
     return TournamentState(
@@ -289,6 +290,69 @@ def _fixture_rank(fixture: FixtureRecord) -> int:
     return _source_rank(str(fixture.metadata.get("source") or fixture.source_id or ""))
 
 
+def _normalized_results(results: list[ResultRecord], fixtures: list[FixtureRecord]) -> list[ResultRecord]:
+    """Snap result observations onto the canonical fixture kickoff.
+
+    Sources occasionally disagree on kickoff time for the same match. Fixture
+    keys embed the timestamp, so without normalization those observations form
+    separate consensus pools and can confirm a phantom duplicate fixture next
+    to the real one.
+    """
+
+    fixtures_by_pair: dict[tuple[str, str], list[FixtureRecord]] = defaultdict(list)
+    for fixture in fixtures:
+        pair = _team_pair(fixture.home_team, fixture.away_team)
+        if pair is not None:
+            fixtures_by_pair[pair].append(fixture)
+    window = dt.timedelta(hours=CONFIRMED_RESULT_KICKOFF_WINDOW_HOURS)
+    normalized = []
+    for result in results:
+        pair = _team_pair(result.home_team, result.away_team)
+        target = _closest_pair_fixture(fixtures_by_pair.get(pair, []) if pair else [], result.event_date, window=window)
+        if target is not None and target.event_date != result.event_date:
+            normalized.append(replace(result, event_date=target.event_date))
+        else:
+            normalized.append(result)
+    return normalized
+
+
+def _team_pair(home: TeamRef, away: TeamRef) -> tuple[str, str] | None:
+    home_key = str(home.fifa_code or home.name or "").casefold()
+    away_key = str(away.fifa_code or away.name or "").casefold()
+    if not home_key or not away_key:
+        return None
+    return tuple(sorted((home_key, away_key)))
+
+
+def _closest_pair_fixture(
+    fixtures: list[FixtureRecord],
+    event_date: str,
+    *,
+    window: dt.timedelta,
+) -> FixtureRecord | None:
+    try:
+        event_at = parse_utc_datetime(event_date)
+    except ValueError:
+        return None
+    if event_at is None:
+        return None
+    candidates = []
+    for fixture in fixtures:
+        try:
+            fixture_at = parse_utc_datetime(fixture.event_date)
+        except ValueError:
+            continue
+        if fixture_at is None:
+            continue
+        delta = abs(fixture_at - event_at)
+        if delta <= window:
+            candidates.append((_fixture_rank(fixture), delta, fixture.event_date, fixture))
+    if not candidates:
+        return None
+    # The authoritative source's kickoff wins over the numerically closest one.
+    return sorted(candidates, key=lambda item: item[:3])[0][3]
+
+
 def _preferred_results(results: Iterable[ResultRecord], *, now: dt.datetime) -> list[ResultRecord]:
     by_fixture: dict[str, list[ResultRecord]] = defaultdict(list)
     for result in results:
@@ -345,8 +409,9 @@ def _confirmed_result(results: list[ResultRecord]) -> ResultRecord | None:
     selected_group = sorted(
         confirmed_groups,
         key=lambda rows: (
-            -len(_unique_sources(rows)),
+            # High-authority agreement beats any number of scraped votes.
             -len(_high_authority_sources(rows)),
+            -len(_unique_sources(rows)),
             _source_rank(_best_result(rows).source),
         ),
     )[0]
@@ -386,7 +451,17 @@ def _is_confirmed_result_group(results: list[ResultRecord]) -> bool:
 
 
 def _unique_sources(results: list[ResultRecord]) -> set[str]:
-    return {result.source for result in results}
+    """Distinct source families supporting a score.
+
+    Scraped families such as ``dynamic_public:<domain>`` share one extractor,
+    so their domains are correlated witnesses and count as a single source.
+    """
+
+    return {_source_family(result.source) for result in results}
+
+
+def _source_family(source: str) -> str:
+    return str(source or "").split(":", 1)[0].strip()
 
 
 def _high_authority_sources(results: list[ResultRecord]) -> set[str]:

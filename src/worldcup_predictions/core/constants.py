@@ -46,6 +46,10 @@ HIGH_AUTHORITY_RESULT_SOURCES = (
     SOURCE_FOOTBALL_DATA,
     SOURCE_ESPN_SCOREBOARD,
 )
+# Result observations whose kickoff differs from the canonical fixture by at
+# most this window are treated as the same match for consensus, so sources
+# that disagree on kickoff time cannot confirm a phantom duplicate fixture.
+CONFIRMED_RESULT_KICKOFF_WINDOW_HOURS = 3
 
 ENDPOINT_THE_ODDS_API_WORLD_CUP_ODDS = "https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/odds"
 ENDPOINT_THE_ODDS_API_WORLD_CUP_EVENTS = "https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/events"
