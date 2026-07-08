@@ -83,6 +83,7 @@ class TournamentSimulator:
         self._provided_score_matrices: dict[tuple[str, str, str], list[ScoreMatrixEntry]] = {}
         self._matrix_source_counts: Counter[str] = Counter()
         self._market_adjustment_counts: Counter[str] = Counter()
+        self._outright_adjusted_matrices: dict[tuple[str, str, str, str], tuple[list[ScoreMatrixEntry], str]] = {}
 
     def run(self) -> SimulationSummary:
         rng = random.Random(self.seed)
@@ -441,7 +442,7 @@ class TournamentSimulator:
         if not matrix:
             matrix = fallback_score_matrix()
             matrix_source = "fallback"
-        matrix, matrix_source = self._apply_outright_adjustment(matrix, matrix_source, home, away)
+        matrix, matrix_source = self._apply_outright_adjustment(matrix, matrix_source, fixture_key, home, away)
         self._matrix_source_counts[matrix_source] += 1
         return sample_score(matrix, rng), "simulated", matrix_source
 
@@ -506,22 +507,32 @@ class TournamentSimulator:
         self,
         matrix: list[ScoreMatrixEntry],
         matrix_source: str,
+        fixture_key: str,
         home: str,
         away: str,
     ) -> tuple[list[ScoreMatrixEntry], str]:
         if matrix_source == "stored":
             return matrix, matrix_source
-        adjusted, adjustment = adjust_score_matrix_for_outrights(
-            matrix,
-            home,
-            away,
-            self.inputs.team_strengths,
-        )
-        if adjustment is None:
-            return matrix, matrix_source
-        adjusted_source = f"{matrix_source}+outright"
-        self._market_adjustment_counts[adjusted_source] += 1
-        return adjusted, adjusted_source
+        # The adjustment is deterministic per pairing, so it is computed once
+        # per fixture pairing instead of once per sampled iteration; the
+        # market_adjustment_counts metadata therefore counts adjusted pairings.
+        cache_key = (matrix_source, fixture_key, home, away)
+        cached = self._outright_adjusted_matrices.get(cache_key)
+        if cached is None:
+            adjusted, adjustment = adjust_score_matrix_for_outrights(
+                matrix,
+                home,
+                away,
+                self.inputs.team_strengths,
+            )
+            if adjustment is None:
+                cached = (matrix, matrix_source)
+            else:
+                adjusted_source = f"{matrix_source}+outright"
+                self._market_adjustment_counts[adjusted_source] += 1
+                cached = (adjusted, adjusted_source)
+            self._outright_adjusted_matrices[cache_key] = cached
+        return cached
 
     def _provided_matrix(self, fixture_key: str, home: str, away: str) -> list[ScoreMatrixEntry]:
         provider = self.inputs.score_matrix_provider

@@ -11,6 +11,7 @@ from worldcup_predictions.core.contracts import (
     ScoreTip,
     confidence_label,
 )
+from worldcup_predictions.core.signals import MARKET_HDA_PROBABILITIES
 
 OUTRIGHT_MARKET_MATRIX_WEIGHT = 0.20
 OUTRIGHT_STRENGTH_POWER = 0.5
@@ -39,8 +40,16 @@ def team_strengths_from_outrights(rows: list[dict[str, Any]]) -> dict[str, float
 
 
 def adjust_prediction_for_outrights(prediction: Prediction, team_strengths: dict[str, float]) -> Prediction:
-    """Return a prediction whose score matrix includes the tournament-outright prior."""
+    """Return a prediction whose score matrix includes the tournament-outright prior.
 
+    Fixture-level match odds and tournament outrights come from the same
+    bookmakers, so predictions that already carry a ``market_hda_probabilities``
+    adjustment keep their matrix unchanged; the outright prior only stands in
+    while no fixture-specific market signal is available.
+    """
+
+    if _has_fixture_market_adjustment(prediction.metadata):
+        return prediction
     adjusted_matrix, adjustment = adjust_score_matrix_for_outrights(
         prediction.score_matrix,
         prediction.fixture.home_team,
@@ -213,6 +222,13 @@ def normalize_score_matrix(entries: list[ScoreMatrixEntry]) -> list[ScoreMatrixE
         ScoreMatrixEntry(entry.home, entry.away, max(0.0, entry.probability) / total, entry.metadata)
         for entry in entries
     ]
+
+
+def _has_fixture_market_adjustment(metadata: dict[str, Any]) -> bool:
+    for adjustment in metadata.get("signal_adjustments") or []:
+        if isinstance(adjustment, dict) and str(adjustment.get("signal") or "") == MARKET_HDA_PROBABILITIES:
+            return True
+    return False
 
 
 def _strength_for(team_strengths: dict[str, float], team: str, fifa_code: str | None) -> float | None:

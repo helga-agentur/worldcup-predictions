@@ -291,6 +291,12 @@ class TournamentSimulationSamplingRegressionTest(unittest.TestCase):
 
         self.assertGreater(summary.metadata["matrix_source_counts"].get("generated+outright", 0), 0)
         self.assertGreater(summary.metadata["market_adjustment_counts"].get("generated+outright", 0), 0)
+        # The adjustment is cached per pairing: samples (matrix_source_counts)
+        # far outnumber adjusted pairings (market_adjustment_counts).
+        self.assertLess(
+            summary.metadata["market_adjustment_counts"]["generated+outright"],
+            summary.metadata["matrix_source_counts"]["generated+outright"],
+        )
         self.assertNotIn("champion_market_blend", summary.distributions)
 
 
