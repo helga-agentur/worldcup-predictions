@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import unittest
-from collections import Counter
 
+from worldcup_predictions.core.contracts import ScoreMatrixEntry
+from worldcup_predictions.market_prior import adjust_score_matrix_for_outrights, outcome_probabilities
 from worldcup_predictions.plugins.sources.markets.market_odds.plugin import market_signals_from_rows
 from worldcup_predictions.plugins.signals.market_trend.plugin import market_trend_rows, market_trend_signals
-from worldcup_predictions.simulations.monte_carlo import SimulationInputs, TournamentSimulator
 
 
 def _odds_row(fixture_key: str, observed_at: str, total_goals: float, over_prob: float | None = None) -> dict:
@@ -68,21 +68,34 @@ class MarketTrendTest(unittest.TestCase):
         self.assertEqual(rows, [])
 
 
-class ChampionMarketBlendTest(unittest.TestCase):
-    def test_blend_mixes_simulation_and_outright(self) -> None:
-        sim = TournamentSimulator(SimulationInputs(fixtures=[], team_strengths={"A": 0.6, "B": 0.4}))
-        blend = sim._champion_market_blend(Counter({"A": 800, "B": 200}), sim_weight=0.45)
+class OutrightMarketMatrixAdjustmentTest(unittest.TestCase):
+    def test_outrights_nudge_non_draw_share_without_changing_draw_rate(self) -> None:
+        matrix = [
+            ScoreMatrixEntry(1, 0, 0.35),
+            ScoreMatrixEntry(1, 1, 0.30),
+            ScoreMatrixEntry(0, 1, 0.35),
+        ]
+        adjusted, adjustment = adjust_score_matrix_for_outrights(
+            matrix,
+            "A",
+            "B",
+            {"A": 0.25, "B": 0.05},
+        )
 
-        assert blend is not None
-        by_team = {row["answer"]: row["probability"] for row in blend}
-        # A: 0.45*0.8 + 0.55*0.6 = 0.69 ; B: 0.45*0.2 + 0.55*0.4 = 0.31
-        self.assertAlmostEqual(by_team["A"], 0.69, places=6)
-        self.assertAlmostEqual(by_team["B"], 0.31, places=6)
-        self.assertEqual(blend[0]["answer"], "A")
+        self.assertIsNotNone(adjustment)
+        before = outcome_probabilities(matrix)
+        after = outcome_probabilities(adjusted)
+        self.assertGreater(after.home, before.home)
+        self.assertLess(after.away, before.away)
+        self.assertAlmostEqual(after.draw, before.draw, places=9)
+        self.assertEqual(adjustment["signal"], "market_outright_strength")
 
-    def test_no_outrights_returns_none(self) -> None:
-        sim = TournamentSimulator(SimulationInputs(fixtures=[], team_strengths={}))
-        self.assertIsNone(sim._champion_market_blend(Counter({"A": 800, "B": 200})))
+    def test_missing_outrights_leave_matrix_unchanged(self) -> None:
+        matrix = [ScoreMatrixEntry(1, 0, 0.5), ScoreMatrixEntry(0, 1, 0.5)]
+        adjusted, adjustment = adjust_score_matrix_for_outrights(matrix, "A", "B", {})
+
+        self.assertEqual(adjusted, matrix)
+        self.assertIsNone(adjustment)
 
 
 if __name__ == "__main__":

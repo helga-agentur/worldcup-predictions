@@ -18,7 +18,7 @@ def evaluate_twenty_min_bonus_questions(summary: SimulationSummary) -> dict[str,
             "seed": summary.seed,
         },
         "questions": {
-            "world_champion": distributions.get("champion_market_blend") or distributions.get("champion", []),
+            "world_champion": distributions.get("champion", []),
             "top_scorer_goals": distributions.get("top_scorer_goals", []),
             "nil_nil_matches": distributions.get("nil_nil", []),
             "team_stage": distributions.get("team_stage", {}),

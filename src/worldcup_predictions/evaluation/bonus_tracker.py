@@ -99,7 +99,7 @@ def _track_champion(row: dict[str, Any], state: TournamentState, sim_distributio
     row["status"] = "still_possible" if status["alive"] else "impossible"
     row["current_state"] = status["note"]
     row["remaining_condition"] = f"{target} must win the World Cup."
-    champion = (sim_distributions or {}).get("champion_market_blend") or (sim_distributions or {}).get("champion")
+    champion = (sim_distributions or {}).get("champion")
     probability = _distribution_probability(champion, target)
     if probability is not None:
         row["simulated_probability"] = probability

@@ -22,7 +22,7 @@ def evaluate_srf_bonus_questions(
             "seed": summary.seed,
         },
         "questions": {
-            "world_champion": distributions.get("champion_market_blend") or distributions.get("champion", []),
+            "world_champion": distributions.get("champion", []),
             "switzerland_stage": distributions.get("team_stage", {}).get(swiss_team, []),
             "switzerland_goals": distributions.get("team_goals", {}).get(swiss_team, []),
             "top_scorer_goals": distributions.get("top_scorer_goals", []),

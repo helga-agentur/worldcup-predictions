@@ -9,6 +9,7 @@ from string import ascii_uppercase
 from typing import Any, Callable
 
 from worldcup_predictions.core.contracts import Fixture, ScoreMatrixEntry, ScoreTip
+from worldcup_predictions.market_prior import adjust_score_matrix_for_outrights
 from worldcup_predictions.simulations.contracts import (
     SimulationOutcome,
     SimulationResult,
@@ -81,6 +82,7 @@ class TournamentSimulator:
         self._group_labels_cache: dict[str, str] | None = None
         self._provided_score_matrices: dict[tuple[str, str, str], list[ScoreMatrixEntry]] = {}
         self._matrix_source_counts: Counter[str] = Counter()
+        self._market_adjustment_counts: Counter[str] = Counter()
 
     def run(self) -> SimulationSummary:
         rng = random.Random(self.seed)
@@ -136,9 +138,6 @@ class TournamentSimulator:
             },
             "team_groups": team_groups,
         }
-        champion_blend = self._champion_market_blend(champion_counter)
-        if champion_blend is not None:
-            distributions["champion_market_blend"] = champion_blend
         metadata = {
             "fixtures": len(self.inputs.fixtures),
             "known_results": len(self.inputs.known_results),
@@ -146,6 +145,7 @@ class TournamentSimulator:
             "score_matrices": len(self.inputs.score_matrices),
             "generated_score_matrices": len([matrix for matrix in self._provided_score_matrices.values() if matrix]),
             "matrix_source_counts": dict(sorted(self._matrix_source_counts.items())),
+            "market_adjustment_counts": dict(sorted(self._market_adjustment_counts.items())),
             "forecast_basis": "modal_path_for_modal_champion",
             "forecast_champion": self._modal_champion(champion_counter) or "",
             "forecast_results": [
@@ -441,6 +441,7 @@ class TournamentSimulator:
         if not matrix:
             matrix = fallback_score_matrix()
             matrix_source = "fallback"
+        matrix, matrix_source = self._apply_outright_adjustment(matrix, matrix_source, home, away)
         self._matrix_source_counts[matrix_source] += 1
         return sample_score(matrix, rng), "simulated", matrix_source
 
@@ -500,6 +501,27 @@ class TournamentSimulator:
         if provided:
             return provided, "generated"
         return [], "fallback"
+
+    def _apply_outright_adjustment(
+        self,
+        matrix: list[ScoreMatrixEntry],
+        matrix_source: str,
+        home: str,
+        away: str,
+    ) -> tuple[list[ScoreMatrixEntry], str]:
+        if matrix_source == "stored":
+            return matrix, matrix_source
+        adjusted, adjustment = adjust_score_matrix_for_outrights(
+            matrix,
+            home,
+            away,
+            self.inputs.team_strengths,
+        )
+        if adjustment is None:
+            return matrix, matrix_source
+        adjusted_source = f"{matrix_source}+outright"
+        self._market_adjustment_counts[adjusted_source] += 1
+        return adjusted, adjusted_source
 
     def _provided_matrix(self, fixture_key: str, home: str, away: str) -> list[ScoreMatrixEntry]:
         provider = self.inputs.score_matrix_provider
@@ -615,40 +637,6 @@ class TournamentSimulator:
                 tie_breakers[standing.team],
             ),
         )
-
-    def _champion_market_blend(self, champion_counter: Counter[str], *, sim_weight: float = 0.45) -> list[dict[str, Any]] | None:
-        """Blend simulated champion probabilities with bookmaker outright probabilities.
-
-        Bookmaker outrights are an efficient champion estimate and stabilize the noisy
-        simulation tail. Uses the legacy 0.45 simulation / 0.55 market split. Returns
-        ``None`` when no outright strengths are available.
-        """
-
-        strengths = self.inputs.team_strengths
-        total = sum(champion_counter.values())
-        if not strengths or total <= 0:
-            return None
-        teams = set(champion_counter) | set(self._team_groups())
-        outright = {team: max(0.0, float(strengths.get(team, 0.0) or 0.0)) for team in teams}
-        outright_total = sum(outright.values())
-        if outright_total <= 0:
-            return None
-        blended = {
-            team: sim_weight * (champion_counter.get(team, 0) / total) + (1 - sim_weight) * (outright[team] / outright_total)
-            for team in teams
-        }
-        blended_total = sum(blended.values()) or 1.0
-        rows = [
-            {
-                "answer": team,
-                "count": round(probability / blended_total * total),
-                "probability": probability / blended_total,
-            }
-            for team, probability in blended.items()
-            if probability > 0
-        ]
-        rows.sort(key=lambda row: (-row["probability"], row["answer"]))
-        return rows
 
     def _counter_distribution(
         self,

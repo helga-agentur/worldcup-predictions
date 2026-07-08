@@ -406,7 +406,7 @@ Transparent Elo/goal-profile model with capped typed-signal blending.
 - Kind: `model`
 - Priority: `400`
 - Events: `predictions_requested`
-- Reads: `historical_results`, `tournament_results`
+- Reads: `historical_results`, `market_outrights`, `tournament_results`
 - Writes: -
 - Signals: -
 - Locales: `en`, `de`

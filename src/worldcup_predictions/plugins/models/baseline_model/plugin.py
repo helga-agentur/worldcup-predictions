@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from worldcup_predictions.core.contracts import Diagnostic, ScoreTip, Signal
-from worldcup_predictions.core.datasets import HISTORICAL_RESULTS, TOURNAMENT_RESULTS
+from worldcup_predictions.core.datasets import HISTORICAL_RESULTS, MARKET_OUTRIGHTS, TOURNAMENT_RESULTS
 from worldcup_predictions.core.events import EventName, event_value
 from worldcup_predictions.core.metadata import PluginKind, PluginMetadata
 from worldcup_predictions.core.plugin import BasePlugin, PluginResult
+from worldcup_predictions.market_prior import adjust_prediction_for_outrights, team_strengths_from_outrights
 from worldcup_predictions.model import BaselineModel, HistoricalResult, load_historical_results
 from worldcup_predictions.tournament import TournamentState
 from worldcup_predictions.tournament.repository import load_tournament_state
@@ -23,7 +24,7 @@ class BaselineModelPlugin(BasePlugin):
         plugin_id=id,
         kind=PluginKind.MODEL,
         description="Transparent Elo/goal-profile model with capped typed-signal blending.",
-        datasets_read=(HISTORICAL_RESULTS, TOURNAMENT_RESULTS),
+        datasets_read=(HISTORICAL_RESULTS, MARKET_OUTRIGHTS, TOURNAMENT_RESULTS),
         confidence_policy="Confidence is the strongest H/D/A probability after exact-score matrix adjustments.",
     )
 
@@ -60,7 +61,11 @@ class BaselineModelPlugin(BasePlugin):
             historical_results.extend(_historical_from_tournament_results(state))
         signals = _workflow_signals(context)
         model = BaselineModel(historical_results)
-        predictions = [model.predict_fixture(fixture, signals=signals) for fixture in fixtures]
+        team_strengths = team_strengths_from_outrights(context.storage.read_records(MARKET_OUTRIGHTS, latest_only=True))
+        predictions = [
+            adjust_prediction_for_outrights(model.predict_fixture(fixture, signals=signals), team_strengths)
+            for fixture in fixtures
+        ]
         diagnostics = []
         if not historical_results:
             diagnostics.append(
@@ -78,6 +83,7 @@ class BaselineModelPlugin(BasePlugin):
             metadata={
                 "fixtures": len(fixtures),
                 "historical_results": len(historical_results),
+                "outright_strengths": len(team_strengths),
             },
         )
 

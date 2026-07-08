@@ -74,15 +74,15 @@ Responsibilities:
 
 The daily job is intentionally separate from the half-hourly job because tournament simulation and maintenance work can be slower and changes less frequently.
 
-The half-hourly `scheduled-update` command also checks whether the unresolved fixture state has changed since the latest current-state simulation. If a result removes an open fixture or resolves a future knockout participant, it immediately runs the same current-state 20,000-iteration simulation before rebuilding the static site. If the fixture fingerprint is unchanged, it skips this simulation refresh.
+The half-hourly `scheduled-update` command also checks whether the unresolved fixture state or simulation-logic version has changed since the latest current-state simulation. If a result removes an open fixture, resolves a future knockout participant, or the simulation logic was upgraded, it immediately runs the same current-state 20,000-iteration simulation before rebuilding the static site. If the fixture fingerprint and simulation version are unchanged, it skips this simulation refresh.
 
 The daily simulation starts from the current confirmed tournament state. For analysis or retrospective comparison, run `worldcup-predictions simulate-tournament --from-day-one` to ignore stored final scores and simulate from the initial fixture plan.
 
-For future knockout rounds, the simulator advances winners round by round. Existing score matrices are used for known/current fixtures; if a simulated pairing did not already have a published matrix, the simulator generates a matchup-specific baseline matrix on demand and caches it for the run before falling back to the neutral matrix. Each summary stores `metadata.matrix_source_counts` and a coherent `metadata.forecast_results` path for the modal champion.
+For future knockout rounds, the simulator advances winners round by round. Existing score matrices are used for known/current fixtures; if a simulated pairing did not already have a published matrix, the simulator generates a matchup-specific baseline matrix on demand, applies the same bounded tournament-outright prior used by published predictions, and caches it for the run before falling back to the neutral matrix. Each summary stores `metadata.matrix_source_counts`, `metadata.market_adjustment_counts`, and a coherent `metadata.forecast_results` path for the modal champion.
 
 ## Static Site
 
-The static site reads from `published_prediction_ledger`. The tournament page additionally reads the latest `simulation_summary` champion distribution, falling back to `market_outrights` no-vig probabilities (with a source note) when no usable simulation data exists.
+The static site reads from `published_prediction_ledger`. The tournament page additionally reads the latest `simulation_summary` champion distribution, which already includes market-outright strength through the simulated match matrices, falling back to `market_outrights` no-vig probabilities (with a source note) when no usable simulation data exists.
 
 When `simulation_summary.metadata.forecast_results` is present, the tournament bracket animation uses published ledger predictions for already-defined fixtures and uses the simulated path only for unresolved future pairings whose teams match the projected bracket slots. This keeps match pages, homepage cards, and bracketry aligned on the same per-fixture forecast while still letting the simulation fill future knockout rounds.
 

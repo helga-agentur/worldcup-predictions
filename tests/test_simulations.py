@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from worldcup_predictions.cli import (
+    SIMULATION_LOGIC_VERSION,
     _latest_current_state_simulation_fixture_fingerprint,
     _simulation_fixture_metadata,
     _simulation_known_results,
@@ -259,6 +260,39 @@ class TournamentSimulationSamplingRegressionTest(unittest.TestCase):
         self.assertEqual(final["winner"], summary.metadata["forecast_champion"])
         self.assertEqual(final["matrix_source"], "generated")
 
+    def test_generated_knockout_matrices_include_outright_market_prior(self) -> None:
+        def provider(_match_id: str, _home: str, _away: str) -> list[ScoreMatrixEntry]:
+            return [
+                ScoreMatrixEntry(1, 0, 0.35),
+                ScoreMatrixEntry(1, 1, 0.30),
+                ScoreMatrixEntry(0, 1, 0.35),
+            ]
+
+        inputs = _mid_tournament_inputs()
+        team_strengths = {
+            "Mexico": 0.30,
+            "South Africa": 0.02,
+            "South Korea": 0.08,
+            "Czech Republic": 0.04,
+            "Canada": 0.18,
+            "Qatar": 0.01,
+            "Switzerland": 0.12,
+            "Bosnia and Herzegovina": 0.03,
+        }
+        inputs = SimulationInputs(
+            fixtures=inputs.fixtures,
+            known_results=inputs.known_results,
+            known_winners=inputs.known_winners,
+            score_matrices=inputs.score_matrices,
+            score_matrix_provider=provider,
+            team_strengths=team_strengths,
+        )
+        summary = TournamentSimulator(inputs, iterations=80, seed=20260611).run()
+
+        self.assertGreater(summary.metadata["matrix_source_counts"].get("generated+outright", 0), 0)
+        self.assertGreater(summary.metadata["market_adjustment_counts"].get("generated+outright", 0), 0)
+        self.assertNotIn("champion_market_blend", summary.distributions)
+
 
 class KnockoutShootoutResolutionTest(unittest.TestCase):
     """Fixed knockout ties must advance the real winner when it is known."""
@@ -459,6 +493,7 @@ class SimulationInputWiringTest(unittest.TestCase):
                             "active_fixture_fingerprint": "older",
                             "forecast_results": [],
                             "matrix_source_counts": {},
+                            "simulation_logic_version": SIMULATION_LOGIC_VERSION,
                         },
                         "_record": {"observed_at_utc": "2026-07-06T07:00:00Z"},
                     },
@@ -474,12 +509,32 @@ class SimulationInputWiringTest(unittest.TestCase):
                             "active_fixture_fingerprint": "newer",
                             "forecast_results": [],
                             "matrix_source_counts": {},
+                            "simulation_logic_version": SIMULATION_LOGIC_VERSION,
                         },
                         "_record": {"observed_at_utc": "2026-07-06T08:00:00Z"},
                     },
                 ]
 
         self.assertEqual(_latest_current_state_simulation_fixture_fingerprint(FakeStorage()), "newer")
+
+    def test_latest_fixture_fingerprint_treats_old_simulation_logic_as_stale(self) -> None:
+        class FakeStorage:
+            def read_records(self, dataset: str, *, latest_only: bool = False) -> list[dict]:
+                return [
+                    {
+                        "mode": "current_state",
+                        "metadata": {
+                            "active_fixture_count": 1,
+                            "active_fixture_fingerprint": "old-logic",
+                            "forecast_results": [],
+                            "matrix_source_counts": {},
+                            "simulation_logic_version": "before-outright-matrix-prior",
+                        },
+                        "_record": {"observed_at_utc": "2026-07-06T08:00:00Z"},
+                    },
+                ]
+
+        self.assertEqual(_latest_current_state_simulation_fixture_fingerprint(FakeStorage()), "")
 
     def test_latest_fixture_fingerprint_treats_missing_forecast_path_as_stale(self) -> None:
         class FakeStorage:

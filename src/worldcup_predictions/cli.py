@@ -51,6 +51,7 @@ from worldcup_predictions.evaluation.published_prediction_ledger import write_pu
 from worldcup_predictions.evaluation.provider_points import build_provider_points_rows
 from worldcup_predictions.evaluation.reports import write_standard_reports
 from worldcup_predictions.evaluation.scheduled_update import summarize_source_ledger_rows, write_prediction_run_summary
+from worldcup_predictions.market_prior import team_strengths_from_outrights
 from worldcup_predictions.model import BaselineModel, BaselineModelConfig, HistoricalResult, load_historical_results
 from worldcup_predictions.model.baseline import compute_elo
 from worldcup_predictions.plugins import builtin_plugins
@@ -66,6 +67,9 @@ from worldcup_predictions.tournament.repository import (
     load_tournament_state,
 )
 from worldcup_predictions.tournament import FixtureRecord, TeamRef
+
+
+SIMULATION_LOGIC_VERSION = "outright-matrix-prior-v1"
 
 
 def build_manager(project_root: Path | None = None) -> PluginManager:
@@ -378,6 +382,8 @@ def _latest_current_state_simulation_fixture_fingerprint(storage) -> str:
     metadata = latest[1].get("metadata") if isinstance(latest[1].get("metadata"), dict) else {}
     if _simulation_summary_needs_forecast_refresh(metadata):
         return ""
+    if str(metadata.get("simulation_logic_version") or "") != SIMULATION_LOGIC_VERSION:
+        return ""
     return str(metadata.get("active_fixture_fingerprint") or "")
 
 
@@ -396,6 +402,7 @@ def _simulation_fixture_metadata(state) -> dict:
     return {
         "active_fixture_count": len(entries),
         "active_fixture_fingerprint": stable_hash(entries),
+        "simulation_logic_version": SIMULATION_LOGIC_VERSION,
     }
 
 
@@ -804,7 +811,7 @@ def _simulation_inputs_from_state(
     include_current_results_in_ratings: bool,
 ) -> SimulationInputs:
     matrices = _simulation_score_matrices(run.predictions)
-    team_strengths = _team_strengths_from_outrights(workflow.context.storage.read_records(MARKET_OUTRIGHTS, latest_only=True))
+    team_strengths = team_strengths_from_outrights(workflow.context.storage.read_records(MARKET_OUTRIGHTS, latest_only=True))
     team_ratings = _team_ratings_for_simulation(
         workflow.context.storage,
         state,
@@ -1094,23 +1101,6 @@ def _team_ratings_for_simulation(storage, state, *, include_current_results: boo
             if team.fifa_code:
                 ratings[team.fifa_code] = rating
     return ratings
-
-
-def _team_strengths_from_outrights(rows: list[dict]) -> dict[str, float]:
-    strengths = {}
-    for row in rows:
-        probability = row.get("fair_probability") or row.get("avg_implied_probability")
-        if probability in (None, ""):
-            continue
-        try:
-            strength = max(0.01, float(probability))
-        except (TypeError, ValueError):
-            continue
-        if row.get("team"):
-            strengths[str(row["team"])] = strength
-        if row.get("fifa_code"):
-            strengths[str(row["fifa_code"])] = strength
-    return strengths
 
 
 def build_parser() -> argparse.ArgumentParser:
