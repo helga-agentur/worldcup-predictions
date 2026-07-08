@@ -54,7 +54,7 @@ fi
 
 log "image revision: $(short_revision "$image_revision")"
 log "fetching origin/main"
-git fetch --prune origin main:refs/remotes/origin/main
+git fetch --prune origin +refs/heads/main:refs/remotes/origin/main
 
 if ! git cat-file -e "$image_revision^{commit}" 2>/dev/null; then
   fail "image revision does not exist in local git history after fetch: $image_revision"
