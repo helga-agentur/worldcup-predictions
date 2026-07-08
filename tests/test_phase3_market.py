@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from worldcup_predictions.core.contracts import ScoreMatrixEntry
-from worldcup_predictions.market_prior import adjust_score_matrix_for_outrights, outcome_probabilities
+from worldcup_predictions.core.contracts import Fixture, OutcomeProbabilities, Prediction, ScoreMatrixEntry, ScoreTip
+from worldcup_predictions.market_prior import (
+    adjust_prediction_for_outrights,
+    adjust_score_matrix_for_outrights,
+    outcome_probabilities,
+)
 from worldcup_predictions.plugins.sources.markets.market_odds.plugin import market_signals_from_rows
 from worldcup_predictions.plugins.signals.market_trend.plugin import market_trend_rows, market_trend_signals
 
@@ -96,6 +100,36 @@ class OutrightMarketMatrixAdjustmentTest(unittest.TestCase):
 
         self.assertEqual(adjusted, matrix)
         self.assertIsNone(adjustment)
+
+    def test_predictions_with_fixture_market_signal_skip_the_outright_prior(self) -> None:
+        matrix = [
+            ScoreMatrixEntry(1, 0, 0.35),
+            ScoreMatrixEntry(1, 1, 0.30),
+            ScoreMatrixEntry(0, 1, 0.35),
+        ]
+        strengths = {"A": 0.25, "B": 0.05}
+
+        def prediction(metadata: dict) -> Prediction:
+            return Prediction(
+                fixture=Fixture(event_date="2026-07-10T18:00:00Z", home_team="A", away_team="B"),
+                most_likely=ScoreTip(1, 1),
+                outcome_probabilities=OutcomeProbabilities(home=0.35, draw=0.30, away=0.35),
+                confidence_label="Medium",
+                confidence_percent=35.0,
+                score_matrix=list(matrix),
+                metadata=metadata,
+            )
+
+        with_market = adjust_prediction_for_outrights(
+            prediction({"signal_adjustments": [{"signal": "market_hda_probabilities", "weight": 0.95}]}),
+            strengths,
+        )
+        self.assertNotIn("outright_market_adjustment", with_market.metadata)
+        self.assertEqual(with_market.outcome_probabilities.home, 0.35)
+
+        without_market = adjust_prediction_for_outrights(prediction({}), strengths)
+        self.assertIn("outright_market_adjustment", without_market.metadata)
+        self.assertGreater(without_market.outcome_probabilities.home, 0.35)
 
 
 if __name__ == "__main__":
