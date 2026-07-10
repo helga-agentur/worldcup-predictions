@@ -186,14 +186,55 @@
     }
   }
 
+  // Keep in sync with --tooltip-arrow-anchor in site.css (65 / 340).
+  var SUMMARY_ARROW_ANCHOR_RATIO = 65 / 340;
+
+  function alignSummaryTooltip(trigger, tooltip) {
+    var parent = tooltip.offsetParent;
+    if (!parent) {
+      return;
+    }
+    var gutter = 16;
+    var arrowMinEdge = 18;
+    var parentRect = parent.getBoundingClientRect();
+    var triggerRect = trigger.getBoundingClientRect();
+    var width = tooltip.getBoundingClientRect().width;
+    if (!width) {
+      return;
+    }
+    // The tooltip may use the full content column, not just the card: any
+    // spare room up to the content edge goes to the short arrow segment while
+    // the arrow itself stays on the trigger.
+    var container = trigger.closest ? trigger.closest(".content-width") : null;
+    var containerRect = container ? container.getBoundingClientRect() : null;
+    var boundLeft = Math.max(containerRect ? containerRect.left : gutter, gutter);
+    var boundRight = Math.min(
+      containerRect ? containerRect.right : window.innerWidth - gutter,
+      window.innerWidth - gutter
+    );
+    var triggerCenter = triggerRect.left + triggerRect.width / 2 - parentRect.left;
+    var left = triggerCenter - width * SUMMARY_ARROW_ANCHOR_RATIO;
+    var minLeft = boundLeft - parentRect.left;
+    var maxLeft = boundRight - width - parentRect.left;
+    left = Math.max(minLeft, Math.min(left, maxLeft));
+    var arrowCenter = triggerCenter - left;
+    arrowCenter = Math.max(arrowMinEdge, Math.min(arrowCenter, width - arrowMinEdge));
+    tooltip.style.setProperty("--tooltip-aligned-left", left.toFixed(2) + "px");
+    tooltip.style.setProperty("--tooltip-aligned-arrow-center", arrowCenter.toFixed(2) + "px");
+    tooltip.classList.add("summary-tooltip--aligned");
+  }
+
   function alignTooltip(trigger, tooltip) {
+    if (!trigger || !tooltip || !tooltip.classList) {
+      return;
+    }
     if (
-      !trigger ||
-      !tooltip ||
-      !tooltip.classList ||
-      (!tooltip.classList.contains("summary-tooltip--inline") &&
-        !tooltip.classList.contains("summary-tooltip--chip"))
+      !tooltip.classList.contains("summary-tooltip--inline") &&
+      !tooltip.classList.contains("summary-tooltip--chip")
     ) {
+      if (tooltip.classList.contains("summary-tooltip")) {
+        alignSummaryTooltip(trigger, tooltip);
+      }
       return;
     }
 
@@ -207,10 +248,20 @@
     var anchorRect = anchor.getBoundingClientRect();
     var triggerRect = trigger.getBoundingClientRect();
     var tooltipRect = tooltip.getBoundingClientRect();
+    // Same anchor policy as the stat-card tooltip: the ratio position is the
+    // standard, the content column bounds the box, and the arrow stays on
+    // the trigger when the two conflict.
+    var container = trigger.closest ? trigger.closest(".content-width") : null;
+    var containerRect = container ? container.getBoundingClientRect() : null;
+    var boundLeft = Math.max(containerRect ? containerRect.left : gutter, gutter);
+    var boundRight = Math.min(
+      containerRect ? containerRect.right : window.innerWidth - gutter,
+      window.innerWidth - gutter
+    );
     var triggerCenter = triggerRect.left + triggerRect.width / 2 - anchorRect.left;
-    var minLeft = gutter - anchorRect.left;
-    var maxLeft = window.innerWidth - tooltipRect.width - gutter - anchorRect.left;
-    var preferredArrowLeft = 28;
+    var minLeft = boundLeft - anchorRect.left;
+    var maxLeft = boundRight - tooltipRect.width - anchorRect.left;
+    var preferredArrowLeft = tooltipRect.width * SUMMARY_ARROW_ANCHOR_RATIO;
     var tooltipLeft = triggerCenter - preferredArrowLeft;
 
     tooltipLeft = Math.max(minLeft, Math.min(tooltipLeft, maxLeft));

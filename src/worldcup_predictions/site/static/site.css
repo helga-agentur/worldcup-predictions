@@ -583,6 +583,14 @@ h2 {
   fill: var(--hover-row);
 }
 
+/* The tooltip floats as a dialog over same-colored surfaces, so its outline
+   needs more contrast than ordinary card borders - most visibly in dark mode,
+   where the standard 70% line blend reads as near-invisible on the arrow. */
+html[data-theme="dark"] .summary-tooltip {
+  --tooltip-border-color: color-mix(in srgb, var(--muted) 42%, transparent);
+  --tooltip-arrow-border-color: color-mix(in srgb, var(--muted) 42%, var(--paper));
+}
+
 .summary-tooltip {
   /* Arrow-center anchor as a fraction of the tooltip width, measured from the
      edge that faces the trigger. Derived from the large-desktop design
@@ -594,6 +602,11 @@ h2 {
   --tooltip-trigger-center: calc(var(--space-8) + 16px);
   --tooltip-arrow-width: 20px;
   --tooltip-arrow-height: 18px;
+  --tooltip-border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  /* The arrow border is the outer of two stacked triangles, so it needs the
+     border color pre-blended over the tooltip surface at full opacity to
+     render at the strength the translucent box border actually shows. */
+  --tooltip-arrow-border-color: color-mix(in srgb, var(--line) 70%, var(--paper));
   position: absolute;
   z-index: 20;
   bottom: calc(100% + var(--space-md));
@@ -602,7 +615,7 @@ h2 {
   margin: 0;
   padding: var(--space-lg);
   padding-right: calc(var(--space-lg) + 30px);
-  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border: 1px solid var(--tooltip-border-color);
   border-radius: 8px;
   color: var(--muted);
   background: var(--paper);
@@ -613,16 +626,46 @@ h2 {
   transform: translateX(calc(0% - var(--tooltip-arrow-anchor)));
 }
 
-.summary-tooltip::before {
-  content: "";
+/* clip-path shapes cannot carry a real border, so the arrow is two stacked
+   triangles: the element in the border color and an inset ::before in the
+   tooltip surface. The base edge stays hidden inside the box, so the outline
+   reads as one continuous stroke around box plus arrow in every browser. */
+.summary-tooltip .summary-tooltip__arrow {
   position: absolute;
   top: 100%;
   left: var(--tooltip-arrow-anchor);
   width: var(--tooltip-arrow-width);
   height: var(--tooltip-arrow-height);
-  background: var(--paper);
+  background: var(--tooltip-arrow-border-color);
   clip-path: polygon(50% 100%, 0 0, 100% 0);
   pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.summary-tooltip .summary-tooltip__arrow::before {
+  content: "";
+  position: absolute;
+  inset: var(--tooltip-arrow-inner-top, 0) 1.2px var(--tooltip-arrow-inner-bottom, 2.1px);
+  background: var(--paper);
+  clip-path: inherit;
+}
+
+/* JS-aligned state for the stat-card tooltip: the ratio anchor stays the
+   standard, but when it cannot sit over the (?) trigger without pushing the
+   tooltip past the viewport, the trigger wins and the arrow snaps to it
+   (alignSummaryTooltip in theme.js sets these variables). Without JS the
+   ratio rules above keep applying. */
+/* Doubled class keeps this above the narrow-layout media rules, which share
+   the single-class specificity and come later in the sheet. */
+.summary-tooltip.summary-tooltip--aligned {
+  left: var(--tooltip-aligned-left);
+  right: auto;
+  transform: none;
+}
+
+.summary-tooltip.summary-tooltip--aligned .summary-tooltip__arrow {
+  left: var(--tooltip-aligned-arrow-center);
+  right: auto;
   transform: translateX(-50%);
 }
 
@@ -768,21 +811,24 @@ h2 {
   bottom: auto;
 }
 
-.summary-tooltip--inline::before,
-.summary-tooltip--chip::before {
+.summary-tooltip--inline .summary-tooltip__arrow,
+.summary-tooltip--chip .summary-tooltip__arrow {
   left: var(--tooltip-inline-arrow-left, var(--space-lg));
 }
 
-.summary-tooltip--inline::before {
+.summary-tooltip--inline .summary-tooltip__arrow {
   top: 100%;
   bottom: auto;
   clip-path: polygon(50% 100%, 0 0, 100% 0);
 }
 
-.summary-tooltip--chip::before {
+.summary-tooltip--chip .summary-tooltip__arrow {
   top: auto;
   bottom: 100%;
   clip-path: polygon(50% 0, 0 100%, 100% 100%);
+  /* Upward arrow: the outline sits along the upward-facing slants. */
+  --tooltip-arrow-inner-top: 2.1px;
+  --tooltip-arrow-inner-bottom: 0;
 }
 
 .summary__value {
@@ -1796,7 +1842,9 @@ html[data-theme="dark"] .tag[data-result="trend"] {
     transform: none;
   }
 
-  .summary-tooltip::before {
+  /* Combines the arrow element (stacked-triangle border) with the ratio
+     anchor: mirrored from the right edge in the narrow layout. */
+  .summary-tooltip .summary-tooltip__arrow {
     right: var(--tooltip-arrow-anchor);
     left: auto;
     transform: translateX(50%);
@@ -1808,8 +1856,8 @@ html[data-theme="dark"] .tag[data-result="trend"] {
     left: var(--tooltip-inline-left, 0);
   }
 
-  .summary-tooltip--inline::before,
-  .summary-tooltip--chip::before {
+  .summary-tooltip--inline .summary-tooltip__arrow,
+  .summary-tooltip--chip .summary-tooltip__arrow {
     right: auto;
     left: var(--tooltip-inline-arrow-left, var(--space-lg));
     transform: translateX(-50%);

@@ -20,6 +20,7 @@
 
 {% macro hit_tooltip(tooltip_id, tag_name="div", extra_class="") -%}
 <{{ tag_name }} class="summary-tooltip{% if extra_class %} {{ extra_class }}{% endif %}" id="{{ tooltip_id }}" role="dialog" aria-labelledby="{{ tooltip_id }}-title" data-tooltip hidden>
+  <span class="summary-tooltip__arrow" aria-hidden="true"></span>
   <button class="summary-tooltip__close" type="button" aria-label="{{ t('summary.hit_method_close') }}" data-tooltip-close>
     {{ icon("x") }}
   </button>
