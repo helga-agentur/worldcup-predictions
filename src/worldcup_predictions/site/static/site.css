@@ -614,21 +614,28 @@ h2 {
   transform: translateX(calc(0% - var(--tooltip-arrow-offset)));
 }
 
-.summary-tooltip::before {
-  content: "";
+/* clip-path shapes cannot carry a real border, so the arrow is two stacked
+   triangles: the element in the border color and an inset ::before in the
+   tooltip surface. The base edge stays hidden inside the box, so the outline
+   reads as one continuous stroke around box plus arrow in every browser. */
+.summary-tooltip .summary-tooltip__arrow {
   position: absolute;
   top: 100%;
   left: var(--tooltip-arrow-offset);
   width: var(--tooltip-arrow-width);
   height: var(--tooltip-arrow-height);
-  background: var(--paper);
+  background: var(--tooltip-arrow-border-color);
   clip-path: polygon(50% 100%, 0 0, 100% 0);
   pointer-events: none;
   transform: translateX(-50%);
-  /* clip-path shapes cannot carry a real border, so the box outline is
-     continued along the triangle's slanted edges with silhouette shadows;
-     the base edge stays hidden inside the box. */
-  filter: drop-shadow(-1px 1px 0 var(--tooltip-arrow-border-color)) drop-shadow(1px 1px 0 var(--tooltip-arrow-border-color));
+}
+
+.summary-tooltip .summary-tooltip__arrow::before {
+  content: "";
+  position: absolute;
+  inset: var(--tooltip-arrow-inner-top, 0) 1.2px var(--tooltip-arrow-inner-bottom, 2.1px);
+  background: var(--paper);
+  clip-path: inherit;
 }
 
 /* JS-aligned state for the stat-card tooltip: the ratio anchor stays the
@@ -644,7 +651,7 @@ h2 {
   transform: none;
 }
 
-.summary-tooltip.summary-tooltip--aligned::before {
+.summary-tooltip.summary-tooltip--aligned .summary-tooltip__arrow {
   left: var(--tooltip-aligned-arrow-center);
   right: auto;
   transform: translateX(-50%);
@@ -789,23 +796,24 @@ h2 {
   bottom: auto;
 }
 
-.summary-tooltip--inline::before,
-.summary-tooltip--chip::before {
+.summary-tooltip--inline .summary-tooltip__arrow,
+.summary-tooltip--chip .summary-tooltip__arrow {
   left: var(--tooltip-inline-arrow-left, var(--space-lg));
 }
 
-.summary-tooltip--inline::before {
+.summary-tooltip--inline .summary-tooltip__arrow {
   top: 100%;
   bottom: auto;
   clip-path: polygon(50% 100%, 0 0, 100% 0);
 }
 
-.summary-tooltip--chip::before {
+.summary-tooltip--chip .summary-tooltip__arrow {
   top: auto;
   bottom: 100%;
   clip-path: polygon(50% 0, 0 100%, 100% 100%);
-  /* Upward arrow: outline the upward-facing slants instead. */
-  filter: drop-shadow(-1px -1px 0 var(--tooltip-arrow-border-color)) drop-shadow(1px -1px 0 var(--tooltip-arrow-border-color));
+  /* Upward arrow: the outline sits along the upward-facing slants. */
+  --tooltip-arrow-inner-top: 2.1px;
+  --tooltip-arrow-inner-bottom: 0;
 }
 
 .summary__value {
@@ -1819,7 +1827,7 @@ html[data-theme="dark"] .tag[data-result="trend"] {
     transform: none;
   }
 
-  .summary-tooltip::before {
+  .summary-tooltip .summary-tooltip__arrow {
     right: calc(var(--tooltip-trigger-center) - var(--space-8));
     left: auto;
     transform: translateX(50%);
@@ -1831,8 +1839,8 @@ html[data-theme="dark"] .tag[data-result="trend"] {
     left: var(--tooltip-inline-left, 0);
   }
 
-  .summary-tooltip--inline::before,
-  .summary-tooltip--chip::before {
+  .summary-tooltip--inline .summary-tooltip__arrow,
+  .summary-tooltip--chip .summary-tooltip__arrow {
     right: auto;
     left: var(--tooltip-inline-arrow-left, var(--space-lg));
     transform: translateX(-50%);
