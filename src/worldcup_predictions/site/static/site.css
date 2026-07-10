@@ -583,6 +583,14 @@ h2 {
   fill: var(--hover-row);
 }
 
+/* The tooltip floats as a dialog over same-colored surfaces, so its outline
+   needs more contrast than ordinary card borders - most visibly in dark mode,
+   where the standard 70% line blend reads as near-invisible on the arrow. */
+html[data-theme="dark"] .summary-tooltip {
+  --tooltip-border-color: color-mix(in srgb, var(--muted) 42%, transparent);
+  --tooltip-arrow-border-color: color-mix(in srgb, var(--muted) 42%, var(--paper));
+}
+
 .summary-tooltip {
   --tooltip-arrow-offset: 19.12%;
   --tooltip-trigger-center: calc(var(--space-8) + 16px);
