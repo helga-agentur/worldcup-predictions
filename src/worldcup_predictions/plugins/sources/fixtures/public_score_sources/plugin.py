@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime as dt
 import html
-import json
 import re
 import urllib.error
 import urllib.parse
@@ -38,7 +37,7 @@ from worldcup_predictions.plugins.article_sources import (
 )
 from worldcup_predictions.plugins.source_runtime import SourceRuntime
 from worldcup_predictions.storage.ledger import SourceRequest, normalize_datetime, stable_hash, utc_now
-from worldcup_predictions.tournament import ResultRecord, TeamRef, TeamResolver, TournamentState
+from worldcup_predictions.tournament import ResultRecord, TournamentState
 from worldcup_predictions.tournament.repository import load_tournament_state, write_derived_state, write_results
 
 
