@@ -684,6 +684,23 @@ class StorageTest(unittest.TestCase):
             storage2.record_fetch(
                 SourceLedgerRecord(request=request(1), status="success", run_id="run-a", fetched_at_utc=stale_at, quota_remaining=2)
             )
+            # Live regression 2026-07-10: every half-hourly run records its own
+            # floor-skip rows, which echo the stale quota_remaining under a
+            # fresh timestamp. Those decisions must not count as observations,
+            # or the daily probe horizon is never reached.
+            for hours_ago in (2, 1):
+                skip_at = (now - dt.timedelta(hours=hours_ago)).isoformat().replace("+00:00", "Z")
+                for day in (1, 2):
+                    storage2.record_fetch(
+                        SourceLedgerRecord(
+                            request=request(day),
+                            status="skipped",
+                            run_id="run-b",
+                            fetched_at_utc=skip_at,
+                            quota_remaining=2,
+                            message="quota_scope_quota_floor_reached",
+                        )
+                    )
             self.assertTrue(storage2.should_fetch(request(1)).should_fetch, "stale quota floor must allow a daily probe")
             self.assertTrue(storage2.should_fetch(request(2)).should_fetch, "stale scope floor must allow a daily probe")
 
