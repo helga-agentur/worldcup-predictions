@@ -543,7 +543,11 @@ def resolve_football_data_team(raw_team: dict[str, Any], resolver: TeamResolver)
 
 
 def quota_remaining(headers: dict[str, str]) -> int | None:
-    for key in ("X-Requests-Available-Minute", "X-RequestsAvailable", "X-RateLimit-Remaining"):
+    # X-Requests-Available-Minute is deliberately NOT read here: it is a
+    # per-minute throttle counter that resets within 60 seconds, and treating
+    # it as a persistent quota once parked this source behind the quota floor
+    # for days. Minute-level throttling is handled by the 429 failure ladder.
+    for key in ("X-RequestsAvailable", "X-RateLimit-Remaining"):
         value = headers.get(key) or headers.get(key.lower())
         if value is not None:
             try:

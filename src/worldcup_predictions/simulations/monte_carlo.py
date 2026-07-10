@@ -36,6 +36,12 @@ STAGE_CHAMPION = "Champion"
 PENALTY_ELO_SCALE = 500.0
 
 
+# 20,000 iterations keep sampling noise on a 30% champion share near
+# +/-0.3 percentage points; measured cost on the production host is only
+# ~2 minutes inside a scheduled run, so precision wins over the saving.
+DEFAULT_SIMULATION_ITERATIONS = 20_000
+
+
 def pair_key(home_team: str, away_team: str) -> str:
     return f"{home_team}|{away_team}"
 
@@ -71,7 +77,7 @@ class TournamentSimulator:
         self,
         inputs: SimulationInputs,
         *,
-        iterations: int = 20_000,
+        iterations: int = DEFAULT_SIMULATION_ITERATIONS,
         seed: int = 20260611,
     ) -> None:
         if iterations < 1:

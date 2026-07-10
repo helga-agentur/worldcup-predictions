@@ -124,3 +124,9 @@ Model/default promotion:
 - only after enough confirmed-match evidence
 - avoid overreacting to red cards, weather interruptions, or one-off blowouts
 - prefer small bounded changes
+
+## Runtime Observability
+
+Long commands log timestamped phase lines to stdout (captured in the cron log), e.g. `phase=site_build duration=42.1s rss=1250MB (+180MB)`. The same entries are stored per run in `prediction_run_summaries` under `maintenance.phase_timings`, together with `maintenance.peak_rss_mb` and the number of Parquet datasets flushed at the end of the run.
+
+Per-plugin rows in `plugin_run_diagnostics` carry `duration_ms`, `rss_mb_after`, and `rss_mb_delta`, so a plugin that starts leaking memory or slowing down is visible per event without host-level tooling. When investigating a slow or killed run, start with the phase lines in `logs/scheduled-update.log`, then drill into `plugin_run_diagnostics` for the workflow portion.

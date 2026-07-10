@@ -39,7 +39,7 @@ from worldcup_predictions.plugins.providers.ch_srf import (
     best_srf_bonus_answers,
     evaluate_srf_bonus_questions,
 )
-from worldcup_predictions.simulations import SimulationInputs, TournamentSimulator, pair_key
+from worldcup_predictions.simulations import DEFAULT_SIMULATION_ITERATIONS, SimulationInputs, TournamentSimulator, pair_key
 from worldcup_predictions.simulations.worldcup_2026 import NEXT_ROUNDS, ROUND_OF_32
 from worldcup_predictions.storage import DuckDBStorage
 
@@ -830,3 +830,12 @@ class FakeDatasetStorage:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SimulationIterationDefaultTest(unittest.TestCase):
+    def test_default_iterations_balance_precision_and_host_budget(self) -> None:
+        self.assertEqual(DEFAULT_SIMULATION_ITERATIONS, 20_000)
+        self.assertEqual(
+            TournamentSimulator(SimulationInputs(fixtures=[])).iterations,
+            DEFAULT_SIMULATION_ITERATIONS,
+        )

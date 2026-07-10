@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import datetime as dt
 import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -32,6 +34,13 @@ def _safe_dataset_name(value: str) -> str:
     return safe.strip("._-") or "records"
 
 
+# A quota observation can only justify skipping for so long: providers reset
+# monthly (Odds API) or per minute (football-data.org), and an unbounded block
+# once parked football-data for days on a per-minute counter. After this
+# horizon the floor is ignored and one probe request re-measures the quota.
+QUOTA_FLOOR_MAX_AGE = dt.timedelta(hours=24)
+
+
 def _sql_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
@@ -48,11 +57,54 @@ class DuckDBStorage:
         self.structured_root = Path(structured_root)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.structured_root.mkdir(parents=True, exist_ok=True)
+        self._deferred_export_datasets: set[str] | None = None
         self._ensure_schema()
 
     @classmethod
     def at_data_root(cls, data_root: Path) -> "DuckDBStorage":
         return cls(db_path=Path(data_root) / "worldcup_predictions.duckdb", structured_root=Path(data_root) / "structured")
+
+    @contextlib.contextmanager
+    def deferred_dataset_exports(self):
+        """Batch per-write Parquet exports and flush them once on exit.
+
+        Long commands write the same large datasets dozens of times per run;
+        exporting the full history on every write dominated scheduled-update
+        wall time. While deferred, the Parquet files lag the database exactly
+        as they already did between consecutive writes.
+        """
+
+        already_deferred = self._deferred_export_datasets is not None
+        if not already_deferred:
+            self._deferred_export_datasets = set()
+        try:
+            yield self
+        finally:
+            if not already_deferred:
+                self.flush_dataset_exports()
+                self._deferred_export_datasets = None
+
+    def flush_dataset_exports(self) -> list[str]:
+        """Export every dataset written while exports were deferred."""
+
+        datasets = sorted(self._deferred_export_datasets or ())
+        if not datasets:
+            return []
+        con = self._connect()
+        try:
+            for dataset in datasets:
+                self._export_dataset(con, dataset)
+        finally:
+            con.close()
+        if self._deferred_export_datasets is not None:
+            self._deferred_export_datasets.clear()
+        return datasets
+
+    def _export_or_defer(self, con, dataset: str) -> None:
+        if self._deferred_export_datasets is not None:
+            self._deferred_export_datasets.add(dataset)
+            return
+        self._export_dataset(con, dataset)
 
     def _connect(self):
         duckdb = _load_duckdb()
@@ -141,12 +193,14 @@ class DuckDBStorage:
             )
 
         if quota_remaining is not None and quota_remaining <= request.quota_remaining_floor:
-            return FetchDecision(
-                False,
-                "quota_floor_reached",
-                request.request_key,
-                metadata={"quota_remaining": quota_remaining, "quota_remaining_floor": request.quota_remaining_floor},
-            )
+            observed_at = parse_datetime(fetched_at_utc)
+            if observed_at and now - observed_at < QUOTA_FLOOR_MAX_AGE:
+                return FetchDecision(
+                    False,
+                    "quota_floor_reached",
+                    request.request_key,
+                    metadata={"quota_remaining": quota_remaining, "quota_remaining_floor": request.quota_remaining_floor},
+                )
 
         if status == "success" and request.min_refresh_interval:
             fetched_at = parse_datetime(fetched_at_utc)
@@ -222,7 +276,9 @@ class DuckDBStorage:
 
         if quota_row:
             quota_key, quota_status, quota_at, quota_remaining = quota_row
-            if quota_remaining is not None and quota_remaining <= request.quota_remaining_floor:
+            observed_at = parse_datetime(quota_at)
+            quota_is_fresh = observed_at is not None and now - observed_at < QUOTA_FLOOR_MAX_AGE
+            if quota_is_fresh and quota_remaining is not None and quota_remaining <= request.quota_remaining_floor:
                 return FetchDecision(
                     False,
                     "quota_scope_quota_floor_reached",
@@ -237,6 +293,34 @@ class DuckDBStorage:
                     },
                 )
         return None
+
+    def consecutive_request_failures(self, request_key: str) -> int:
+        """Consecutive failed attempts for this request key since its last success.
+
+        Skipped rows are decisions, not attempts, so they do not interrupt or
+        extend a failure streak.
+        """
+
+        con = self._connect()
+        try:
+            rows = con.execute(
+                """
+                SELECT status FROM source_ledger
+                WHERE request_key = ? AND status != 'skipped'
+                ORDER BY fetched_at_utc DESC, rowid DESC
+                LIMIT 16
+                """,
+                [request_key],
+            ).fetchall()
+        finally:
+            con.close()
+        failures = 0
+        for (status,) in rows:
+            if status in ("error", "rate_limited"):
+                failures += 1
+            else:
+                break
+        return failures
 
     def cache_validators(self, request: SourceRequest) -> dict[str, str]:
         """Return the latest HTTP cache validators stored for this request."""
@@ -454,7 +538,7 @@ class DuckDBStorage:
                 """,
                 prepared,
             )
-            self._export_dataset(con, dataset)
+            self._export_or_defer(con, dataset)
         finally:
             con.close()
         return len(prepared)
@@ -474,7 +558,7 @@ class DuckDBStorage:
         con = self._connect()
         try:
             con.execute("DELETE FROM structured_records WHERE dataset = ?", [dataset])
-            self._export_dataset(con, dataset)
+            self._export_or_defer(con, dataset)
         finally:
             con.close()
         return self.write_records(
@@ -505,6 +589,20 @@ class DuckDBStorage:
             where.append("fixture_key = ?")
             params.append(fixture_key)
 
+        # latest_only collapses to the newest row per record key inside DuckDB
+        # so full dataset histories are not parsed from JSON on every read.
+        # The rowid tie-breaker preserves the previous Python collapse's
+        # last-inserted-wins behavior for writes within the same second.
+        latest_filter = (
+            """
+                QUALIFY ROW_NUMBER() OVER (
+                    PARTITION BY record_key
+                    ORDER BY observed_at_utc DESC, source DESC, rowid DESC
+                ) = 1
+            """
+            if latest_only
+            else ""
+        )
         con = self._connect()
         try:
             rows = con.execute(
@@ -512,6 +610,7 @@ class DuckDBStorage:
                 SELECT record_key, source, fixture_key, run_id, observed_at_utc, payload_json, metadata_json
                 FROM structured_records
                 WHERE {" AND ".join(where)}
+                {latest_filter}
                 ORDER BY observed_at_utc, source, record_key
                 """,
                 params,
@@ -532,13 +631,6 @@ class DuckDBStorage:
                 "metadata": metadata,
             }
             records.append(payload)
-
-        if latest_only:
-            latest_by_key: dict[str, dict[str, Any]] = {}
-            for row in records:
-                key = str(row.get("record_key") or row["_record"]["record_key"])
-                latest_by_key[key] = row
-            return list(latest_by_key.values())
         return records
 
     @staticmethod

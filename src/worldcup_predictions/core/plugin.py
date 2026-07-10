@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Protocol
 
+from worldcup_predictions.core.runtime_metrics import current_rss_mb
 from worldcup_predictions.core.contracts import Artifact, Diagnostic, OptimizedTip, Prediction, Signal
 from worldcup_predictions.core.datasets import DATASET_CONTRACTS, PLUGIN_EVENT_OUTPUTS, PLUGIN_RUN_DIAGNOSTICS
 from worldcup_predictions.core.events import EventName, event_value
@@ -97,6 +98,7 @@ class PluginManager:
             if not plugin.supports(event):
                 continue
             started = time.perf_counter()
+            rss_before_mb = current_rss_mb()
             try:
                 result = plugin.handle(event, context, payload)
             except Exception as exc:  # noqa: BLE001 - plugins should not block unrelated sources.
@@ -114,10 +116,16 @@ class PluginManager:
                     ],
                 )
             duration_ms = round((time.perf_counter() - started) * 1000, 3)
-            result = _with_metadata(result, {"duration_ms": duration_ms})
+            rss_after_mb = current_rss_mb()
+            rss_delta_mb = (
+                round(rss_after_mb - rss_before_mb, 1)
+                if rss_before_mb is not None and rss_after_mb is not None
+                else None
+            )
+            result = _with_metadata(result, {"duration_ms": duration_ms, "rss_mb_delta": rss_delta_mb})
             result = self._validate_result(plugin, result)
             result = self._record_core_event_outputs(plugin, result, context)
-            result = self._record_core_diagnostics(plugin, result, context, payload, duration_ms)
+            result = self._record_core_diagnostics(plugin, result, context, payload, duration_ms, rss_after_mb=rss_after_mb, rss_delta_mb=rss_delta_mb)
             results.append(result)
             if hasattr(context, "record_result"):
                 context.record_result(result)
@@ -231,6 +239,9 @@ class PluginManager:
         context: Any,
         payload: dict[str, Any] | PayloadMixin,
         duration_ms: float,
+        *,
+        rss_after_mb: float | None = None,
+        rss_delta_mb: float | None = None,
     ) -> PluginResult:
         storage = getattr(context, "storage", None)
         run_id = str(getattr(context, "run_id", "") or "")
@@ -252,6 +263,8 @@ class PluginManager:
             "plugin_kind": metadata.kind.value,
             "priority": getattr(plugin, "priority", None),
             "duration_ms": duration_ms,
+            "rss_mb_after": rss_after_mb,
+            "rss_mb_delta": rss_delta_mb,
             "payload": _payload_summary(payload),
             "output_counts": {
                 "signals": len(result.signals),
