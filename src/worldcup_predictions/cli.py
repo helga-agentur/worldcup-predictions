@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import gc
 import datetime as dt
 from pathlib import Path
@@ -83,6 +84,18 @@ ENTITY_MAINTENANCE_INTERVAL = dt.timedelta(hours=24)
 
 def build_manager(project_root: Path | None = None) -> PluginManager:
     return PluginManager(list(builtin_plugins()))
+
+
+@contextlib.contextmanager
+def _deferred_dataset_exports(storage):
+    """Batch per-write Parquet exports for the duration of a long command."""
+
+    deferred = getattr(storage, "deferred_dataset_exports", None)
+    if callable(deferred):
+        with deferred():
+            yield
+    else:
+        yield
 
 
 def build_workflow(project_root: Path) -> PredictionWorkflow:
@@ -196,6 +209,11 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
         print("Structured storage is unavailable; cannot run scheduled update.")
         return 1
 
+    with _deferred_dataset_exports(workflow.context.storage):
+        return _run_scheduled_update(args, project_root, workflow)
+
+
+def _run_scheduled_update(args: argparse.Namespace, project_root: Path, workflow: PredictionWorkflow) -> int:
     hook_results = run_data_update_hooks(workflow.context.storage, run_id=workflow.context.run_id)
     applied_hooks = [row for row in hook_results if row.get("status") == "success" and int(row.get("rows_changed") or 0) > 0]
     for row in applied_hooks:
@@ -988,6 +1006,11 @@ def command_simulate_tournament(args: argparse.Namespace) -> int:
     if workflow.context.storage is None:
         print("Structured storage is unavailable; cannot run simulation.")
         return 1
+    with _deferred_dataset_exports(workflow.context.storage):
+        return _run_simulate_tournament(args, workflow)
+
+
+def _run_simulate_tournament(args: argparse.Namespace, workflow: PredictionWorkflow) -> int:
     if args.from_day_one:
         simulation_inputs = _simulation_inputs_from_day_one(workflow)
         mode = "from_day_one"

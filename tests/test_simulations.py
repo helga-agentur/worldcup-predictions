@@ -834,7 +834,7 @@ if __name__ == "__main__":
 
 class SimulationIterationDefaultTest(unittest.TestCase):
     def test_default_iterations_balance_precision_and_host_budget(self) -> None:
-        self.assertEqual(DEFAULT_SIMULATION_ITERATIONS, 10_000)
+        self.assertEqual(DEFAULT_SIMULATION_ITERATIONS, 20_000)
         self.assertEqual(
             TournamentSimulator(SimulationInputs(fixtures=[])).iterations,
             DEFAULT_SIMULATION_ITERATIONS,

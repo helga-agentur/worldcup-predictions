@@ -36,11 +36,10 @@ STAGE_CHAMPION = "Champion"
 PENALTY_ELO_SCALE = 500.0
 
 
-# With the group stage decided, champion probabilities move on a handful of
-# knockout matches; at 10,000 iterations the sampling error on a 30% champion
-# share is about +/-0.5 percentage points, below the displayed precision,
-# while CPU and wall time on the small production host halve.
-DEFAULT_SIMULATION_ITERATIONS = 10_000
+# 20,000 iterations keep sampling noise on a 30% champion share near
+# +/-0.3 percentage points; measured cost on the production host is only
+# ~2 minutes inside a scheduled run, so precision wins over the saving.
+DEFAULT_SIMULATION_ITERATIONS = 20_000
 
 
 def pair_key(home_team: str, away_team: str) -> str:

@@ -168,7 +168,7 @@ Scheduled updates keep current-state simulations fresh during normal server oper
 
 ## Tournament Simulation
 
-Run the standard 10,000-iteration tournament simulation:
+Run the standard 20,000-iteration tournament simulation:
 
 ```bash
 worldcup-predictions simulate-tournament

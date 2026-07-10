@@ -673,6 +673,40 @@ class StorageTest(unittest.TestCase):
             self.assertEqual(latest_rows[0]["value"], 0.84)
             self.assertEqual(latest_rows[0]["_record"]["run_id"], "run-c")
 
+    def test_deferred_dataset_exports_batch_parquet_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            dataset = "test_hourly_source"
+            parquet_path = Path(tmp) / "data" / "structured" / f"{dataset}.parquet"
+
+            with storage.deferred_dataset_exports():
+                storage.write_records(
+                    dataset,
+                    [{"record_key": "fixture-a:weather", "fixture_key": "fixture-a", "value": 0.91}],
+                    source="weather",
+                    run_id="run-a",
+                )
+                self.assertFalse(parquet_path.exists())
+                storage.write_records(
+                    dataset,
+                    [{"record_key": "fixture-a:weather", "fixture_key": "fixture-a", "value": 0.84}],
+                    source="weather",
+                    run_id="run-b",
+                )
+                self.assertFalse(parquet_path.exists())
+
+            self.assertTrue(parquet_path.exists())
+            self.assertEqual(len(storage.read_records(dataset)), 2)
+            # Writes after the deferred block export immediately again.
+            parquet_path.unlink()
+            storage.write_records(
+                dataset,
+                [{"record_key": "fixture-a:weather", "fixture_key": "fixture-a", "value": 0.7}],
+                source="weather",
+                run_id="run-c",
+            )
+            self.assertTrue(parquet_path.exists())
+
     def test_structured_output_plugin_persists_predictions(self) -> None:
         now = dt.datetime.now(dt.timezone.utc)
         with tempfile.TemporaryDirectory() as tmp:

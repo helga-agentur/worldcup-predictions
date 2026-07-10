@@ -178,7 +178,7 @@ Applied automation hooks are recorded in the `automation_hooks` structured datas
 /opt/worldcup-predictions/data/structured/automation_hooks.parquet
 ```
 
-The scheduled `scheduled-update` command checks committed automation hooks after the normal prediction/export work and before the static site build. A pending `trigger_current_state_simulation_*` hook forces the same current-state 10,000-iteration simulation used for fixture-state changes, records the hook as successful, and lets the same cron run publish a site built from the refreshed simulation. Later cron runs skip successful hook ids.
+The scheduled `scheduled-update` command checks committed automation hooks after the normal prediction/export work and before the static site build. A pending `trigger_current_state_simulation_*` hook forces the same current-state 20,000-iteration simulation used for fixture-state changes, records the hook as successful, and lets the same cron run publish a site built from the refreshed simulation. Later cron runs skip successful hook ids.
 
 Use automation hooks for explicit one-time operational triggers that should be picked up by live cron after deployment. Use runtime data update hooks only for cleanup or migration of persisted runtime data.
 

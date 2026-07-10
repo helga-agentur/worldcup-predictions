@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -48,11 +49,54 @@ class DuckDBStorage:
         self.structured_root = Path(structured_root)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.structured_root.mkdir(parents=True, exist_ok=True)
+        self._deferred_export_datasets: set[str] | None = None
         self._ensure_schema()
 
     @classmethod
     def at_data_root(cls, data_root: Path) -> "DuckDBStorage":
         return cls(db_path=Path(data_root) / "worldcup_predictions.duckdb", structured_root=Path(data_root) / "structured")
+
+    @contextlib.contextmanager
+    def deferred_dataset_exports(self):
+        """Batch per-write Parquet exports and flush them once on exit.
+
+        Long commands write the same large datasets dozens of times per run;
+        exporting the full history on every write dominated scheduled-update
+        wall time. While deferred, the Parquet files lag the database exactly
+        as they already did between consecutive writes.
+        """
+
+        already_deferred = self._deferred_export_datasets is not None
+        if not already_deferred:
+            self._deferred_export_datasets = set()
+        try:
+            yield self
+        finally:
+            if not already_deferred:
+                self.flush_dataset_exports()
+                self._deferred_export_datasets = None
+
+    def flush_dataset_exports(self) -> list[str]:
+        """Export every dataset written while exports were deferred."""
+
+        datasets = sorted(self._deferred_export_datasets or ())
+        if not datasets:
+            return []
+        con = self._connect()
+        try:
+            for dataset in datasets:
+                self._export_dataset(con, dataset)
+        finally:
+            con.close()
+        if self._deferred_export_datasets is not None:
+            self._deferred_export_datasets.clear()
+        return datasets
+
+    def _export_or_defer(self, con, dataset: str) -> None:
+        if self._deferred_export_datasets is not None:
+            self._deferred_export_datasets.add(dataset)
+            return
+        self._export_dataset(con, dataset)
 
     def _connect(self):
         duckdb = _load_duckdb()
@@ -454,7 +498,7 @@ class DuckDBStorage:
                 """,
                 prepared,
             )
-            self._export_dataset(con, dataset)
+            self._export_or_defer(con, dataset)
         finally:
             con.close()
         return len(prepared)
@@ -474,7 +518,7 @@ class DuckDBStorage:
         con = self._connect()
         try:
             con.execute("DELETE FROM structured_records WHERE dataset = ?", [dataset])
-            self._export_dataset(con, dataset)
+            self._export_or_defer(con, dataset)
         finally:
             con.close()
         return self.write_records(
@@ -505,6 +549,20 @@ class DuckDBStorage:
             where.append("fixture_key = ?")
             params.append(fixture_key)
 
+        # latest_only collapses to the newest row per record key inside DuckDB
+        # so full dataset histories are not parsed from JSON on every read.
+        # The rowid tie-breaker preserves the previous Python collapse's
+        # last-inserted-wins behavior for writes within the same second.
+        latest_filter = (
+            """
+                QUALIFY ROW_NUMBER() OVER (
+                    PARTITION BY record_key
+                    ORDER BY observed_at_utc DESC, source DESC, rowid DESC
+                ) = 1
+            """
+            if latest_only
+            else ""
+        )
         con = self._connect()
         try:
             rows = con.execute(
@@ -512,6 +570,7 @@ class DuckDBStorage:
                 SELECT record_key, source, fixture_key, run_id, observed_at_utc, payload_json, metadata_json
                 FROM structured_records
                 WHERE {" AND ".join(where)}
+                {latest_filter}
                 ORDER BY observed_at_utc, source, record_key
                 """,
                 params,
@@ -532,13 +591,6 @@ class DuckDBStorage:
                 "metadata": metadata,
             }
             records.append(payload)
-
-        if latest_only:
-            latest_by_key: dict[str, dict[str, Any]] = {}
-            for row in records:
-                key = str(row.get("record_key") or row["_record"]["record_key"])
-                latest_by_key[key] = row
-            return list(latest_by_key.values())
         return records
 
     @staticmethod
