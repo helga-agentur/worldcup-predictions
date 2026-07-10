@@ -5,8 +5,12 @@ Generated from plugin metadata declared in the codebase.
 | Plugin | Kind | Priority | Events | Writes | Emits | Quota-limited |
 | --- | --- | ---: | --- | --- | --- | --- |
 | `tournament_state` | workflow | 100 | `workflow_started`, `fixtures_requested`, `feature_signals_requested` | `tournament_standings`, `tournament_result_checks`, `group_state_signals` | `group_motivation`, `group_draw_pressure`, `group_rotation_risk`, `group_elimination_risk` | no |
+| `fixturedownload_source` | source | 115 | `fixtures_requested` | `tournament_results`, `extraction_diagnostics` | - | no |
 | `openfootball_source` | source | 115 | `fixtures_requested` | `tournament_fixtures`, `tournament_results` | - | no |
+| `openligadb_source` | source | 115 | `fixtures_requested` | `tournament_results`, `extraction_diagnostics` | - | no |
 | `srf_public` | source | 115 | `fixtures_requested` | `srf_fixtures`, `srf_bonus_questions`, `tournament_fixtures`, `tournament_results` | - | no |
+| `thesportsdb_source` | source | 115 | `fixtures_requested` | `tournament_results`, `extraction_diagnostics` | - | no |
+| `wikipedia_results` | source | 115 | `fixtures_requested` | `tournament_results`, `extraction_diagnostics` | - | no |
 | `fifa_match_centre` | source | 118 | `fixtures_requested` | `tournament_fixtures`, `tournament_results`, `fifa_match_details` | - | no |
 | `football_data` | source | 120 | `fixtures_requested`, `feature_signals_requested` | `tournament_fixtures`, `tournament_results`, `football_data_competition`, `football_data_standings`, `football_data_teams`, `football_data_match_details`, `squad_players` | - | yes |
 | `kaggle_source` | source | 125 | `feature_signals_requested` | `kaggle_datasets`, `squad_players` | - | yes |
@@ -20,14 +24,15 @@ Generated from plugin metadata declared in the codebase.
 | `market_trend` | signal | 255 | `feature_signals_requested` | `market_trends` | `total_goals_factor` | no |
 | `phase_context` | signal | 258 | `feature_signals_requested` | `phase_context_signals` | `total_goals_factor`, `live_draw_adjustment`, `team_expected_goals_factor` | no |
 | `weather` | source | 260 | `feature_signals_requested` | `weather_observations` | `total_goals_factor` | no |
+| `elo_ratings` | source | 265 | `feature_signals_requested` | `elo_ratings`, `extraction_diagnostics` | `expert_hda_probabilities` | no |
 | `lineup_availability` | source | 265 | `feature_signals_requested` | `lineup_availability`, `lineup_consensus`, `extraction_diagnostics` | `team_expected_goals_factor` | yes |
+| `google_news_rss` | source | 269 | `feature_signals_requested` | `public_match_analysis`, `extraction_diagnostics` | - | no |
 | `public_analysis` | source | 270 | `feature_signals_requested` | `public_match_analysis`, `match_analysis_causes`, `match_analysis_team_adjustments`, `extraction_diagnostics` | `total_goals_factor` | yes |
 | `postmatch_stats` | signal | 300 | `feature_signals_requested` | `postmatch_stats`, `postmatch_team_performance`, `extraction_diagnostics` | - | no |
 | `automatic_match_notes` | signal | 310 | `feature_signals_requested` | `automatic_match_notes`, `extraction_diagnostics` | `total_goals_factor`, `team_expected_goals_factor` | no |
 | `player_impact` | signal | 310 | `feature_signals_requested` | `squad_values`, `player_impact` | `team_expected_goals_factor`, `total_goals_factor` | no |
 | `ml_outcome` | signal | 320 | `feature_signals_requested` | `ml_outcome_models` | `ml_hda_probabilities` | no |
 | `live_calibration` | signal | 330 | `results_updated`, `feature_signals_requested` | `team_calibration`, `live_global_calibration`, `calibration_decisions` | `team_expected_goals_factor`, `total_goals_factor`, `live_draw_adjustment`, `live_score_tail_factor`, `live_favorite_outcome_factor` | no |
-| `srf_experts` | source | 340 | `feature_signals_requested` | `srf_expert_predictions`, `srf_expert_performance`, `extraction_diagnostics` | `expert_hda_probabilities` | no |
 | `baseline_model` | model | 400 | `predictions_requested` | - | - | no |
 | `provider_optimizer_srf_ch` | provider_optimizer | 700 | `provider_optimization_requested` | - | - | no |
 | `provider_optimizer_20min_ch` | provider_optimizer | 710 | `provider_optimization_requested` | - | - | no |
@@ -52,6 +57,21 @@ Load tournament state, apply result consensus, derive standings, and emit group-
 - Locales: `en`, `de`
 - Confidence policy: Group-state signals are deterministic from fixtures and consensus-confirmed results.
 
+### `fixturedownload_source`
+
+Fetch the public fixturedownload.com World Cup 2026 JSON feed as an additional result-confirmation witness.
+
+- Version: `0.1.0`
+- Kind: `source`
+- Priority: `115`
+- Events: `fixtures_requested`
+- Reads: -
+- Writes: `tournament_results`, `extraction_diagnostics`
+- Signals: -
+- Locales: `en`, `de`
+- Quota: not limited and ledger-required - One public JSON feed request per run, refreshed through the source ledger at most every 30 minutes.
+- Confidence policy: fixturedownload result rows are consensus witness observations only; they enter tournament state solely through the central source-consensus policy.
+
 ### `openfootball_source`
 
 Fetch openfootball/worldcup fixture and result data into tournament state.
@@ -67,6 +87,21 @@ Fetch openfootball/worldcup fixture and result data into tournament state.
 - Quota: not limited and ledger-required - Public GitHub raw files are refreshed through the source ledger so scheduled cron runs do not refetch unchanged inputs.
 - Confidence policy: openfootball fixtures/results are useful public fallbacks; result rows enter tournament state only after the central source-consensus policy confirms them.
 
+### `openligadb_source`
+
+Fetch OpenLigaDB World Cup 2026 match data and store finished scores as result observations.
+
+- Version: `0.1.0`
+- Kind: `source`
+- Priority: `115`
+- Events: `fixtures_requested`
+- Reads: -
+- Writes: `tournament_results`, `extraction_diagnostics`
+- Signals: -
+- Locales: `en`, `de`
+- Quota: not limited and ledger-required - One public getmatchdata call per run, refreshed through the source ledger every 30 minutes.
+- Confidence policy: OpenLigaDB rows are independent result witnesses; scores enter tournament state only after the central source-consensus policy confirms them.
+
 ### `srf_public`
 
 Fetch SRF public round pages and extract fixtures, final results, and bonus-question metadata.
@@ -81,6 +116,38 @@ Fetch SRF public round pages and extract fixtures, final results, and bonus-ques
 - Locales: `en`, `de`
 - Quota: not limited and ledger-required - Public SRF round pages refresh with a short ledger interval during the tournament.
 - Confidence policy: SRF fixture rows are canonicalized through the country registry before entering tournament state.
+
+### `thesportsdb_source`
+
+Fetch TheSportsDB World Cup 2026 knockout-round and recent events and store finished scores as result observations.
+
+- Version: `0.1.0`
+- Kind: `source`
+- Priority: `115`
+- Events: `fixtures_requested`
+- Reads: -
+- Writes: `tournament_results`, `extraction_diagnostics`
+- Signals: -
+- Locales: `en`, `de`
+- Environment:
+  - `THESPORTSDB_API_KEY` (optional): TheSportsDB API key; defaults to the free public key '3'.
+- Quota: not limited and ledger-required - A handful of public round/recent-event calls per run, each refreshed through the source ledger every 30 minutes.
+- Confidence policy: TheSportsDB rows are independent result witnesses; scores enter tournament state only after the central source-consensus policy confirms them.
+
+### `wikipedia_results`
+
+Extract finished-match scores from Wikipedia footballbox blocks as result-consensus witnesses.
+
+- Version: `0.1.0`
+- Kind: `source`
+- Priority: `115`
+- Events: `fixtures_requested`
+- Reads: -
+- Writes: `tournament_results`, `extraction_diagnostics`
+- Signals: -
+- Locales: `en`, `de`
+- Quota: not limited and ledger-required - Public Wikipedia tournament pages refresh through the source ledger on a short interval during the tournament.
+- Confidence policy: Wikipedia score rows are witness observations only; results enter tournament state solely through the central source-consensus policy.
 
 ### `fifa_match_centre`
 
@@ -163,7 +230,7 @@ Robots-aware Transfermarkt team search extraction for optional player/squad enri
 
 ### `public_score_sources`
 
-Fetch robots-aware FIFA, ESPN, FotMob, SofaScore, and 20min public pages for result verification and page-level analysis.
+Fetch robots-aware FIFA, FotMob, SofaScore, and 20min public pages for result verification and page-level analysis.
 
 - Version: `0.1.0`
 - Kind: `source`
@@ -279,6 +346,21 @@ Fetch Open-Meteo match-window weather and emit total-goal factors.
 - Quota: not limited and ledger-required - Ledger avoids unnecessary repeated weather requests even though Open-Meteo has no project API key.
 - Confidence policy: Weather signals are capped and require material heat, wind, rain, or storm risk.
 
+### `elo_ratings`
+
+Fetch eloratings.net national-team Elo ratings and emit neutral-venue H/D/A probability signals.
+
+- Version: `0.1.0`
+- Kind: `source`
+- Priority: `265`
+- Events: `feature_signals_requested`
+- Reads: `elo_ratings`
+- Writes: `elo_ratings`, `extraction_diagnostics`
+- Signals: `expert_hda_probabilities`
+- Locales: `en`, `de`
+- Quota: not limited and ledger-required - Ratings only change after matches, so the public TSV is refetched at most every 12 hours.
+- Confidence policy: Elo H/D/A signals use a fixed conservative confidence and share the capped expert weight.
+
 ### `lineup_availability`
 
 Fetch reliable public lineup/availability reports and emit side-specific xG factors.
@@ -295,6 +377,21 @@ Fetch reliable public lineup/availability reports and emit side-specific xG fact
   - `NEWS_API_KEY` (optional): NewsAPI key for bounded availability discovery.
 - Quota: limited and ledger-required - Fixture-specific NewsAPI calls are skipped while fresh or near the quota floor.
 - Confidence policy: Reliable articles are aggregated per fixture/side and capped before model use.
+
+### `google_news_rss`
+
+Fetch reliable public pre/postgame articles from quota-free Google News RSS.
+
+- Version: `0.1.0`
+- Kind: `source`
+- Priority: `269`
+- Events: `feature_signals_requested`
+- Reads: -
+- Writes: `public_match_analysis`, `extraction_diagnostics`
+- Signals: -
+- Locales: `en`, `de`
+- Quota: not limited and ledger-required - Quota-free RSS search; per-fixture requests are throttled by a 3-hour refresh interval.
+- Confidence policy: Only publishers on the shared reliable-domain allowlist are retained; scoring uses shared reliability profiles.
 
 ### `public_analysis`
 
@@ -382,21 +479,6 @@ Convert finished tournament results and chance-quality rows into team expected-g
 - Signals: `team_expected_goals_factor`, `total_goals_factor`, `live_draw_adjustment`, `live_score_tail_factor`, `live_favorite_outcome_factor`
 - Locales: `en`, `de`
 - Confidence policy: Recent tournament samples are conservative, sample-size weighted, and capped.
-
-### `srf_experts`
-
-Fetch SRF public expert pages and emit conservative expert consensus signals.
-
-- Version: `0.1.0`
-- Kind: `source`
-- Priority: `340`
-- Events: `feature_signals_requested`
-- Reads: `srf_expert_predictions`
-- Writes: `srf_expert_predictions`, `srf_expert_performance`, `extraction_diagnostics`
-- Signals: `expert_hda_probabilities`
-- Locales: `en`, `de`
-- Quota: not limited and ledger-required - Public expert pages are refetched at most every 15 minutes while fixtures are open; pages without extractable picks back off for six hours because SRF hides tips until kickoff.
-- Confidence policy: Expert consensus confidence rises with extracted expert count and is capped below market weight.
 
 ### `baseline_model`
 

@@ -176,10 +176,14 @@ class DynamicPublicSourcesTest(unittest.TestCase):
         self.assertEqual(len(links), 1)
         self.assertEqual(links[0].url, "https://www.example.com/football/world-cup/brazil-japan-preview")
 
-    def test_trusted_seed_registry_contains_at_least_100_unique_sources(self) -> None:
+    def test_trusted_seed_registry_contains_unique_audited_sources(self) -> None:
+        # The registry was trimmed 2026-07-10 to sources that actually yield
+        # extracted claims (a live-ledger audit removed 54 blocked or
+        # zero-yield domains), so the floor asserts against silent shrinkage,
+        # not the old 100+ breadth goal.
         seeds = trusted_public_source_seeds()
 
-        self.assertGreaterEqual(len(seeds), 100)
+        self.assertGreaterEqual(len(seeds), 50)
         self.assertEqual(len({seed.url for seed in seeds}), len(seeds))
         self.assertTrue(all(seed.category != "core" for seed in seeds))
 
@@ -193,7 +197,7 @@ class DynamicPublicSourcesTest(unittest.TestCase):
         )
         trusted_run_seeds = [seed for seed in run_seeds if seed.category not in {"core", "scoreboard"}]
 
-        self.assertGreaterEqual(len(all_seeds), 100)
+        self.assertGreaterEqual(len(all_seeds), 50)
         self.assertEqual(len(trusted_run_seeds), DYNAMIC_PUBLIC_TRUSTED_SOURCE_BATCH_SIZE)
 
 

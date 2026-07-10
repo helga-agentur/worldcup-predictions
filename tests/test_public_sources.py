@@ -34,7 +34,6 @@ from worldcup_predictions.core.events import EventName
 from worldcup_predictions.core.workflow import WorkflowContext
 from worldcup_predictions.plugins.sources.fixtures.football_data.plugin import FootballDataPlugin
 from worldcup_predictions.plugins.source_runtime import SourceRuntime
-from worldcup_predictions.plugins.sources.enrichment.srf_experts.plugin import SrfExpertsPlugin
 from worldcup_predictions.storage import DuckDBStorage
 from worldcup_predictions.tournament import build_tournament_state
 
@@ -348,34 +347,6 @@ class SourceRequestHygieneTest(unittest.TestCase):
             stage="Round of 32",
             source_id=source_id,
         )
-
-    def test_srf_experts_zero_pick_page_writes_diagnostic_and_backs_off(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
-            context = WorkflowContext(project_root=Path(tmp), data_root=Path(tmp) / "data", storage=storage, run_id="run-a")
-            plugin = SrfExpertsPlugin()
-            runtime = SourceRuntime(plugin, EventName.FEATURE_SIGNALS_REQUESTED, context)
-            page = "<html><body>Bruno Berner 498 Punkte. Keine Tipps sichtbar.</body></html>"
-
-            with unittest.mock.patch.object(SourceRuntime, "fetch_text", return_value=(page, {})):
-                result = plugin._fetch_expert(
-                    runtime,
-                    [self._future_fixture()],
-                    expert_id="bruno-berner",
-                    url="https://wmtippspiel.srf.ch/experts/bruno-berner",
-                )
-
-            self.assertEqual(result.metadata["written_rows"], 0)
-            diagnostics = storage.read_records(EXTRACTION_DIAGNOSTICS, latest_only=True)
-            self.assertEqual(len(diagnostics), 1)
-            self.assertEqual(diagnostics[0]["reason"], "no_expert_picks_on_page")
-            ledger = storage.read_source_ledger(run_id="run-a")
-            success_rows = [row for row in ledger if row["status"] == "success"]
-            self.assertEqual(len(success_rows), 1)
-            next_safe = dt.datetime.fromisoformat(str(success_rows[0]["next_safe_fetch_at"]).replace("Z", "+00:00"))
-            hours_out = (next_safe - dt.datetime.now(dt.timezone.utc)).total_seconds() / 3600
-            self.assertGreater(hours_out, 5.5)
-            self.assertLess(hours_out, 6.5)
 
     def test_football_data_match_details_use_only_own_match_ids(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -35,6 +35,20 @@ Quota-floor blocks expire too: a stored `quota_remaining` observation older than
 
 Within a single run, the first transport-level failure (rate limit, 403, 5xx, timeout, connection error) from a source opens a circuit: every remaining planned request to that source is skipped instead of attempted, recorded with status `skipped` and reason `rate_limited_this_run` or `source_failed_this_run`. 400/404 do not open the circuit — one bad match id must not veto the valid ones. Each error row records `consecutive_failures` and the chosen `backoff_reason` in its metadata, so the source-ledger report shows both what was skipped and why.
 
+## Result Witnesses Added 2026-07-10
+
+Four additional independent result witnesses feed `tournament_results` (all keyless, all through the source ledger; results still enter tournament state only via the central consensus policy):
+
+- `fixturedownload_source` fetches the public fixturedownload.com World Cup 2026 JSON feed (one call per run) — full schedule with scores and knockout winners, updated within hours of full time.
+- `wikipedia_results` parses footballbox blocks from the English Wikipedia knockout-stage page via the MediaWiki API — typically updated within minutes of full time.
+- `thesportsdb_source` queries TheSportsDB knockout rounds and recent events (free public key; the free tier truncates full-season queries, so the plugin asks per round).
+- `openligadb_source` fetches OpenLigaDB `wm2026` match data, resolving teams by FIFA code with German-name fallback.
+
+Two enrichment sources were added at the same time:
+
+- `elo_ratings` fetches eloratings.net national-team ratings (one TSV, twice a day) and emits capped `expert_hda_probabilities` signals for open fixtures — an independent rating-model consensus in the slot vacated by the removed SRF expert picks.
+- `google_news_rss` supplements the quota-limited NewsAPI with Google News RSS queries per open fixture, feeding the same reliability-filtered analysis pipeline.
+
 ## Core Sources
 
 ### Historical Results
@@ -68,7 +82,7 @@ These plugins write fixture and result observations. Raw result observations ent
 
 `fifa_match_centre` fetches FIFA's public calendar API for World Cup 2026 (`idCompetition=17`, `idSeason=285023`). It writes official fixture/result evidence plus `fifa_match_details` rows with match number, group/stage, venue, officials, attendance, possession when available, and formations/tactics. The API does not currently expose player-level starting XIs, so formations are used as neutral official lineup context rather than as player availability data.
 
-`dynamic_public_sources` extends the fixed public adapters with bounded public-page discovery. It starts from known public seed pages plus a curated registry of 100+ official, wire, major-media, specialist, and data-app sources. Core fixture/result pages are checked every run, while the broader trusted registry rotates in batches so half-hourly cron runs do not fetch every source at once. Each selected page is fetched only when the source ledger says it is stale, only after robots.txt allows the path, and with same-domain link discovery capped per seed.
+`dynamic_public_sources` extends the fixed public adapters with bounded public-page discovery. It works from a curated registry of wire, major-media, specialist, and data-app sources, trimmed after a 2026-07-10 live-ledger audit to domains that actually yield extracted claims (blocked domains and zero-yield federation pages were removed). The registry rotates in batches so half-hourly cron runs do not fetch every source at once; core fixture/result pages are no longer duplicated here because dedicated plugins fetch and parse them directly. Each selected page is fetched only when the source ledger says it is stale, only after robots.txt allows the path, and with same-domain link discovery capped per seed.
 
 The plugin stores page metadata and content fingerprints, then extracts atomic fixture/result/market claims. Result claims are promoted to `tournament_results` only after the dynamic layer has multi-domain weighted consensus; those promoted rows still pass through the central tournament-state result consensus before they can affect published results, calibration, or provider points.
 
