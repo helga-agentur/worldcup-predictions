@@ -186,14 +186,45 @@
     }
   }
 
+  // Keep in sync with --tooltip-arrow-anchor in site.css (65 / 340).
+  var SUMMARY_ARROW_ANCHOR_RATIO = 65 / 340;
+
+  function alignSummaryTooltip(trigger, tooltip) {
+    var parent = tooltip.offsetParent;
+    if (!parent) {
+      return;
+    }
+    var gutter = 16;
+    var arrowMinEdge = 18;
+    var parentRect = parent.getBoundingClientRect();
+    var triggerRect = trigger.getBoundingClientRect();
+    var width = tooltip.getBoundingClientRect().width;
+    if (!width) {
+      return;
+    }
+    var triggerCenter = triggerRect.left + triggerRect.width / 2 - parentRect.left;
+    var left = triggerCenter - width * SUMMARY_ARROW_ANCHOR_RATIO;
+    var minLeft = gutter - parentRect.left;
+    var maxLeft = window.innerWidth - gutter - width - parentRect.left;
+    left = Math.max(minLeft, Math.min(left, maxLeft));
+    var arrowCenter = triggerCenter - left;
+    arrowCenter = Math.max(arrowMinEdge, Math.min(arrowCenter, width - arrowMinEdge));
+    tooltip.style.setProperty("--tooltip-aligned-left", left.toFixed(2) + "px");
+    tooltip.style.setProperty("--tooltip-aligned-arrow-center", arrowCenter.toFixed(2) + "px");
+    tooltip.classList.add("summary-tooltip--aligned");
+  }
+
   function alignTooltip(trigger, tooltip) {
+    if (!trigger || !tooltip || !tooltip.classList) {
+      return;
+    }
     if (
-      !trigger ||
-      !tooltip ||
-      !tooltip.classList ||
-      (!tooltip.classList.contains("summary-tooltip--inline") &&
-        !tooltip.classList.contains("summary-tooltip--chip"))
+      !tooltip.classList.contains("summary-tooltip--inline") &&
+      !tooltip.classList.contains("summary-tooltip--chip")
     ) {
+      if (tooltip.classList.contains("summary-tooltip")) {
+        alignSummaryTooltip(trigger, tooltip);
+      }
       return;
     }
 

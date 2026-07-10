@@ -620,6 +620,23 @@ h2 {
   transform: translateX(-50%);
 }
 
+/* JS-aligned state for the stat-card tooltip: the ratio anchor stays the
+   standard, but when it cannot sit over the (?) trigger without pushing the
+   tooltip past the viewport, the trigger wins and the arrow snaps to it
+   (alignSummaryTooltip in theme.js sets these variables). Without JS the
+   ratio rules above keep applying. */
+.summary-tooltip--aligned {
+  left: var(--tooltip-aligned-left);
+  right: auto;
+  transform: none;
+}
+
+.summary-tooltip--aligned::before {
+  left: var(--tooltip-aligned-arrow-center);
+  right: auto;
+  transform: translateX(-50%);
+}
+
 .summary-tooltip__close {
   position: absolute;
   top: var(--space-sm);
