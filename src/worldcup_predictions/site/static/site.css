@@ -625,13 +625,15 @@ h2 {
    tooltip past the viewport, the trigger wins and the arrow snaps to it
    (alignSummaryTooltip in theme.js sets these variables). Without JS the
    ratio rules above keep applying. */
-.summary-tooltip--aligned {
+/* Doubled class keeps this above the narrow-layout media rules, which share
+   the single-class specificity and come later in the sheet. */
+.summary-tooltip.summary-tooltip--aligned {
   left: var(--tooltip-aligned-left);
   right: auto;
   transform: none;
 }
 
-.summary-tooltip--aligned::before {
+.summary-tooltip.summary-tooltip--aligned::before {
   left: var(--tooltip-aligned-arrow-center);
   right: auto;
   transform: translateX(-50%);

@@ -202,10 +202,20 @@
     if (!width) {
       return;
     }
+    // The tooltip may use the full content column, not just the card: any
+    // spare room up to the content edge goes to the short arrow segment while
+    // the arrow itself stays on the trigger.
+    var container = trigger.closest ? trigger.closest(".content-width") : null;
+    var containerRect = container ? container.getBoundingClientRect() : null;
+    var boundLeft = Math.max(containerRect ? containerRect.left : gutter, gutter);
+    var boundRight = Math.min(
+      containerRect ? containerRect.right : window.innerWidth - gutter,
+      window.innerWidth - gutter
+    );
     var triggerCenter = triggerRect.left + triggerRect.width / 2 - parentRect.left;
     var left = triggerCenter - width * SUMMARY_ARROW_ANCHOR_RATIO;
-    var minLeft = gutter - parentRect.left;
-    var maxLeft = window.innerWidth - gutter - width - parentRect.left;
+    var minLeft = boundLeft - parentRect.left;
+    var maxLeft = boundRight - width - parentRect.left;
     left = Math.max(minLeft, Math.min(left, maxLeft));
     var arrowCenter = triggerCenter - left;
     arrowCenter = Math.max(arrowMinEdge, Math.min(arrowCenter, width - arrowMinEdge));
