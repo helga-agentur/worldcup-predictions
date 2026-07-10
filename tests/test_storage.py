@@ -572,8 +572,8 @@ class StorageTest(unittest.TestCase):
             self.assertEqual(rows[0]["status"], "rate_limited")
             next_safe = dt.datetime.fromisoformat(str(rows[0]["next_safe_fetch_at"]).replace("Z", "+00:00"))
             hours_out = (next_safe - dt.datetime.now(dt.timezone.utc)).total_seconds() / 3600
-            self.assertGreater(hours_out, 5.5)
-            self.assertLess(hours_out, 6.5)
+            self.assertGreater(hours_out, 0.5)
+            self.assertLess(hours_out, 1.5)
             self.assertFalse(storage.should_fetch(request).should_fetch)
 
             other_key_same_source = SourceRequest(source="news_api", endpoint="/v2/everything", purpose="pregame", params={"q": "b"})
@@ -626,7 +626,7 @@ class StorageTest(unittest.TestCase):
     def test_client_error_codes_back_off_broken_request_keys(self) -> None:
         import urllib.error
 
-        expectations = {400: (20.0, 28.0), 403: (5.5, 6.5), 404: (20.0, 28.0)}
+        expectations = {400: (20.0, 28.0), 403: (0.5, 1.5), 404: (20.0, 28.0)}
         for code, (low, high) in expectations.items():
             with tempfile.TemporaryDirectory() as tmp:
                 storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
@@ -643,6 +643,67 @@ class StorageTest(unittest.TestCase):
                 self.assertGreater(hours_out, low, f"code {code}")
                 self.assertLess(hours_out, high, f"code {code}")
                 self.assertFalse(storage.should_fetch(request).should_fetch)
+
+                sibling = SourceRequest(
+                    source="espn_scoreboard", endpoint="/scoreboard", purpose="scores", params={"other": True}
+                )
+                decision = runtime.should_fetch(sibling)
+                if code in (400, 404):
+                    self.assertTrue(decision.should_fetch, f"code {code} must stay request-specific")
+                else:
+                    self.assertFalse(decision.should_fetch, f"code {code} must open the run circuit")
+                    self.assertEqual(decision.reason, "source_failed_this_run")
+
+    def test_repeated_failures_escalate_backoff_and_success_resets_the_ladder(self) -> None:
+        import urllib.error
+
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            context = WorkflowContext(project_root=Path(tmp), data_root=Path(tmp) / "data", storage=storage, run_id="run-a")
+            runtime = SourceRuntime(BasePlugin(), EventName.FIXTURES_REQUESTED, context)
+            request = SourceRequest(source="espn_scoreboard", endpoint="/scoreboard", purpose="scores", params={"day": 1})
+
+            expected_hours = [1, 4, 12, 24, 24]
+            for attempt, expected in enumerate(expected_hours, start=1):
+                runtime.record_error(request, urllib.error.HTTPError("/scoreboard", 503, "unavailable", None, None))
+                errors = [row for row in storage.read_source_ledger(run_id="run-a") if row["status"] == "error"]
+                row = next(r for r in errors if r["metadata"].get("consecutive_failures") == attempt)
+                next_safe = dt.datetime.fromisoformat(str(row["next_safe_fetch_at"]).replace("Z", "+00:00"))
+                hours_out = (next_safe - dt.datetime.now(dt.timezone.utc)).total_seconds() / 3600
+                self.assertGreater(hours_out, expected - 0.5, f"attempt {attempt}")
+                self.assertLess(hours_out, expected + 0.5, f"attempt {attempt}")
+                self.assertEqual(row["metadata"]["backoff_reason"], f"failure_ladder_step_{min(attempt, 4)}")
+
+            storage.record_fetch(SourceLedgerRecord(request=request, status="success", run_id="run-a"))
+            runtime.record_error(request, urllib.error.HTTPError("/scoreboard", 503, "unavailable", None, None))
+            errors = [row for row in storage.read_source_ledger(run_id="run-a") if row["status"] == "error"]
+            first_step_rows = [r for r in errors if r["metadata"].get("consecutive_failures") == 1]
+            self.assertEqual(len(first_step_rows), 2, "success must reset the ladder to step 1")
+
+    def test_transport_error_without_http_code_backs_off_and_skips_remaining_source_requests(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            context = WorkflowContext(project_root=Path(tmp), data_root=Path(tmp) / "data", storage=storage, run_id="run-a")
+            runtime = SourceRuntime(BasePlugin(), EventName.FIXTURES_REQUESTED, context)
+            request = SourceRequest(source="open_meteo", endpoint="/v1/forecast", purpose="weather", params={"city": "a"})
+
+            runtime.record_error(request, TimeoutError("timed out"))
+
+            rows = storage.read_source_ledger(run_id="run-a")
+            self.assertEqual(rows[0]["status"], "error")
+            self.assertIsNotNone(rows[0]["next_safe_fetch_at"], "timeouts must back off too")
+            self.assertEqual(rows[0]["metadata"]["backoff_reason"], "failure_ladder_step_1")
+
+            sibling = SourceRequest(source="open_meteo", endpoint="/v1/forecast", purpose="weather", params={"city": "b"})
+            decision = runtime.should_fetch(sibling)
+            self.assertFalse(decision.should_fetch)
+            self.assertEqual(decision.reason, "source_failed_this_run")
+            skipped = [row for row in storage.read_source_ledger(run_id="run-a") if row["status"] == "skipped"]
+            self.assertEqual(len(skipped), 1)
+            self.assertEqual(skipped[0]["message"], "source_failed_this_run")
+
+            other_source = SourceRequest(source="srf_public", endpoint="/results", purpose="scores")
+            self.assertTrue(runtime.should_fetch(other_source).should_fetch)
 
     def test_structured_records_are_append_only_and_latest_reads_reuse_last_available_row(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

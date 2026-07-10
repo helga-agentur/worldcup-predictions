@@ -22,17 +22,23 @@ from worldcup_predictions.tournament import TournamentState
 from worldcup_predictions.tournament.repository import load_tournament_state
 
 
-# Rate limits without a Retry-After header (NewsAPI's daily quota answers 429
-# with no header) previously retried on every half-hourly run; failed request
-# keys with client errors (invalid ids, blocked clients) retried forever.
-RATE_LIMIT_DEFAULT_BACKOFF = dt.timedelta(hours=6)
-CLIENT_ERROR_BACKOFFS = {
-    400: dt.timedelta(hours=24),
-    403: dt.timedelta(hours=6),
-    404: dt.timedelta(hours=24),
-}
+# Failed request keys back off on an escalating ladder: retry quickly once in
+# case the failure was transient, then progressively less often, but always
+# probe at least daily so a recovered source is picked up within 24 hours.
+# A Retry-After header always wins over the ladder, and 400/404 responses jump
+# straight to the daily probe because a malformed request or missing resource
+# cannot heal within an hour.
+FAILURE_BACKOFF_LADDER = (
+    dt.timedelta(hours=1),
+    dt.timedelta(hours=4),
+    dt.timedelta(hours=12),
+    dt.timedelta(hours=24),
+)
+DAILY_PROBE_BACKOFF = dt.timedelta(hours=24)
+PERMANENT_CLIENT_ERROR_CODES = frozenset({400, 404})
 _RATE_LIMITED_SOURCES_STATE_KEY = "_source_runtime_rate_limited_sources"
 _RATE_LIMITED_QUOTA_SCOPES_STATE_KEY = "_source_runtime_rate_limited_quota_scopes"
+_FAILED_SOURCES_STATE_KEY = "_source_runtime_failed_sources"
 
 
 @dataclass(frozen=True)
@@ -178,6 +184,8 @@ class SourceRuntime:
             decision = FetchDecision(False, "rate_limited_quota_scope_this_run", request.request_key)
         elif request.source in self._rate_limited_sources():
             decision = FetchDecision(False, "rate_limited_this_run", request.request_key)
+        elif request.source in self._failed_sources():
+            decision = FetchDecision(False, "source_failed_this_run", request.request_key)
         else:
             decision = self.storage.should_fetch(request)
         self.context.state["_source_runtime_last_request"] = request
@@ -242,11 +250,22 @@ class SourceRuntime:
         if response_body:
             metadata_dict.setdefault("response_body", response_body)
         status = _error_status(error, metadata_dict)
-        next_safe_fetch_at = _error_next_safe_fetch_at(error, status, request)
+        consecutive_failures = self._consecutive_failures(request) + 1
+        next_safe_fetch_at, backoff_reason = _error_next_safe_fetch_at(
+            error, status, consecutive_failures
+        )
+        code = _optional_int(getattr(error, "code", None))
         if status == "rate_limited":
             self._rate_limited_sources().add(request.source)
             if request.quota_scope:
                 self._rate_limited_quota_scopes().add(str(request.quota_scope))
+        elif code not in PERMANENT_CLIENT_ERROR_CODES:
+            # A blocked or unreachable source fails the same way for every
+            # remaining request this run, so skip them; 400/404 stay
+            # request-specific (one bad id must not veto the valid ones).
+            self._failed_sources().add(request.source)
+        metadata_dict["consecutive_failures"] = consecutive_failures
+        metadata_dict["backoff_reason"] = backoff_reason
         response_headers = _sanitize_response_headers(getattr(error, "headers", None))
         self.storage.record_fetch(
             SourceLedgerRecord(
@@ -273,6 +292,22 @@ class SourceRuntime:
             sources = set()
             self.context.state[_RATE_LIMITED_SOURCES_STATE_KEY] = sources
         return sources
+
+    def _failed_sources(self) -> set[str]:
+        sources = self.context.state.get(_FAILED_SOURCES_STATE_KEY)
+        if not isinstance(sources, set):
+            sources = set()
+            self.context.state[_FAILED_SOURCES_STATE_KEY] = sources
+        return sources
+
+    def _consecutive_failures(self, request: SourceRequest) -> int:
+        counter = getattr(self.storage, "consecutive_request_failures", None)
+        if not callable(counter):
+            return 0
+        try:
+            return int(counter(request.request_key))
+        except Exception:
+            return 0
 
     def _rate_limited_quota_scopes(self) -> set[str]:
         scopes = self.context.state.get(_RATE_LIMITED_QUOTA_SCOPES_STATE_KEY)
@@ -376,15 +411,26 @@ def _retry_after_next_safe_fetch_at(error: Exception | str) -> str | None:
     return normalize_datetime(utc_now() + dt.timedelta(seconds=max(0, retry_after)))
 
 
-def _error_next_safe_fetch_at(error: Exception | str, status: str, request: SourceRequest) -> str | None:
-    """Backoff for failed request keys so they are not retried every run."""
+def _error_next_safe_fetch_at(
+    error: Exception | str, status: str, consecutive_failures: int
+) -> tuple[str, str]:
+    """Escalating backoff for failed request keys, with a daily probe cap."""
 
     if status == "rate_limited":
-        return _retry_after_next_safe_fetch_at(error) or normalize_datetime(utc_now() + (request.rate_limit_backoff or RATE_LIMIT_DEFAULT_BACKOFF))
-    backoff = CLIENT_ERROR_BACKOFFS.get(_optional_int(getattr(error, "code", None)) or 0)
-    if backoff is None:
-        return None
-    return normalize_datetime(utc_now() + backoff)
+        header_based = _retry_after_next_safe_fetch_at(error)
+        if header_based:
+            return header_based, "retry_after_header"
+    code = _optional_int(getattr(error, "code", None))
+    if code in PERMANENT_CLIENT_ERROR_CODES:
+        return (
+            normalize_datetime(utc_now() + DAILY_PROBE_BACKOFF),
+            "permanent_client_error_daily_probe",
+        )
+    step = min(max(consecutive_failures, 1), len(FAILURE_BACKOFF_LADDER)) - 1
+    return (
+        normalize_datetime(utc_now() + FAILURE_BACKOFF_LADDER[step]),
+        f"failure_ladder_step_{step + 1}",
+    )
 
 
 def _params_match(request_params: Mapping[str, Any], fetch_params: Mapping[str, Any]) -> bool:

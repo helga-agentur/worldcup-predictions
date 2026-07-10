@@ -282,6 +282,34 @@ class DuckDBStorage:
                 )
         return None
 
+    def consecutive_request_failures(self, request_key: str) -> int:
+        """Consecutive failed attempts for this request key since its last success.
+
+        Skipped rows are decisions, not attempts, so they do not interrupt or
+        extend a failure streak.
+        """
+
+        con = self._connect()
+        try:
+            rows = con.execute(
+                """
+                SELECT status FROM source_ledger
+                WHERE request_key = ? AND status != 'skipped'
+                ORDER BY fetched_at_utc DESC, rowid DESC
+                LIMIT 16
+                """,
+                [request_key],
+            ).fetchall()
+        finally:
+            con.close()
+        failures = 0
+        for (status,) in rows:
+            if status in ("error", "rate_limited"):
+                failures += 1
+            else:
+                break
+        return failures
+
     def cache_validators(self, request: SourceRequest) -> dict[str, str]:
         """Return the latest HTTP cache validators stored for this request."""
 
