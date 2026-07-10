@@ -31,6 +31,8 @@ Failed requests back off on an escalating ladder of 1, 4, 12, and 24 hours, coun
 - 400 and 404 responses jump straight to the daily probe, because a malformed request or missing resource cannot heal within an hour.
 - Rate limits with a shared quota scope also block sibling requests in that scope, as described above.
 
+Quota-floor blocks expire too: a stored `quota_remaining` observation older than 24 hours no longer justifies skipping, so one probe request re-measures the provider quota daily. Without this, an exhausted monthly quota (Odds API) or a misread per-minute counter would park a source forever even after the provider reset.
+
 Within a single run, the first transport-level failure (rate limit, 403, 5xx, timeout, connection error) from a source opens a circuit: every remaining planned request to that source is skipped instead of attempted, recorded with status `skipped` and reason `rate_limited_this_run` or `source_failed_this_run`. 400/404 do not open the circuit — one bad match id must not veto the valid ones. Each error row records `consecutive_failures` and the chosen `backoff_reason` in its metadata, so the source-ledger report shows both what was skipped and why.
 
 ## Core Sources

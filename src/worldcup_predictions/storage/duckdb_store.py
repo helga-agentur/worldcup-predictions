@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import datetime as dt
 import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -31,6 +32,13 @@ def _load_duckdb():
 def _safe_dataset_name(value: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip())
     return safe.strip("._-") or "records"
+
+
+# A quota observation can only justify skipping for so long: providers reset
+# monthly (Odds API) or per minute (football-data.org), and an unbounded block
+# once parked football-data for days on a per-minute counter. After this
+# horizon the floor is ignored and one probe request re-measures the quota.
+QUOTA_FLOOR_MAX_AGE = dt.timedelta(hours=24)
 
 
 def _sql_literal(value: str) -> str:
@@ -185,12 +193,14 @@ class DuckDBStorage:
             )
 
         if quota_remaining is not None and quota_remaining <= request.quota_remaining_floor:
-            return FetchDecision(
-                False,
-                "quota_floor_reached",
-                request.request_key,
-                metadata={"quota_remaining": quota_remaining, "quota_remaining_floor": request.quota_remaining_floor},
-            )
+            observed_at = parse_datetime(fetched_at_utc)
+            if observed_at and now - observed_at < QUOTA_FLOOR_MAX_AGE:
+                return FetchDecision(
+                    False,
+                    "quota_floor_reached",
+                    request.request_key,
+                    metadata={"quota_remaining": quota_remaining, "quota_remaining_floor": request.quota_remaining_floor},
+                )
 
         if status == "success" and request.min_refresh_interval:
             fetched_at = parse_datetime(fetched_at_utc)
@@ -266,7 +276,9 @@ class DuckDBStorage:
 
         if quota_row:
             quota_key, quota_status, quota_at, quota_remaining = quota_row
-            if quota_remaining is not None and quota_remaining <= request.quota_remaining_floor:
+            observed_at = parse_datetime(quota_at)
+            quota_is_fresh = observed_at is not None and now - observed_at < QUOTA_FLOOR_MAX_AGE
+            if quota_is_fresh and quota_remaining is not None and quota_remaining <= request.quota_remaining_floor:
                 return FetchDecision(
                     False,
                     "quota_scope_quota_floor_reached",

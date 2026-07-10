@@ -654,6 +654,45 @@ class StorageTest(unittest.TestCase):
                     self.assertFalse(decision.should_fetch, f"code {code} must open the run circuit")
                     self.assertEqual(decision.reason, "source_failed_this_run")
 
+    def test_quota_floor_blocks_expire_after_a_day_so_reset_quotas_are_probed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            now = dt.datetime.now(dt.timezone.utc)
+
+            def request(day: int) -> SourceRequest:
+                return SourceRequest(
+                    source="the_odds_api",
+                    endpoint="/v4/sports/soccer/odds",
+                    purpose="fixture_odds",
+                    params={"day": day},
+                    quota_scope="the_odds_api",
+                    quota_remaining_floor=5,
+                )
+
+            fresh_at = (now - dt.timedelta(hours=2)).isoformat().replace("+00:00", "Z")
+            storage.record_fetch(
+                SourceLedgerRecord(request=request(1), status="success", run_id="run-a", fetched_at_utc=fresh_at, quota_remaining=2)
+            )
+            same_key = storage.should_fetch(request(1))
+            sibling = storage.should_fetch(request(2))
+            self.assertFalse(same_key.should_fetch)
+            self.assertFalse(sibling.should_fetch)
+            self.assertEqual(sibling.reason, "quota_scope_quota_floor_reached")
+
+            stale_at = (now - dt.timedelta(hours=30)).isoformat().replace("+00:00", "Z")
+            storage2 = DuckDBStorage.at_data_root(Path(tmp) / "data2")
+            storage2.record_fetch(
+                SourceLedgerRecord(request=request(1), status="success", run_id="run-a", fetched_at_utc=stale_at, quota_remaining=2)
+            )
+            self.assertTrue(storage2.should_fetch(request(1)).should_fetch, "stale quota floor must allow a daily probe")
+            self.assertTrue(storage2.should_fetch(request(2)).should_fetch, "stale scope floor must allow a daily probe")
+
+    def test_football_data_ignores_per_minute_counter_as_quota(self) -> None:
+        from worldcup_predictions.plugins.sources.fixtures.football_data.plugin import quota_remaining
+
+        self.assertIsNone(quota_remaining({"X-Requests-Available-Minute": "2"}))
+        self.assertEqual(quota_remaining({"X-RequestsAvailable": "40"}), 40)
+
     def test_repeated_failures_escalate_backoff_and_success_resets_the_ladder(self) -> None:
         import urllib.error
 
