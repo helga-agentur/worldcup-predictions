@@ -673,6 +673,20 @@ class StorageTest(unittest.TestCase):
             self.assertEqual(latest_rows[0]["value"], 0.84)
             self.assertEqual(latest_rows[0]["_record"]["run_id"], "run-c")
 
+    def test_timed_phase_records_duration_and_memory(self) -> None:
+        from worldcup_predictions.core.runtime_metrics import peak_rss_mb, timed_phase
+
+        sink: list[dict] = []
+        with timed_phase("unit_test_phase", sink):
+            pass
+
+        self.assertEqual(len(sink), 1)
+        entry = sink[0]
+        self.assertEqual(entry["phase"], "unit_test_phase")
+        self.assertGreaterEqual(entry["duration_seconds"], 0)
+        self.assertIn("rss_mb_after", entry)
+        self.assertGreater(peak_rss_mb(), 0)
+
     def test_deferred_dataset_exports_batch_parquet_writes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
@@ -761,6 +775,9 @@ class StorageTest(unittest.TestCase):
             impact_rows = storage.read_records(PREDICTION_SIGNAL_IMPACTS, latest_only=True)
             self.assertTrue(any(row["plugin_id"] == "static_prediction" for row in plugin_rows))
             self.assertTrue(any(row["plugin_id"] == "debug_report" for row in plugin_rows))
+            self.assertIn("duration_ms", plugin_rows[0])
+            self.assertIn("rss_mb_delta", plugin_rows[0])
+            self.assertIn("rss_mb_after", plugin_rows[0])
             self.assertTrue(any(row["plugin_id"] == "static_signal" and row["output_type"] == "signal" for row in event_output_rows))
             self.assertTrue(any(row["plugin_id"] == "static_prediction" and row["output_type"] == "prediction" for row in event_output_rows))
             self.assertEqual(impact_rows[0]["signal_name"], TOTAL_GOALS_FACTOR)

@@ -60,6 +60,7 @@ from worldcup_predictions.evaluation.provider_points import build_provider_point
 from worldcup_predictions.evaluation.reports import write_standard_reports
 from worldcup_predictions.evaluation.scheduled_update import summarize_source_ledger_rows, write_prediction_run_summary
 from worldcup_predictions.market_prior import team_strengths_from_outrights
+from worldcup_predictions.core.runtime_metrics import log_line, peak_rss_mb, timed_phase
 from worldcup_predictions.model import BaselineModel, BaselineModelConfig, HistoricalResult, load_historical_results
 from worldcup_predictions.model.baseline import compute_elo
 from worldcup_predictions.plugins import builtin_plugins
@@ -214,6 +215,7 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
 
 
 def _run_scheduled_update(args: argparse.Namespace, project_root: Path, workflow: PredictionWorkflow) -> int:
+    phase_timings: list[dict] = []
     hook_results = run_data_update_hooks(workflow.context.storage, run_id=workflow.context.run_id)
     applied_hooks = [row for row in hook_results if row.get("status") == "success" and int(row.get("rows_changed") or 0) > 0]
     for row in applied_hooks:
@@ -222,52 +224,58 @@ def _run_scheduled_update(args: argparse.Namespace, project_root: Path, workflow
     initial_state = load_tournament_state(workflow.context.storage)
     initial_open_count = len(initial_state.open_fixtures())
     del initial_state
-    run = workflow.next_predictions(limit=0, include_closed=False)
+    with timed_phase("workflow_predictions", phase_timings):
+        run = workflow.next_predictions(limit=0, include_closed=False)
     snapshot_id = f"scheduled_{utc_label()}"
-    snapshot_count = write_prediction_snapshot(
-        workflow.context.storage,
-        snapshot_id,
-        run.predictions,
-        run.optimized_tips,
-        run_id=workflow.context.run_id,
-    )
+    with timed_phase("prediction_snapshot", phase_timings):
+        snapshot_count = write_prediction_snapshot(
+            workflow.context.storage,
+            snapshot_id,
+            run.predictions,
+            run.optimized_tips,
+            run_id=workflow.context.run_id,
+        )
 
     refreshed_state = load_tournament_state(workflow.context.storage)
     open_count = len(refreshed_state.open_fixtures())
-    historical_results = load_historical_results(workflow.context.storage)
-    model_calibration_count = write_model_calibration(
-        workflow.context.storage,
-        historical_results,
-        run_id=workflow.context.run_id,
-    )
-    backtest_rows = backtest_srf(refreshed_state, historical_results, signals=_workflow_signals(workflow))
-    workflow.context.storage.write_records(
-        PREDICTION_BACKTEST,
-        backtest_rows,
-        source="scheduled_update:backtest",
-        run_id=workflow.context.run_id,
-    )
-    knockout_summary = knockout_backtest_summary(backtest_rows)
-    knockout_audit_rows = write_provider_knockout_audit(
-        workflow.context.storage,
-        backtest_rows,
-        run_id=workflow.context.run_id,
-    )
-    audit_rows = build_prediction_audit_rows(
-        workflow.context.storage,
-        refreshed_state,
-        run_id=workflow.context.run_id,
-    )
-    learning_count, review_count, postmatch_summary = write_postmatch_outputs(
-        workflow.context.storage,
-        run_id=workflow.context.run_id,
-    )
+    with timed_phase("backtest_and_calibration", phase_timings):
+        historical_results = load_historical_results(workflow.context.storage)
+        model_calibration_count = write_model_calibration(
+            workflow.context.storage,
+            historical_results,
+            run_id=workflow.context.run_id,
+        )
+        backtest_rows = backtest_srf(refreshed_state, historical_results, signals=_workflow_signals(workflow))
+        workflow.context.storage.write_records(
+            PREDICTION_BACKTEST,
+            backtest_rows,
+            source="scheduled_update:backtest",
+            run_id=workflow.context.run_id,
+        )
+        knockout_summary = knockout_backtest_summary(backtest_rows)
+        knockout_audit_rows = write_provider_knockout_audit(
+            workflow.context.storage,
+            backtest_rows,
+            run_id=workflow.context.run_id,
+        )
+    with timed_phase("prediction_audit_and_postmatch", phase_timings):
+        audit_rows = build_prediction_audit_rows(
+            workflow.context.storage,
+            refreshed_state,
+            run_id=workflow.context.run_id,
+        )
+        learning_count, review_count, postmatch_summary = write_postmatch_outputs(
+            workflow.context.storage,
+            run_id=workflow.context.run_id,
+        )
 
-    ledger_count = write_prediction_ledger(workflow.context.storage, run_id=workflow.context.run_id)
-    published_ledger_count = write_published_prediction_ledger(workflow.context.storage, run_id=workflow.context.run_id)
+    with timed_phase("prediction_ledgers", phase_timings):
+        ledger_count = write_prediction_ledger(workflow.context.storage, run_id=workflow.context.run_id)
+        published_ledger_count = write_published_prediction_ledger(workflow.context.storage, run_id=workflow.context.run_id)
 
     provider_summary = {}
-    for provider in ("srf.ch", "20min.ch"):
+    with timed_phase("provider_points_and_bonus", phase_timings):
+      for provider in ("srf.ch", "20min.ch"):
         point_rows = build_provider_points_rows(
             workflow.context.storage,
             refreshed_state,
@@ -286,12 +294,13 @@ def _run_scheduled_update(args: argparse.Namespace, project_root: Path, workflow
             "bonus_rows": len(bonus_rows),
         }
 
-    export_manifest = write_prediction_export(
-        workflow.context.storage,
-        project_root / "data" / "exports" / "predictions.json",
-        export_id=f"{snapshot_id}:export",
-        run_id=workflow.context.run_id,
-    )
+    with timed_phase("prediction_export", phase_timings):
+        export_manifest = write_prediction_export(
+            workflow.context.storage,
+            project_root / "data" / "exports" / "predictions.json",
+            export_id=f"{snapshot_id}:export",
+            run_id=workflow.context.run_id,
+        )
     # The 2026-07-09 incident: maintenance artifacts (a quarter-million
     # historical results, backtest/audit rows with embedded score matrices)
     # stayed referenced while the simulation allocated its own peak on top,
@@ -302,7 +311,8 @@ def _run_scheduled_update(args: argparse.Namespace, project_root: Path, workflow
     knockout_audit_count = len(knockout_audit_rows)
     del backtest_rows, audit_rows, knockout_audit_rows, historical_results, point_rows, bonus_rows
     gc.collect()
-    simulation_refresh = _run_simulation_if_needed(workflow, refreshed_state, run)
+    with timed_phase("simulation_refresh", phase_timings):
+        simulation_refresh = _run_simulation_if_needed(workflow, refreshed_state, run)
     automation_hook_results, simulation_refresh = _run_scheduled_automation_hooks(
         workflow,
         refreshed_state,
@@ -317,23 +327,26 @@ def _run_scheduled_update(args: argparse.Namespace, project_root: Path, workflow
             print(f"{row['hook_id']}: applied ({result['simulation_id']}).")
         else:
             print(f"{row['hook_id']}: applied.")
-    entity_maintenance = _run_entity_maintenance_if_due(workflow)
+    with timed_phase("entity_maintenance", phase_timings):
+        entity_maintenance = _run_entity_maintenance_if_due(workflow)
     if entity_maintenance.get("ran"):
         print(
             "Entity maintenance: {alias_rows} alias candidate(s); "
             "{validation_rows} entity label(s) validated ({unresolved_rows} unresolved).".format(**entity_maintenance)
         )
-    site_build = build_site(
-        project_root=project_root,
-        storage=workflow.context.storage,
-        gtm_container_id=gtm_container_id_from_env(project_root),
-    )
-    diagnostics_completeness_rows = write_diagnostics_completeness_audit(
-        workflow.context.storage,
-        workflow.manager.plugins,
-        run_id=workflow.context.run_id,
-    )
-    reports = write_standard_reports(workflow.context.storage, project_root, run_id=workflow.context.run_id)
+    with timed_phase("site_build", phase_timings):
+        site_build = build_site(
+            project_root=project_root,
+            storage=workflow.context.storage,
+            gtm_container_id=gtm_container_id_from_env(project_root),
+        )
+    with timed_phase("reports_and_diagnostics", phase_timings):
+        diagnostics_completeness_rows = write_diagnostics_completeness_audit(
+            workflow.context.storage,
+            workflow.manager.plugins,
+            run_id=workflow.context.run_id,
+        )
+        reports = write_standard_reports(workflow.context.storage, project_root, run_id=workflow.context.run_id)
     source_ledger_path = ""
     source_ledger_summary = {}
     if hasattr(workflow.context.storage, "export_source_ledger"):
@@ -342,7 +355,16 @@ def _run_scheduled_update(args: argparse.Namespace, project_root: Path, workflow
         source_ledger_rows = workflow.context.storage.read_source_ledger(run_id=workflow.context.run_id)
         source_ledger_summary = summarize_source_ledger_rows(source_ledger_rows)
 
+    flushed_datasets: list[str] = []
+    flush_exports = getattr(workflow.context.storage, "flush_dataset_exports", None)
+    if callable(flush_exports):
+        with timed_phase("parquet_export_flush", phase_timings):
+            flushed_datasets = flush_exports()
+
     maintenance = {
+        "peak_rss_mb": peak_rss_mb(),
+        "phase_timings": phase_timings,
+        "parquet_export_datasets": len(flushed_datasets),
         "initial_open_fixtures": initial_open_count,
         "open_fixtures": open_count,
         "backtest_rows": backtest_count,
