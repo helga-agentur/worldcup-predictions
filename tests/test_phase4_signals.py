@@ -8,41 +8,7 @@ from worldcup_predictions.plugins.article_sources import analysis_query, classif
 from worldcup_predictions.plugins.sources.enrichment.lineup_availability.plugin import classify_availability_signal
 from worldcup_predictions.plugins.sources.enrichment.lineup_availability.plugin import lineup_availability_signals_from_rows
 from worldcup_predictions.plugins.signals.ml_outcome.plugin import RollingFeatureBuilder
-from worldcup_predictions.plugins.sources.enrichment.srf_experts.plugin import (
-    expert_weights_from_performance,
-    srf_expert_signals_from_rows,
-)
 from worldcup_predictions.tournament import FixtureRecord, TeamResolver
-
-
-class ExpertWeightingTest(unittest.TestCase):
-    def test_weights_reward_accuracy_and_clamp(self) -> None:
-        performance = [
-            {"expert_id": "a", "points": 8.0},
-            {"expert_id": "a", "points": 8.0},
-            {"expert_id": "b", "points": 1.0},
-            {"expert_id": "b", "points": 1.0},
-        ]
-        weights = expert_weights_from_performance(performance)
-        self.assertGreater(weights["a"], 1.0)
-        self.assertLess(weights["b"], 1.0)
-        self.assertGreaterEqual(weights["b"], 0.75)
-        self.assertLessEqual(weights["a"], 1.35)
-
-    def test_no_performance_yields_equal_weights(self) -> None:
-        self.assertEqual(expert_weights_from_performance([]), {})
-
-    def test_consensus_shifts_toward_stronger_expert(self) -> None:
-        rows = [
-            {"fixture_key": "F", "expert_id": "a", "tip_home": 2, "tip_away": 0, "observed_at_utc": "t"},
-            {"fixture_key": "F", "expert_id": "b", "tip_home": 0, "tip_away": 1, "observed_at_utc": "t"},
-        ]
-        equal = srf_expert_signals_from_rows(rows)[0]
-        self.assertAlmostEqual(equal.metadata["prob_home"], 0.5, places=6)
-
-        weighted = srf_expert_signals_from_rows(rows, weights={"a": 1.35, "b": 0.75})[0]
-        self.assertGreater(weighted.metadata["prob_home"], 0.5)
-        self.assertTrue(weighted.metadata["performance_weighted"])
 
 
 class MlFeatureParityTest(unittest.TestCase):

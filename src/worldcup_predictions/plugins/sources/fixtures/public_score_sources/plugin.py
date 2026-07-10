@@ -13,12 +13,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from worldcup_predictions.core.constants import (
-    ENDPOINT_ESPN_SOCCER_SCOREBOARD,
     ENDPOINT_FIFA_WORLDCUP_2026_SCORES,
     ENDPOINT_FOTMOB_MATCH_SITEMAP,
     ENDPOINT_SOFASCORE_FOOTBALL,
     ENDPOINT_TWENTY_MIN_TIPPSPIEL_DETAILS,
-    SOURCE_ESPN_SCOREBOARD,
     SOURCE_FIFA_MATCH_CENTRE,
     SOURCE_FOTMOB_PUBLIC,
     SOURCE_SOFASCORE_PUBLIC,
@@ -64,7 +62,7 @@ class PublicScoreSourcesPlugin(BasePlugin):
     metadata = PluginMetadata(
         plugin_id=id,
         kind=PluginKind.SOURCE,
-        description="Fetch robots-aware FIFA, ESPN, FotMob, SofaScore, and 20min public pages for result verification and page-level analysis.",
+        description="Fetch robots-aware FIFA, FotMob, SofaScore, and 20min public pages for result verification and page-level analysis.",
         datasets_written=(TOURNAMENT_RESULTS, PUBLIC_MATCH_ANALYSIS, EXTRACTION_DIAGNOSTICS),
         quota_policy=QuotaPolicy(
             quota_limited=False,
@@ -86,7 +84,6 @@ class PublicScoreSourcesPlugin(BasePlugin):
         extraction_rows: list[dict[str, Any]] = []
         robots_cache: dict[str, tuple[bool, str]] = {}
         for source_result in (
-            self._fetch_espn(runtime, state, robots_cache),
             self._fetch_public_page(
                 runtime,
                 state,
@@ -159,36 +156,6 @@ class PublicScoreSourcesPlugin(BasePlugin):
             diagnostics=diagnostics,
             metadata={"results": count, "analysis_rows": analysis_count, "extraction_rows": extraction_count},
         )
-
-    def _fetch_espn(
-        self,
-        runtime: SourceRuntime,
-        state: TournamentState,
-        robots_cache: dict[str, tuple[bool, str]],
-    ) -> PluginResult:
-        dates = _espn_dates_to_fetch(state)
-        if not dates:
-            return runtime.result(diagnostics=[runtime.diagnostic("info", "ESPN scoreboard skipped because no due fixture dates are known.")])
-        results: list[ResultRecord] = []
-        diagnostics: list[Diagnostic] = []
-        for date_value in dates:
-            source_result = self._fetch_public_page(
-                runtime,
-                state,
-                PublicPageSource(
-                    source=SOURCE_ESPN_SCOREBOARD,
-                    label="ESPN scoreboard",
-                    endpoint=ENDPOINT_ESPN_SOCCER_SCOREBOARD,
-                    purpose="espn_worldcup_scoreboard",
-                    params={"league": "fifa.world", "dates": date_value},
-                    min_refresh=dt.timedelta(minutes=runtime.context.config.source_defaults.default_refresh_minutes),
-                ),
-                parser=parse_espn_scoreboard_results,
-                robots_cache=robots_cache,
-            )
-            diagnostics.extend(source_result.diagnostics)
-            results.extend(source_result.metadata.get("results") or [])
-        return runtime.result(diagnostics=diagnostics, metadata={"results": results})
 
     def _fetch_public_page(
         self,
@@ -280,64 +247,6 @@ def robots_allows(
     if cache is not None:
         cache[url] = result
     return result
-
-
-def parse_espn_scoreboard_results(page: str, *, state: TournamentState, source: str = SOURCE_ESPN_SCOREBOARD) -> list[ResultRecord]:
-    payload = _extract_espn_payload(page)
-    events = _walk_for_espn_events(payload)
-    resolver = TeamResolver.default(source=source)
-    results: list[ResultRecord] = []
-    fixture_by_codes = {(fixture.home_team.key, fixture.away_team.key, fixture.event_date[:10]): fixture for fixture in state.fixtures}
-    for event in events:
-        if not event.get("completed") and str((event.get("status") or {}).get("state") or "") != "post":
-            continue
-        competitors = list(event.get("competitors") or event.get("teams") or [])
-        if len(competitors) < 2:
-            continue
-        parsed = _espn_home_away(competitors)
-        if parsed is None:
-            continue
-        home_row, away_row = parsed
-        home_team = resolver.resolve(str(home_row.get("displayName") or home_row.get("shortDisplayName") or home_row.get("abbrev") or ""))
-        away_team = resolver.resolve(str(away_row.get("displayName") or away_row.get("shortDisplayName") or away_row.get("abbrev") or ""))
-        if not home_team.fifa_code or not away_team.fifa_code:
-            continue
-        fixture_date = str(event.get("date") or "")[:10]
-        fixture = fixture_by_codes.get((home_team.key, away_team.key, fixture_date))
-        reversed_fixture = False
-        if fixture is None:
-            fixture = fixture_by_codes.get((away_team.key, home_team.key, fixture_date))
-            reversed_fixture = fixture is not None
-        event_date = fixture.event_date if fixture else normalize_datetime(event.get("date")) or str(event.get("date") or "")
-        try:
-            parsed_score = ScoreTip(int(home_row.get("score")), int(away_row.get("score")))
-        except (TypeError, ValueError):
-            continue
-        if fixture is not None:
-            result_home = fixture.home_team
-            result_away = fixture.away_team
-            score = ScoreTip(parsed_score.away, parsed_score.home) if reversed_fixture else parsed_score
-        else:
-            result_home = TeamRef(home_team.name, home_team.fifa_code)
-            result_away = TeamRef(away_team.name, away_team.fifa_code)
-            score = parsed_score
-        results.append(
-            ResultRecord(
-                event_date=event_date,
-                home_team=result_home,
-                away_team=result_away,
-                score=score,
-                source=source,
-                notes=str(event.get("note") or ""),
-                metadata={
-                    "espn_event_id": event.get("id"),
-                    "status": event.get("status"),
-                    "match_url": urllib.parse.urljoin("https://www.espn.com", str(event.get("link") or "")),
-                    "source_page": "scoreboard",
-                },
-            )
-        )
-    return _dedupe_results(results)
 
 
 def parse_public_score_page_results(page: str, *, state: TournamentState, source: str) -> list[ResultRecord]:
@@ -447,60 +356,11 @@ def public_page_analysis_rows(
     return rows, diagnostics
 
 
-def _extract_espn_payload(page: str) -> dict[str, Any]:
-    match = re.search(r"window\['__espnfitt__'\]\s*=\s*({.*?});\s*</script>", page, flags=re.DOTALL)
-    if not match:
-        match = re.search(r"window\[\"__espnfitt__\"\]\s*=\s*({.*?});\s*</script>", page, flags=re.DOTALL)
-    if not match:
-        return {}
-    try:
-        return json.loads(html.unescape(match.group(1)))
-    except json.JSONDecodeError:
-        return {}
-
-
-def _walk_for_espn_events(value: Any) -> list[dict[str, Any]]:
-    events: list[dict[str, Any]] = []
-    if isinstance(value, dict):
-        if "competitors" in value and ("completed" in value or "status" in value):
-            events.append(value)
-        for nested in value.values():
-            events.extend(_walk_for_espn_events(nested))
-    elif isinstance(value, list):
-        for nested in value:
-            events.extend(_walk_for_espn_events(nested))
-    return events
-
-
-def _espn_home_away(competitors: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]] | None:
-    home = next((row for row in competitors if row.get("isHome") is True), None)
-    away = next((row for row in competitors if row.get("isHome") is False), None)
-    if home and away:
-        return home, away
-    if len(competitors) >= 2:
-        return competitors[1], competitors[0]
-    return None
-
-
 def _fixture_date_for_query(event_date: str) -> str:
     parsed = parse_utc_datetime(event_date)
     if parsed is None:
         return ""
     return parsed.strftime("%Y%m%d")
-
-
-def _espn_dates_to_fetch(state: TournamentState, *, now: dt.datetime | None = None) -> list[str]:
-    """Return only due ESPN scoreboard dates, including US-local date fallback."""
-
-    current = now or dt.datetime.now(dt.UTC)
-    dates: set[str] = set()
-    for fixture in state.fixtures:
-        kickoff = parse_utc_datetime(fixture.event_date)
-        if kickoff is None or kickoff > current:
-            continue
-        dates.add(kickoff.strftime("%Y%m%d"))
-        dates.add((kickoff - dt.timedelta(hours=12)).strftime("%Y%m%d"))
-    return sorted(dates)
 
 
 def _dedupe_results(results: list[ResultRecord]) -> list[ResultRecord]:

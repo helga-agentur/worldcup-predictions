@@ -17,6 +17,7 @@ PHASE_CONTEXT_SIGNALS = "phase_context_signals"
 HISTORICAL_RESULTS = "historical_results"
 MARKET_ODDS = "market_odds"
 WEATHER_OBSERVATIONS = "weather_observations"
+ELO_RATINGS = "elo_ratings"
 PUBLIC_MATCH_ANALYSIS = "public_match_analysis"
 PUBLIC_SOURCE_PAGES = "public_source_pages"
 PUBLIC_SOURCE_CLAIMS = "public_source_claims"
@@ -99,6 +100,7 @@ DATASET_CONTRACTS: dict[str, DatasetContract] = {
     MARKET_ODDS: DatasetContract(MARKET_ODDS, "Extracted public market odds facts.", ("fixture_key",)),
     MARKET_TRENDS: DatasetContract(MARKET_TRENDS, "Market movement facts derived from the odds snapshot history.", ("fixture_key",)),
     WEATHER_OBSERVATIONS: DatasetContract(WEATHER_OBSERVATIONS, "Aggregated match-window weather rows.", ("fixture_key",)),
+    ELO_RATINGS: DatasetContract(ELO_RATINGS, "eloratings.net national-team Elo rating rows.", ("team", "elo_rating")),
     PUBLIC_MATCH_ANALYSIS: DatasetContract(PUBLIC_MATCH_ANALYSIS, "Reliable public pre/postgame analysis rows.", ("fixture_key", "phase")),
     PUBLIC_SOURCE_PAGES: DatasetContract(PUBLIC_SOURCE_PAGES, "Fetched public-source page metadata and content fingerprints.", ("url", "domain", "status")),
     PUBLIC_SOURCE_CLAIMS: DatasetContract(PUBLIC_SOURCE_CLAIMS, "Atomic fixture, result, market, and analysis claims extracted from dynamic public sources.", ("claim_id", "claim_type", "source_url", "domain")),

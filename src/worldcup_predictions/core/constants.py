@@ -19,7 +19,6 @@ SOURCE_NEWS_API = "news_api"
 SOURCE_FOOTBALL_DATA = "football_data_org"
 SOURCE_OPENFOOTBALL = "openfootball_worldcup"
 SOURCE_FIFA_MATCH_CENTRE = "fifa_match_centre"
-SOURCE_ESPN_SCOREBOARD = "espn_scoreboard"
 SOURCE_FOTMOB_PUBLIC = "fotmob_public"
 SOURCE_SOFASCORE_PUBLIC = "sofascore_public"
 SOURCE_TWENTY_MIN_PUBLIC = "twenty_min_public"
@@ -28,7 +27,6 @@ SOURCE_ML_OUTCOME = "ml_outcome"
 SOURCE_PUBLIC_ANALYSIS = "public_analysis"
 SOURCE_LINEUP_AVAILABILITY = "lineup_availability"
 SOURCE_LIVE_CALIBRATION = "live_calibration"
-SOURCE_SRF_EXPERTS = "srf_experts"
 SOURCE_SRF_PUBLIC = "srf_public"
 SOURCE_DYNAMIC_PUBLIC = "dynamic_public"
 SOURCE_KAGGLE = "kaggle"
@@ -40,11 +38,12 @@ SOURCE_MODEL_CALIBRATION = "model_calibration"
 
 CONFIRMED_RESULT_MIN_SOURCES = 3
 CONFIRMED_RESULT_HIGH_AUTHORITY_MIN_SOURCES = 2
+# espn_scoreboard was removed 2026-07-10: 6,104 failed fetches and zero
+# successes all tournament (blocked with 403 from day one).
 HIGH_AUTHORITY_RESULT_SOURCES = (
     SOURCE_SRF_PUBLIC,
     SOURCE_FIFA_MATCH_CENTRE,
     SOURCE_FOOTBALL_DATA,
-    SOURCE_ESPN_SCOREBOARD,
 )
 # Result observations whose kickoff differs from the canonical fixture by at
 # most this window are treated as the same match for consensus, so sources
@@ -63,7 +62,6 @@ ENDPOINT_FIFA_CALENDAR_MATCHES = "https://api.fifa.com/api/v3/calendar/matches"
 FIFA_WORLD_CUP_COMPETITION_ID = "17"
 FIFA_WORLD_CUP_2026_SEASON_ID = "285023"
 ENDPOINT_FIFA_WORLDCUP_2026_SCORES = "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures"
-ENDPOINT_ESPN_SOCCER_SCOREBOARD = "https://www.espn.com/soccer/scoreboard"
 ENDPOINT_FOTMOB_MATCH_SITEMAP = "https://www.fotmob.com/sitemap/en/matches.xml"
 ENDPOINT_SOFASCORE_FOOTBALL = "https://www.sofascore.com/football"
 ENDPOINT_TWENTY_MIN_TIPPSPIEL_DETAILS = "https://tippspiel.20min.ch/details"
@@ -135,7 +133,6 @@ EXPECTED_DEBUG_SIGNAL_SOURCES = (
     SOURCE_PLAYER_IMPACT,
     SOURCE_ML_OUTCOME,
     SOURCE_LIVE_CALIBRATION,
-    SOURCE_SRF_EXPERTS,
 )
 
 SIGNAL_TOTAL_GOALS_FACTOR_MIN = 0.82

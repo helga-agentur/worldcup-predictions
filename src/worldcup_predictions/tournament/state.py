@@ -389,8 +389,6 @@ def _source_rank(source: str) -> int:
         return 3
     if "srf_public" in source:
         return 4
-    if "espn_scoreboard" in source:
-        return 5
     if "fotmob_public" in source:
         return 6
     if "sofascore_public" in source:
