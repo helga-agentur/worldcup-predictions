@@ -654,6 +654,87 @@ class StorageTest(unittest.TestCase):
                     self.assertFalse(decision.should_fetch, f"code {code} must open the run circuit")
                     self.assertEqual(decision.reason, "source_failed_this_run")
 
+    def test_model_calibration_skips_recompute_when_inputs_unchanged(self) -> None:
+        import unittest.mock
+        from worldcup_predictions.core.contracts import ScoreTip
+        from worldcup_predictions.evaluation import model_calibration as mc
+        from worldcup_predictions.model import HistoricalResult
+        from worldcup_predictions.tournament import TeamResolver
+
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            resolver = TeamResolver.default()
+            history = [
+                HistoricalResult(
+                    date="2022-12-18",
+                    home_team=resolver.resolve("Argentina"),
+                    away_team=resolver.resolve("France"),
+                    score=ScoreTip(3, 3),
+                    tournament="FIFA World Cup",
+                )
+            ]
+            fingerprint = mc.calibration_inputs_fingerprint(history)
+            storage.write_records(
+                "model_calibration",
+                [{"record_key": "cal-1", "calibration_id": "cal-1", "inputs_fingerprint": fingerprint}],
+                source="model_calibration",
+                run_id="run-a",
+            )
+
+            with unittest.mock.patch.object(mc, "calibrate_baseline_model", side_effect=AssertionError("must not recompute")):
+                written = mc.write_model_calibration(storage, history, run_id="run-b")
+            self.assertEqual(written, 0)
+
+            changed = history + [
+                HistoricalResult(
+                    date="2022-12-14",
+                    home_team=resolver.resolve("France"),
+                    away_team=resolver.resolve("Morocco"),
+                    score=ScoreTip(2, 0),
+                    tournament="FIFA World Cup",
+                )
+            ]
+            with unittest.mock.patch.object(mc, "calibrate_baseline_model", return_value=[{"record_key": "cal-2", "calibration_id": "cal-2"}]) as compute:
+                written = mc.write_model_calibration(storage, changed, run_id="run-c")
+            self.assertEqual(compute.call_count, 1, "changed history must recompute")
+            self.assertEqual(written, 1)
+            rows = storage.read_records("model_calibration", latest_only=True)
+            new_row = next(row for row in rows if row["calibration_id"] == "cal-2")
+            self.assertEqual(new_row["inputs_fingerprint"], mc.calibration_inputs_fingerprint(changed))
+
+    def test_repeated_extraction_diagnostics_are_not_reappended(self) -> None:
+        from worldcup_predictions.core.extraction import extraction_diagnostic_row, unstored_extraction_diagnostics
+
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
+            row = extraction_diagnostic_row(
+                source="postmatch_stats",
+                extractor="postmatch_v1",
+                status="rejected",
+                reason="no_parseable_xg_or_stat_fields",
+                fixture_key="fixture-a",
+            )
+
+            first = unstored_extraction_diagnostics(storage, [row])
+            self.assertEqual(len(first), 1)
+            storage.write_records("extraction_diagnostics", first, source="postmatch_stats", run_id="run-a")
+
+            second = unstored_extraction_diagnostics(storage, [dict(row)])
+            self.assertEqual(second, [], "identical diagnostic must not be re-appended")
+
+            changed = extraction_diagnostic_row(
+                source="postmatch_stats",
+                extractor="postmatch_v1",
+                status="accepted",
+                reason="stats_extracted",
+                fixture_key="fixture-a",
+            )
+            fresh = unstored_extraction_diagnostics(storage, [changed])
+            self.assertEqual(len(fresh), 1, "changed diagnostic must still be written")
+
+            plain_storage = object()
+            self.assertEqual(unstored_extraction_diagnostics(plain_storage, [dict(row)]), [dict(row)])
+
     def test_quota_floor_blocks_expire_after_a_day_so_reset_quotas_are_probed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             storage = DuckDBStorage.at_data_root(Path(tmp) / "data")
