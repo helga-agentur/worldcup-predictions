@@ -584,7 +584,13 @@ h2 {
 }
 
 .summary-tooltip {
-  --tooltip-arrow-offset: 19.12%;
+  /* Arrow-center anchor as a fraction of the tooltip width, measured from the
+     edge that faces the trigger. Derived from the large-desktop design
+     (arrow center 65px into the 340px tooltip = 65 / 340) and reused on every
+     breakpoint so the left/arrow/right segment ratio never changes: the
+     default layout anchors it from the left edge, the narrow layout mirrors
+     it from the right edge. */
+  --tooltip-arrow-anchor: calc(65 / 340 * 100%);
   --tooltip-trigger-center: calc(var(--space-8) + 16px);
   --tooltip-arrow-width: 20px;
   --tooltip-arrow-height: 18px;
@@ -604,14 +610,14 @@ h2 {
   font-size: var(--text-sm);
   line-height: 1.45;
   text-align: left;
-  transform: translateX(calc(0% - var(--tooltip-arrow-offset)));
+  transform: translateX(calc(0% - var(--tooltip-arrow-anchor)));
 }
 
 .summary-tooltip::before {
   content: "";
   position: absolute;
   top: 100%;
-  left: var(--tooltip-arrow-offset);
+  left: var(--tooltip-arrow-anchor);
   width: var(--tooltip-arrow-width);
   height: var(--tooltip-arrow-height);
   background: var(--paper);
@@ -1788,7 +1794,7 @@ html[data-theme="dark"] .tag[data-result="trend"] {
   }
 
   .summary-tooltip::before {
-    right: calc(var(--tooltip-trigger-center) - var(--space-8));
+    right: var(--tooltip-arrow-anchor);
     left: auto;
     transform: translateX(50%);
   }
