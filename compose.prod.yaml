@@ -2,6 +2,11 @@ services:
   predictions:
     image: ghcr.io/helga-agentur/worldcup-predictions:main
     working_dir: /app
+    # The host has 3.8G RAM + 8G swap. Cap the batch container below host RAM
+    # so a memory spike degrades into swap and a clean container kill instead
+    # of a host-wide OOM that starves Caddy (incident 2026-07-09).
+    mem_limit: 3g
+    memswap_limit: 6g
     volumes:
       - ./data:/app/data
       - ./public:/app/public

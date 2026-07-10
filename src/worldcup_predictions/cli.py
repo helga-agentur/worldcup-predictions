@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import datetime as dt
 from pathlib import Path
 from typing import Sequence
@@ -202,6 +203,7 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
 
     initial_state = load_tournament_state(workflow.context.storage)
     initial_open_count = len(initial_state.open_fixtures())
+    del initial_state
     run = workflow.next_predictions(limit=0, include_closed=False)
     snapshot_id = f"scheduled_{utc_label()}"
     snapshot_count = write_prediction_snapshot(
@@ -272,6 +274,16 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
         export_id=f"{snapshot_id}:export",
         run_id=workflow.context.run_id,
     )
+    # The 2026-07-09 incident: maintenance artifacts (a quarter-million
+    # historical results, backtest/audit rows with embedded score matrices)
+    # stayed referenced while the simulation allocated its own peak on top,
+    # pushing the container past the host's memory. Everything below is
+    # already persisted, so only the counts stay alive past this point.
+    backtest_count = len(backtest_rows)
+    audit_count = len(audit_rows)
+    knockout_audit_count = len(knockout_audit_rows)
+    del backtest_rows, audit_rows, knockout_audit_rows, historical_results, point_rows, bonus_rows
+    gc.collect()
     simulation_refresh = _run_simulation_if_needed(workflow, refreshed_state, run)
     automation_hook_results, simulation_refresh = _run_scheduled_automation_hooks(
         workflow,
@@ -315,14 +327,14 @@ def command_scheduled_update(args: argparse.Namespace) -> int:
     maintenance = {
         "initial_open_fixtures": initial_open_count,
         "open_fixtures": open_count,
-        "backtest_rows": len(backtest_rows),
+        "backtest_rows": backtest_count,
         "model_calibration_rows": model_calibration_count,
-        "audit_rows": len(audit_rows),
+        "audit_rows": audit_count,
         "postmatch_learning_rows": learning_count,
         "postmatch_review_rows": review_count,
         "postmatch_summary": postmatch_summary,
         "knockout_backtest_summary": knockout_summary,
-        "provider_knockout_audit_rows": len(knockout_audit_rows),
+        "provider_knockout_audit_rows": knockout_audit_count,
         "providers": provider_summary,
         "prediction_ledger_rows": ledger_count,
         "published_prediction_ledger_rows": published_ledger_count,
