@@ -299,6 +299,29 @@ class DuckDBStorage:
                 )
         return None
 
+    def existing_record_keys(self, dataset: str, record_keys: list[str]) -> set[str]:
+        """Return which of the given record keys already exist in a dataset.
+
+        Used to avoid re-appending byte-identical rows (extraction diagnostics
+        re-derived from unchanged evidence every run) to append-only datasets.
+        """
+
+        keys = [str(key) for key in record_keys if key]
+        if not keys:
+            return set()
+        con = self._connect()
+        try:
+            rows = con.execute(
+                """
+                SELECT DISTINCT record_key FROM structured_records
+                WHERE dataset = ? AND record_key IN (SELECT unnest(?::VARCHAR[]))
+                """,
+                [dataset, keys],
+            ).fetchall()
+        finally:
+            con.close()
+        return {row[0] for row in rows}
+
     def consecutive_request_failures(self, request_key: str) -> int:
         """Consecutive failed attempts for this request key since its last success.
 

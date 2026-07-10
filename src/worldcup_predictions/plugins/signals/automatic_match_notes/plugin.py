@@ -9,7 +9,7 @@ from worldcup_predictions.core.constants import SIGNAL_WEIGHT_AUTOMATIC_MATCH_NO
 from worldcup_predictions.core.contracts import Artifact, Diagnostic, Signal
 from worldcup_predictions.core.datasets import AUTOMATIC_MATCH_NOTES, EXTRACTION_DIAGNOSTICS, LINEUP_AVAILABILITY, PUBLIC_MATCH_ANALYSIS
 from worldcup_predictions.core.events import EventName, event_value
-from worldcup_predictions.core.extraction import extraction_diagnostic_row
+from worldcup_predictions.core.extraction import extraction_diagnostic_row, unstored_extraction_diagnostics
 from worldcup_predictions.core.metadata import PluginKind, PluginMetadata
 from worldcup_predictions.core.plugin import BasePlugin, PluginResult
 from worldcup_predictions.core.signals import TEAM_EXPECTED_GOALS_FACTOR, TOTAL_GOALS_FACTOR
@@ -43,6 +43,7 @@ class AutomaticMatchNotesPlugin(BasePlugin):
         analysis_rows = context.storage.read_records(PUBLIC_MATCH_ANALYSIS, latest_only=True)
         availability_rows = context.storage.read_records(LINEUP_AVAILABILITY, latest_only=True)
         rows, extraction_diagnostics = automatic_note_rows_with_diagnostics(analysis_rows, availability_rows)
+        extraction_diagnostics = unstored_extraction_diagnostics(context.storage, extraction_diagnostics)
         count = context.storage.write_records(AUTOMATIC_MATCH_NOTES, rows, source=self.id, run_id=context.run_id)
         diagnostic_count = context.storage.write_records(EXTRACTION_DIAGNOSTICS, extraction_diagnostics, source=self.id, run_id=context.run_id)
         signals = automatic_note_signals(rows)

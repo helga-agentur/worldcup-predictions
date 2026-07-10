@@ -80,8 +80,52 @@ def calibrate_baseline_model(
     return [{**row, "rank": index + 1, "selected": row["calibration_id"] == best_id} for index, row in enumerate(rows)]
 
 
+# Bump when the candidate grid, tuning years, or evaluation logic change, so
+# stored calibrations from older logic are never treated as current.
+CALIBRATION_LOGIC_VERSION = "grid-rho-overdispersion-mlweight-v1"
+
+
+def calibration_inputs_fingerprint(historical_results: list[HistoricalResult]) -> str:
+    """Fingerprint of everything the calibration grid depends on.
+
+    The grid evaluates fixed candidate constants against historical World Cup
+    results only, so identical inputs always produce identical rows.
+    """
+
+    return stable_hash(
+        {
+            "logic": CALIBRATION_LOGIC_VERSION,
+            "years": list(DEFAULT_TUNING_YEARS),
+            "grid": {
+                "rho": list(CANDIDATE_DIXON_COLES_RHO),
+                "overdispersion": list(CANDIDATE_SCORE_OVERDISPERSION),
+                "ml_weights": list(CANDIDATE_ML_WEIGHTS),
+            },
+            "results": [
+                (r.date, r.home_team.key, r.away_team.key, r.score.home, r.score.away, r.neutral, r.tournament)
+                for r in historical_results
+            ],
+        }
+    )
+
+
 def write_model_calibration(storage, historical_results: list[HistoricalResult], *, run_id: str | None = None) -> int:
+    """Recompute and store the calibration grid, unless inputs are unchanged.
+
+    The 48-candidate grid took ~270s per scheduled run while its only input,
+    the historical-results dataset, changes about once a day. When the stored
+    rows already carry the current inputs fingerprint they are byte-identical
+    to what a recompute would produce, so the recompute is skipped and 0 is
+    returned. Calibration rows are diagnostic reports; nothing configures the
+    live model from them, so skipping cannot affect predictions.
+    """
+
+    fingerprint = calibration_inputs_fingerprint(historical_results)
+    existing = storage.read_records(MODEL_CALIBRATION, latest_only=True)
+    if existing and all(row.get("inputs_fingerprint") == fingerprint for row in existing):
+        return 0
     rows = calibrate_baseline_model(historical_results)
+    rows = [{**row, "inputs_fingerprint": fingerprint} for row in rows]
     return storage.write_records(MODEL_CALIBRATION, rows, source="model_calibration", run_id=run_id)
 
 
