@@ -751,7 +751,10 @@ h2 {
 
 .summary-tooltip--inline {
   top: auto;
-  bottom: calc(100% + var(--space-md));
+  /* 100% of the positioned ancestor is the whole intro block, so the JS
+     measures the trigger's own line and overrides this fallback; the tooltip
+     then sits directly above the (?) trigger, not above the paragraph. */
+  bottom: var(--tooltip-inline-bottom, calc(100% + var(--space-md)));
 }
 
 .summary-tooltip--chip {
