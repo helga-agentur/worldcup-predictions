@@ -588,6 +588,7 @@ h2 {
   --tooltip-trigger-center: calc(var(--space-8) + 16px);
   --tooltip-arrow-width: 20px;
   --tooltip-arrow-height: 18px;
+  --tooltip-border-color: color-mix(in srgb, var(--line) 70%, transparent);
   position: absolute;
   z-index: 20;
   bottom: calc(100% + var(--space-md));
@@ -596,7 +597,7 @@ h2 {
   margin: 0;
   padding: var(--space-lg);
   padding-right: calc(var(--space-lg) + 30px);
-  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border: 1px solid var(--tooltip-border-color);
   border-radius: 8px;
   color: var(--muted);
   background: var(--paper);
@@ -618,6 +619,10 @@ h2 {
   clip-path: polygon(50% 100%, 0 0, 100% 0);
   pointer-events: none;
   transform: translateX(-50%);
+  /* clip-path shapes cannot carry a real border, so the box outline is
+     continued along the triangle's slanted edges with silhouette shadows;
+     the base edge stays hidden inside the box. */
+  filter: drop-shadow(-1px 1px 0 var(--tooltip-border-color)) drop-shadow(1px 1px 0 var(--tooltip-border-color));
 }
 
 /* JS-aligned state for the stat-card tooltip: the ratio anchor stays the
@@ -793,6 +798,8 @@ h2 {
   top: auto;
   bottom: 100%;
   clip-path: polygon(50% 0, 0 100%, 100% 100%);
+  /* Upward arrow: outline the upward-facing slants instead. */
+  filter: drop-shadow(-1px -1px 0 var(--tooltip-border-color)) drop-shadow(1px -1px 0 var(--tooltip-border-color));
 }
 
 .summary__value {
