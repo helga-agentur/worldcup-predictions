@@ -44,6 +44,25 @@ def extraction_diagnostic_row(
     return payload
 
 
+def unstored_extraction_diagnostics(storage: Any, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop diagnostic rows that already exist verbatim in structured storage.
+
+    Diagnostic record keys are stable hashes of the full payload, so plugins
+    that re-derive diagnostics from unchanged evidence every run (match notes,
+    postmatch stats) would append byte-identical rows forever: 97.5% of all
+    extraction_diagnostics rows on live were such repeats (2026-07-10).
+    Stored rows keep serving latest_only reads, so no information is lost.
+    """
+
+    if not rows:
+        return rows
+    checker = getattr(storage, "existing_record_keys", None)
+    if not callable(checker):
+        return rows
+    existing = checker("extraction_diagnostics", [str(row.get("record_key") or "") for row in rows])
+    return [row for row in rows if str(row.get("record_key") or "") not in existing]
+
+
 def _truncate(value: Any, limit: int) -> str:
     text = " ".join(str(value or "").split())
     return text[:limit]

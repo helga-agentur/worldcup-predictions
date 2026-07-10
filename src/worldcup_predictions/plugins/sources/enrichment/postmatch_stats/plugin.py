@@ -10,7 +10,7 @@ from worldcup_predictions.core.datasets import PUBLIC_MATCH_ANALYSIS as PUBLIC_A
 from worldcup_predictions.core.datasets import POSTMATCH_STATS as POSTMATCH_STATS_DATASET
 from worldcup_predictions.core.datasets import POSTMATCH_TEAM_PERFORMANCE as POSTMATCH_TEAM_PERFORMANCE_DATASET
 from worldcup_predictions.core.events import EventName, event_value
-from worldcup_predictions.core.extraction import extraction_diagnostic_row
+from worldcup_predictions.core.extraction import extraction_diagnostic_row, unstored_extraction_diagnostics
 from worldcup_predictions.core.metadata import PluginKind, PluginMetadata
 from worldcup_predictions.core.plugin import BasePlugin, PluginResult
 from worldcup_predictions.plugins.article_sources import stat_row_from_public_analysis
@@ -42,6 +42,7 @@ class PostmatchStatsPlugin(BasePlugin):
             )
         public_analysis_rows = context.storage.read_records(PUBLIC_ANALYSIS_DATASET, latest_only=True)
         derived_stat_rows, extraction_diagnostics = postmatch_stat_rows_with_diagnostics(public_analysis_rows)
+        extraction_diagnostics = unstored_extraction_diagnostics(context.storage, extraction_diagnostics)
         derived_count = context.storage.write_records(
             POSTMATCH_STATS_DATASET,
             derived_stat_rows,

@@ -272,6 +272,16 @@
 
     tooltip.style.setProperty("--tooltip-inline-left", tooltipLeft.toFixed(2) + "px");
     tooltip.style.setProperty("--tooltip-inline-arrow-left", arrowLeft.toFixed(2) + "px");
+
+    if (tooltip.classList.contains("summary-tooltip--inline")) {
+      // Anchor the tooltip to the trigger's own line instead of the top of
+      // the positioned ancestor (the whole intro block): distance from the
+      // ancestor's bottom edge up to just above the trigger. 18px matches
+      // --space-md, clearing the 18px arrow like the stat-card tooltips.
+      var verticalGap = 18;
+      var tooltipBottom = anchorRect.bottom - triggerRect.top + verticalGap;
+      tooltip.style.setProperty("--tooltip-inline-bottom", tooltipBottom.toFixed(2) + "px");
+    }
   }
 
   function setTooltip(trigger, tooltip, open, pinned) {

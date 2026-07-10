@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import functools
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -37,6 +38,14 @@ from worldcup_predictions.storage.ledger import normalize_datetime, stable_hash
 from worldcup_predictions.tournament.contracts import TeamRef
 
 
+@functools.lru_cache(maxsize=65536)
+def _parse_played_on(date_value: str) -> dt.date:
+    # played_on is hit hundreds of millions of times per calibration/backtest
+    # pass (once per historical result per prediction); caching the ISO parse
+    # per distinct date string is output-identical and removes most of it.
+    return dt.date.fromisoformat(date_value[:10])
+
+
 @dataclass(frozen=True)
 class HistoricalResult:
     """One historical international football result."""
@@ -52,7 +61,7 @@ class HistoricalResult:
 
     @property
     def played_on(self) -> dt.date:
-        return dt.date.fromisoformat(self.date[:10])
+        return _parse_played_on(self.date)
 
     @property
     def record_key(self) -> str:
