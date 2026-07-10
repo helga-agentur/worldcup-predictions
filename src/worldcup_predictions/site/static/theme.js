@@ -248,10 +248,20 @@
     var anchorRect = anchor.getBoundingClientRect();
     var triggerRect = trigger.getBoundingClientRect();
     var tooltipRect = tooltip.getBoundingClientRect();
+    // Same anchor policy as the stat-card tooltip: the ratio position is the
+    // standard, the content column bounds the box, and the arrow stays on
+    // the trigger when the two conflict.
+    var container = trigger.closest ? trigger.closest(".content-width") : null;
+    var containerRect = container ? container.getBoundingClientRect() : null;
+    var boundLeft = Math.max(containerRect ? containerRect.left : gutter, gutter);
+    var boundRight = Math.min(
+      containerRect ? containerRect.right : window.innerWidth - gutter,
+      window.innerWidth - gutter
+    );
     var triggerCenter = triggerRect.left + triggerRect.width / 2 - anchorRect.left;
-    var minLeft = gutter - anchorRect.left;
-    var maxLeft = window.innerWidth - tooltipRect.width - gutter - anchorRect.left;
-    var preferredArrowLeft = 28;
+    var minLeft = boundLeft - anchorRect.left;
+    var maxLeft = boundRight - tooltipRect.width - anchorRect.left;
+    var preferredArrowLeft = tooltipRect.width * SUMMARY_ARROW_ANCHOR_RATIO;
     var tooltipLeft = triggerCenter - preferredArrowLeft;
 
     tooltipLeft = Math.max(minLeft, Math.min(tooltipLeft, maxLeft));
