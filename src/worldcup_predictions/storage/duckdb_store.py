@@ -38,6 +38,9 @@ def _safe_dataset_name(value: str) -> str:
 # monthly (Odds API) or per minute (football-data.org), and an unbounded block
 # once parked football-data for days on a per-minute counter. After this
 # horizon the floor is ignored and one probe request re-measures the quota.
+# Only rows from actual attempts count as observations: skip rows echo the
+# stale quota_remaining with a fresh timestamp on every run, which kept the
+# horizon from ever being reached on live (2026-07-10).
 QUOTA_FLOOR_MAX_AGE = dt.timedelta(hours=24)
 
 
@@ -170,7 +173,8 @@ class DuckDBStorage:
                 SELECT status, fetched_at_utc, quota_remaining, next_safe_fetch_at
                 FROM source_ledger
                 WHERE request_key = ?
-                ORDER BY fetched_at_utc DESC
+                  AND status != 'skipped'
+                ORDER BY fetched_at_utc DESC, rowid DESC
                 LIMIT 1
                 """,
                 [request.request_key],
@@ -248,7 +252,8 @@ class DuckDBStorage:
                 WHERE source = ?
                   AND quota_scope = ?
                   AND quota_remaining IS NOT NULL
-                ORDER BY fetched_at_utc DESC
+                  AND status != 'skipped'
+                ORDER BY fetched_at_utc DESC, rowid DESC
                 LIMIT 1
                 """,
                 [request.source, quota_scope],
