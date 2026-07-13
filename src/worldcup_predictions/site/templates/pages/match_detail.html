@@ -17,18 +17,28 @@
     <div class="detail-hero__main">
       <div class="detail-hero__kicker">
         {{ t("site.kicker") }}{% if row.stage_label %} · {{ row.stage_label }}{% endif %}
-        · <time datetime="{{ row.event_date }}">{{ row.kickoff_display }}</time>
+        · <time datetime="{{ row.event_date }}">{{ row.kickoff_display }}</time>{% if row.venue_display %} · {{ row.venue_display }}{% endif %}
       </div>
       <h1 id="match-title" class="detail-hero__title">
         {{ country_name(row.home_team_display, flag_class="detail-hero__flag") }} – {{ country_name(row.away_team_display, flag_class="detail-hero__flag") }}
       </h1>
+      {% if row.status == "final" and row.actual_score %}
+      <p class="detail-hero__score"{% if row.hit_result %} data-result="{{ row.hit_result }}"{% endif %}>
+        <span class="detail-hero__score-value numeric">{{ row.actual_score }}</span>
+        <span class="detail-hero__score-label">{{ t("detail.final_score") }}</span>
+      </p>
+      {% elif row.most_likely_score %}
+      <p class="detail-hero__score" data-kind="forecast">
+        <span class="detail-hero__score-value numeric">{{ row.most_likely_score }}</span>
+        <span class="detail-hero__score-label">{{ t("detail.model_forecast") }}{% if row.most_likely_percent_text %} · <span class="numeric">{{ row.most_likely_percent_text }}</span>{% endif %}</span>
+      </p>
+      {% endif %}
       {{ prob_bar(row, full=True) }}
       <div class="detail-hero__tags">
         {% if row.status == "future" %}
         <span class="status" data-status="{{ row.status }}">{{ row.status_label }}</span>
         {% endif %}
         {% if row.status == "final" and row.actual_score %}
-        <span class="tag numeric"{% if row.hit_result %} data-result="{{ row.hit_result }}"{% endif %}>{{ t("label.result") }}: {{ row.actual_score }}</span>
         {% if row.hit_label %}
         <div class="hit-explainer hit-explainer--chip">
           <span class="hit-chip" data-result="{{ row.hit_result }}">{{ row.hit_label }}</span>
@@ -42,6 +52,9 @@
         {% endif %}
         {% if row.confidence_text and row.confidence_text != "-" %}
         <span class="tag">{{ t("label.confidence") }}: <span class="numeric">{{ row.confidence_text }}</span></span>
+        {% endif %}
+        {% if row.weather_text %}
+        <span class="tag">{{ t("label.weather") }}: <span class="numeric">{{ row.weather_text }}</span></span>
         {% endif %}
         {% if row.advancement %}
         <span class="tag">
