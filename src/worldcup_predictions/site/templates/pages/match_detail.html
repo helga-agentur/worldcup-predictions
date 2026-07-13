@@ -23,7 +23,7 @@
         {{ country_name(row.home_team_display, flag_class="detail-hero__flag") }} – {{ country_name(row.away_team_display, flag_class="detail-hero__flag") }}
       </h1>
       {% if row.status == "final" and row.actual_score %}
-      <p class="detail-hero__score">
+      <p class="detail-hero__score"{% if row.hit_result %} data-result="{{ row.hit_result }}"{% endif %}>
         <span class="detail-hero__score-value numeric">{{ row.actual_score }}</span>
         <span class="detail-hero__score-label">{{ t("detail.final_score") }}</span>
       </p>

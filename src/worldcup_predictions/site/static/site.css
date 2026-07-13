@@ -1392,9 +1392,9 @@ html[data-theme="dark"] .tag[data-result="trend"] {
    gets scoreboard prominence right under the team names. */
 .detail-hero__score {
   display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: var(--space-md);
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
   margin: var(--space-8) 0 var(--space-md);
 }
 
@@ -1409,6 +1409,21 @@ html[data-theme="dark"] .tag[data-result="trend"] {
 
 .detail-hero__score[data-kind="forecast"] .detail-hero__score-value {
   color: var(--helga-blue);
+}
+
+/* Final scores take the hit-result palette so the number itself shows how
+   the model's forecast fared; the warning yellow is mixed toward ink for
+   readable large type on both themes. */
+.detail-hero__score[data-result="exact"] .detail-hero__score-value {
+  color: var(--accent);
+}
+
+.detail-hero__score[data-result="trend"] .detail-hero__score-value {
+  color: color-mix(in srgb, var(--warning) 55%, var(--ink));
+}
+
+.detail-hero__score[data-result="miss"] .detail-hero__score-value {
+  color: var(--danger);
 }
 
 .detail-hero__score-label {
