@@ -28,6 +28,45 @@ from worldcup_predictions.storage.ledger import SourceRequest, normalize_datetim
 from worldcup_predictions.tournament.contracts import FixtureRecord
 
 
+# Forecast refresh schedule: once daily while kickoff is more than a day out,
+# then at fixed kickoff-minus checkpoints where hourly forecasts sharpen the
+# most. After each fetch the ledger's next_safe_fetch_at is set to the next
+# checkpoint, so the half-hourly cron fires at most 29 minutes after each mark.
+WEATHER_CHECKPOINT_HOURS = (24, 18, 12, 6, 3, 1)
+WEATHER_DAILY_INTERVAL = dt.timedelta(hours=24)
+# Actual (observed) match-window weather is fetched once after full time and
+# then never again; Open-Meteo serves past dates on the same endpoint.
+WEATHER_ACTUAL_REFRESH = dt.timedelta(days=365)
+MATCH_OVER_BUFFER = dt.timedelta(hours=4)
+
+
+def next_weather_fetch_at(kickoff: dt.datetime, now: dt.datetime) -> dt.datetime:
+    """Return when the next pre-match forecast refresh is due.
+
+    Daily until the 24-hour mark, then the kickoff-minus checkpoints; once
+    inside the final hour (or after kickoff) the pre-match schedule ends and
+    the kickoff time itself is returned so no further forecast is fetched.
+    """
+
+    if now >= kickoff:
+        return kickoff
+    upcoming = [
+        kickoff - dt.timedelta(hours=hours)
+        for hours in WEATHER_CHECKPOINT_HOURS
+        if kickoff - dt.timedelta(hours=hours) > now
+    ]
+    if not upcoming:
+        return kickoff
+    return min(min(upcoming), now + WEATHER_DAILY_INTERVAL)
+
+
+def fixture_teams_resolved(fixture: FixtureRecord) -> bool:
+    """Placeholder pairings ("Sieger Viertelfinal 1") have no FIFA codes; their
+    weather rows can never join a real fixture key, so they are not fetched."""
+
+    return bool(fixture.home_team.fifa_code) and bool(fixture.away_team.fifa_code)
+
+
 HOURLY_FIELDS = ",".join(
     [
         "temperature_2m",
@@ -75,8 +114,16 @@ class WeatherPlugin(BasePlugin):
 
         diagnostics: list[Diagnostic] = []
         written = 0
+        now = dt.datetime.now(dt.timezone.utc)
         for fixture in state.open_fixtures():
-            result = self._fetch_fixture_weather(runtime, fixture)
+            result = self._fetch_fixture_weather(runtime, fixture, now=now)
+            diagnostics.extend(result.diagnostics)
+            written += int(result.metadata.get("written_rows") or 0)
+        for fixture in state.fixtures:
+            kickoff = fixture.kickoff_at
+            if kickoff is None or now < kickoff + MATCH_OVER_BUFFER:
+                continue
+            result = self._fetch_fixture_weather(runtime, fixture, now=now, actual=True)
             diagnostics.extend(result.diagnostics)
             written += int(result.metadata.get("written_rows") or 0)
 
@@ -91,9 +138,22 @@ class WeatherPlugin(BasePlugin):
             metadata={"written_rows": written, "signals": len(signals)},
         )
 
-    def _fetch_fixture_weather(self, runtime: SourceRuntime, fixture: FixtureRecord) -> PluginResult:
+    def _fetch_fixture_weather(
+        self,
+        runtime: SourceRuntime,
+        fixture: FixtureRecord,
+        *,
+        now: dt.datetime,
+        actual: bool = False,
+    ) -> PluginResult:
+        if not fixture_teams_resolved(fixture):
+            return runtime.result()
         coordinates = fixture_coordinates(fixture)
         if coordinates is None:
+            if actual:
+                # A missing venue mapping on a finished match would repeat the
+                # same diagnostic on every run; skip silently instead.
+                return runtime.result()
             return runtime.result(
                 diagnostics=[
                     runtime.diagnostic(
@@ -113,7 +173,7 @@ class WeatherPlugin(BasePlugin):
         request = SourceRequest(
             source=SOURCE_OPEN_METEO,
             endpoint=ENDPOINT_OPEN_METEO_FORECAST,
-            purpose="match_window_weather",
+            purpose="match_window_weather_actual" if actual else "match_window_weather",
             params={
                 "latitude": round(latitude, 4),
                 "longitude": round(longitude, 4),
@@ -124,7 +184,7 @@ class WeatherPlugin(BasePlugin):
             },
             fixture_key=fixture.key,
             quota_cost=0,
-            min_refresh_interval=dt.timedelta(minutes=runtime.context.config.source_defaults.weather_refresh_minutes),
+            min_refresh_interval=WEATHER_ACTUAL_REFRESH if actual else dt.timedelta(minutes=30),
             quota_scope=SOURCE_OPEN_METEO,
             rate_limit_backoff=dt.timedelta(hours=6),
         )
@@ -157,11 +217,21 @@ class WeatherPlugin(BasePlugin):
                 ],
             )
 
-        row = weather_row_from_open_meteo(payload, fixture, latitude=latitude, longitude=longitude, window_start=start, window_end=end)
+        row = weather_row_from_open_meteo(
+            payload,
+            fixture,
+            latitude=latitude,
+            longitude=longitude,
+            window_start=start,
+            window_end=end,
+            data_kind="actual" if actual else "forecast",
+        )
+        next_fetch = None if actual else normalize_datetime(next_weather_fetch_at(parse_utc_datetime(fixture.event_date) or now, now))
         runtime.record_success(
             request,
-            message="Fetched Open-Meteo match-window forecast.",
+            message="Fetched Open-Meteo match-window observations." if actual else "Fetched Open-Meteo match-window forecast.",
             metadata={"rows": 1 if row else 0},
+            next_safe_fetch_at=next_fetch,
         )
         count = 0
         if row is not None:
@@ -183,12 +253,15 @@ def fixture_coordinates(fixture: FixtureRecord) -> tuple[float, float] | None:
     )
     if latitude is None or longitude is None:
         venue = _normalize_venue_label(fixture.venue or metadata.get("location") or metadata.get("venue") or "")
-        return VENUE_COORDINATES.get(venue)
+        # The coordinate table is keyed by the German SRF venue labels; the
+        # canonical state now carries FIFA's English names ("Dallas Stadium",
+        # "New York/New Jersey Stadium"), which differ only in that suffix.
+        return VENUE_COORDINATES.get(venue) or VENUE_COORDINATES.get(venue.replace("stadium", "stadion"))
     return latitude, longitude
 
 
 def _normalize_venue_label(value: Any) -> str:
-    return " ".join(str(value or "").casefold().replace("-", " ").split())
+    return " ".join(str(value or "").casefold().replace("-", " ").replace("/", " ").split())
 
 
 def weather_row_from_open_meteo(
@@ -199,6 +272,7 @@ def weather_row_from_open_meteo(
     longitude: float,
     window_start: dt.datetime,
     window_end: dt.datetime,
+    data_kind: str = "forecast",
 ) -> dict[str, Any] | None:
     hourly = payload.get("hourly") or {}
     times = hourly.get("time") or []
@@ -218,8 +292,10 @@ def weather_row_from_open_meteo(
 
     weather_codes = [_optional_int_at(hourly.get("weather_code"), index) for index in selected_indexes]
     weather_codes = [code for code in weather_codes if code is not None]
+    key_suffix = ":actual" if data_kind == "actual" else ""
     row = {
-        "record_key": f"{fixture.key}:{SOURCE_OPEN_METEO}:{normalize_datetime(window_start)}",
+        "record_key": f"{fixture.key}:{SOURCE_OPEN_METEO}:{normalize_datetime(window_start)}{key_suffix}",
+        "data_kind": data_kind,
         "fixture_key": fixture.key,
         "event_date": fixture.event_date,
         "home_team": fixture.home_team.name,
@@ -252,6 +328,8 @@ def weather_row_from_open_meteo(
 def weather_signals_from_rows(rows: list[dict[str, Any]]) -> list[Signal]:
     latest_by_fixture: dict[str, dict[str, Any]] = {}
     for row in rows:
+        if str(row.get("data_kind") or "forecast") != "forecast":
+            continue
         fixture_key = str(row.get("fixture_key") or "")
         observed_at = str(row.get("_record", {}).get("observed_at_utc") or row.get("window_start_utc") or "")
         current = latest_by_fixture.get(fixture_key)

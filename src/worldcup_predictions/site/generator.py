@@ -1663,7 +1663,13 @@ def _attach_fixture_context(storage, rows: list[dict[str, Any]]) -> None:
         weather_rows = []
     for weather_row in weather_rows:
         fixture_key = str(weather_row.get("fixture_key") or "")
-        if fixture_key:
+        if not fixture_key:
+            continue
+        current = weather.get(fixture_key)
+        # Observed post-match weather beats any forecast snapshot.
+        if current is not None and str(current.get("data_kind") or "forecast") == "actual":
+            continue
+        if current is None or str(weather_row.get("data_kind") or "forecast") == "actual":
             weather[fixture_key] = weather_row
     for row in rows:
         fixture_key = str(row.get("fixture_key") or "")
@@ -1684,12 +1690,25 @@ def _venue_display(prepared: dict[str, Any], *, locale: str) -> str:
 
 
 def _weather_text(prepared: dict[str, Any], *, catalog: TranslationCatalog) -> str:
-    """Compact forecast for upcoming matches, e.g. "29 °C, Regen 45%"."""
+    """Compact match-window weather, e.g. "29 °C, Regen 45%".
 
-    if prepared.get("status") != "future":
-        return ""
+    Upcoming matches show the latest forecast; finished matches only show
+    weather once the observed post-match row exists (a stale pregame
+    forecast would misrepresent what actually happened).
+    """
+
     observation = prepared.get("weather") or {}
     if not isinstance(observation, dict):
+        return ""
+    kind = str(observation.get("data_kind") or "forecast")
+    status = prepared.get("status")
+    if status == "future":
+        if kind != "forecast":
+            return ""
+    elif status == "final":
+        if kind != "actual":
+            return ""
+    else:
         return ""
     temperature = observation.get("temperature_max_c")
     if temperature is None:
