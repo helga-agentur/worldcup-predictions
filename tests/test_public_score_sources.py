@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+
 import json
 import unittest
 
@@ -13,7 +14,7 @@ class PublicScoreSourcesTest(unittest.TestCase):
     def test_public_page_analysis_rows_extract_supported_pregame_note(self) -> None:
         resolver = TeamResolver.default()
         fixture = FixtureRecord(
-            event_date="2026-07-10T18:00:00Z",
+            event_date=(dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=2)).strftime("%Y-%m-%dT18:00:00Z"),
             home_team=resolver.resolve("Brazil"),
             away_team=resolver.resolve("Japan"),
             stage="Group Stage",

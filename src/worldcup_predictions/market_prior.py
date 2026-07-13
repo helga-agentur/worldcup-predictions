@@ -72,7 +72,10 @@ def adjust_prediction_for_outrights(prediction: Prediction, team_strengths: dict
         most_likely=most_likely_score(adjusted_matrix),
         outcome_probabilities=probabilities,
         confidence_label=confidence_label(probabilities.max_probability()),
-        confidence_percent=probabilities.max_probability() * 100,
+        # confidence_percent is a 0-1 fraction everywhere else (baseline model,
+        # site formatting, CLI ':.0%'); the stray *100 here rendered as
+        # "Sicherheit: Tief (4415.7%)" on every market-adjusted fixture.
+        confidence_percent=probabilities.max_probability(),
         expected_home_goals=_expected_goals(adjusted_matrix, side="home"),
         expected_away_goals=_expected_goals(adjusted_matrix, side="away"),
         source=prediction.source,

@@ -3655,6 +3655,11 @@ def _confidence_text(label: Any, percent: Any, *, catalog: TranslationCatalog) -
         value = float(percent)
     except (TypeError, ValueError):
         value = None
+    if value is not None and value > 1.0:
+        # Ledger rows frozen between the market-prior unification and its
+        # scale fix stored confidence_percent as 0-100; normalize so past
+        # match pages don't render "4415.7%" forever.
+        value = value / 100.0
     fallback_label = "-"
     if value is not None:
         if value >= 0.70:
