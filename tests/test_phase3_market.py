@@ -130,6 +130,10 @@ class OutrightMarketMatrixAdjustmentTest(unittest.TestCase):
         without_market = adjust_prediction_for_outrights(prediction({}), strengths)
         self.assertIn("outright_market_adjustment", without_market.metadata)
         self.assertGreater(without_market.outcome_probabilities.home, 0.35)
+        # confidence_percent is a 0-1 fraction across the codebase; a stray
+        # *100 here once published "Sicherheit: Tief (4415.7%)" to the site.
+        self.assertLessEqual(without_market.confidence_percent, 1.0)
+        self.assertGreater(without_market.confidence_percent, 0.0)
 
 
 if __name__ == "__main__":

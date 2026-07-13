@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime as dt
+
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,7 +26,7 @@ from worldcup_predictions.tournament.repository import write_fixtures
 def fixture() -> FixtureRecord:
     resolver = TeamResolver.default()
     return FixtureRecord(
-        event_date="2026-07-10T18:00:00Z",
+        event_date=(dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=2)).strftime("%Y-%m-%dT18:00:00Z"),
         home_team=resolver.resolve("Brazil"),
         away_team=resolver.resolve("Japan"),
         group="Group A",
