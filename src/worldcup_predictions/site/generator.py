@@ -24,6 +24,8 @@ from worldcup_predictions.core.datasets import (
     PROVIDER_POINTS,
     PUBLISHED_PREDICTION_LEDGER,
     SIMULATION_SUMMARY,
+    TOURNAMENT_FIXTURES,
+    WEATHER_OBSERVATIONS,
 )
 from worldcup_predictions.core.env import env_value
 from worldcup_predictions.core.i18n import SUPPORTED_LOCALES, TranslationCatalog, load_translation_catalog
@@ -313,6 +315,7 @@ def build_site(
     country_registry = load_country_registry()
     placeholder_rows = _unpredicted_fixture_rows(storage, ledger_rows, country_registry=country_registry)
     source_rows = [*ledger_rows, *placeholder_rows]
+    _attach_fixture_context(storage, source_rows)
     rows = [_prepare_html_row(row, country_registry=country_registry, locale="de") for row in source_rows]
     rows.sort(key=lambda row: (str(row.get("event_date") or ""), str(row.get("fixture_key") or "")))
     _apply_provider_point_accounts(rows, country_registry=country_registry)
@@ -1628,6 +1631,76 @@ def _add_alternate_links(locale: str, rows: list[dict[str, Any]]) -> None:
         row["language_switch_links"] = _language_switch_links(locale, slug)
 
 
+# Venue names differ per source language: SRF publishes German stadium names,
+# the FIFA match centre English ones.
+_VENUE_SOURCE_PREFERENCE: dict[str, tuple[str, ...]] = {
+    "de": ("srf_public", "fifa_match_centre", "openfootball"),
+    "en": ("fifa_match_centre", "openfootball", "srf_public"),
+}
+
+
+def _attach_fixture_context(storage, rows: list[dict[str, Any]]) -> None:
+    """Attach per-source venue names and match-window weather to raw rows."""
+
+    venues: dict[str, dict[str, str]] = {}
+    weather: dict[str, dict[str, Any]] = {}
+    try:
+        fixture_rows = storage.read_records(TOURNAMENT_FIXTURES, latest_only=True)
+    except Exception:
+        fixture_rows = []
+    for fixture_row in fixture_rows:
+        venue = str(fixture_row.get("venue") or "").strip()
+        fixture_key = str(fixture_row.get("fixture_key") or "")
+        if not venue or not fixture_key:
+            continue
+        record = fixture_row.get("_record") or {}
+        source_family = str(record.get("source") or "").split(":", 1)[0].split("/", 1)[0]
+        if source_family:
+            venues.setdefault(fixture_key, {})[source_family] = venue
+    try:
+        weather_rows = storage.read_records(WEATHER_OBSERVATIONS, latest_only=True)
+    except Exception:
+        weather_rows = []
+    for weather_row in weather_rows:
+        fixture_key = str(weather_row.get("fixture_key") or "")
+        if fixture_key:
+            weather[fixture_key] = weather_row
+    for row in rows:
+        fixture_key = str(row.get("fixture_key") or "")
+        if fixture_key in venues:
+            row["venue_by_source"] = venues[fixture_key]
+        if fixture_key in weather:
+            row["weather"] = weather[fixture_key]
+
+
+def _venue_display(prepared: dict[str, Any], *, locale: str) -> str:
+    venues = prepared.get("venue_by_source") or {}
+    if not isinstance(venues, dict) or not venues:
+        return ""
+    for source in _VENUE_SOURCE_PREFERENCE.get(locale, _VENUE_SOURCE_PREFERENCE["en"]):
+        if venues.get(source):
+            return str(venues[source])
+    return str(next(iter(venues.values())))
+
+
+def _weather_text(prepared: dict[str, Any], *, catalog: TranslationCatalog) -> str:
+    """Compact forecast for upcoming matches, e.g. "29 °C, Regen 45%"."""
+
+    if prepared.get("status") != "future":
+        return ""
+    observation = prepared.get("weather") or {}
+    if not isinstance(observation, dict):
+        return ""
+    temperature = observation.get("temperature_max_c")
+    if temperature is None:
+        return ""
+    text = f"{round(float(temperature))} °C"
+    rain_probability = observation.get("precipitation_probability_max_pct")
+    if rain_probability is not None:
+        text += f", {catalog.translate('label.rain')} {round(float(rain_probability))}%"
+    return text
+
+
 def _detail_path(locale: str, slug: str) -> str:
     return f"/{locale}/{LOCALE_DETAIL_PREFIX[locale]}/{slug}"
 
@@ -2433,6 +2506,8 @@ def _prepare_html_row(row: dict[str, Any], *, country_registry: CountryRegistry,
     prepared["away_team_display"] = away_display
     prepared["match_display"] = _match_display(home_display, away_display)
     prepared["status_label"] = _status_label(prepared.get("status"), catalog=catalog)
+    prepared["venue_display"] = _venue_display(prepared, locale=locale)
+    prepared["weather_text"] = _weather_text(prepared, catalog=catalog)
     prepared["actual_score_label"] = catalog.translate("label.result") if prepared.get("actual_score") else ""
     prepared["srf_tip_label"] = _tip_display_text(prepared.get("srf_tip"), country_registry=country_registry, locale=locale)
     prepared["twenty_min_tip_label"] = _tip_display_text(

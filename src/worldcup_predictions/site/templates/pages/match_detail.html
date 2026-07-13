@@ -17,7 +17,7 @@
     <div class="detail-hero__main">
       <div class="detail-hero__kicker">
         {{ t("site.kicker") }}{% if row.stage_label %} · {{ row.stage_label }}{% endif %}
-        · <time datetime="{{ row.event_date }}">{{ row.kickoff_display }}</time>
+        · <time datetime="{{ row.event_date }}">{{ row.kickoff_display }}</time>{% if row.venue_display %} · {{ row.venue_display }}{% endif %}
       </div>
       <h1 id="match-title" class="detail-hero__title">
         {{ country_name(row.home_team_display, flag_class="detail-hero__flag") }} – {{ country_name(row.away_team_display, flag_class="detail-hero__flag") }}
@@ -52,6 +52,9 @@
         {% endif %}
         {% if row.confidence_text and row.confidence_text != "-" %}
         <span class="tag">{{ t("label.confidence") }}: <span class="numeric">{{ row.confidence_text }}</span></span>
+        {% endif %}
+        {% if row.weather_text %}
+        <span class="tag">{{ t("label.weather") }}: <span class="numeric">{{ row.weather_text }}</span></span>
         {% endif %}
         {% if row.advancement %}
         <span class="tag">
