@@ -1403,27 +1403,8 @@ html[data-theme="dark"] .tag[data-result="trend"] {
   font-size: clamp(2.6rem, 6vw, 3.6rem);
   font-weight: 700;
   line-height: 1;
-  color: var(--ink);
-  letter-spacing: 0.02em;
-}
-
-.detail-hero__score[data-kind="forecast"] .detail-hero__score-value {
   color: var(--helga-blue);
-}
-
-/* Final scores take the hit-result palette so the number itself shows how
-   the model's forecast fared; the warning yellow is mixed toward ink for
-   readable large type on both themes. */
-.detail-hero__score[data-result="exact"] .detail-hero__score-value {
-  color: var(--accent);
-}
-
-.detail-hero__score[data-result="trend"] .detail-hero__score-value {
-  color: color-mix(in srgb, var(--warning) 55%, var(--ink));
-}
-
-.detail-hero__score[data-result="miss"] .detail-hero__score-value {
-  color: var(--danger);
+  letter-spacing: 0.02em;
 }
 
 .detail-hero__score-label {
