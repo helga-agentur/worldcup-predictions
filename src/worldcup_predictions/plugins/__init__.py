@@ -23,6 +23,7 @@ from worldcup_predictions.plugins.signals.phase_context import PhaseContextPlugi
 from worldcup_predictions.plugins.sources.enrichment.postmatch_stats import PostmatchStatsPlugin
 from worldcup_predictions.plugins.signals.player_impact import PlayerImpactPlugin
 from worldcup_predictions.plugins.sources.enrichment.public_analysis import PublicAnalysisPlugin
+from worldcup_predictions.plugins.sources.enrichment.srf_experts import SrfExpertsPlugin
 from worldcup_predictions.plugins.sources.enrichment.google_news_rss import GoogleNewsRssPlugin
 from worldcup_predictions.plugins.sources.fixtures.public_score_sources import PublicScoreSourcesPlugin
 from worldcup_predictions.plugins.workflow.result_monitoring import ResultMonitoringPlugin
@@ -71,6 +72,7 @@ def builtin_plugins():
         PlayerImpactPlugin(),
         MlOutcomePlugin(),
         LiveCalibrationPlugin(),
+        SrfExpertsPlugin(),
         BaselineModelPlugin(),
         SrfChProviderOptimizerPlugin(),
         TwentyMinChProviderOptimizerPlugin(),

@@ -33,6 +33,7 @@ Generated from plugin metadata declared in the codebase.
 | `player_impact` | signal | 310 | `feature_signals_requested` | `squad_values`, `player_impact` | `team_expected_goals_factor`, `total_goals_factor` | no |
 | `ml_outcome` | signal | 320 | `feature_signals_requested` | `ml_outcome_models` | `ml_hda_probabilities` | no |
 | `live_calibration` | signal | 330 | `results_updated`, `feature_signals_requested` | `team_calibration`, `live_global_calibration`, `calibration_decisions` | `team_expected_goals_factor`, `total_goals_factor`, `live_draw_adjustment`, `live_score_tail_factor`, `live_favorite_outcome_factor` | no |
+| `srf_experts` | source | 340 | `feature_signals_requested` | `srf_expert_predictions`, `srf_expert_performance`, `extraction_diagnostics` | `expert_hda_probabilities` | no |
 | `baseline_model` | model | 400 | `predictions_requested` | - | - | no |
 | `provider_optimizer_srf_ch` | provider_optimizer | 700 | `provider_optimization_requested` | - | - | no |
 | `provider_optimizer_20min_ch` | provider_optimizer | 710 | `provider_optimization_requested` | - | - | no |
@@ -479,6 +480,21 @@ Convert finished tournament results and chance-quality rows into team expected-g
 - Signals: `team_expected_goals_factor`, `total_goals_factor`, `live_draw_adjustment`, `live_score_tail_factor`, `live_favorite_outcome_factor`
 - Locales: `en`, `de`
 - Confidence policy: Recent tournament samples are conservative, sample-size weighted, and capped.
+
+### `srf_experts`
+
+Fetch SRF public expert round pages and emit conservative expert consensus signals.
+
+- Version: `0.2.0`
+- Kind: `source`
+- Priority: `340`
+- Events: `feature_signals_requested`
+- Reads: `srf_expert_predictions`
+- Writes: `srf_expert_predictions`, `srf_expert_performance`, `extraction_diagnostics`
+- Signals: `expert_hda_probabilities`
+- Locales: `en`, `de`
+- Quota: not limited and ledger-required - Expert round pages poll hourly near tip deadlines, every six hours otherwise; settled rounds re-probe weekly.
+- Confidence policy: Expert consensus confidence rises with extracted expert count and is capped below market weight.
 
 ### `baseline_model`
 
