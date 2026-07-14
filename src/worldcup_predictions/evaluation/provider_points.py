@@ -139,7 +139,30 @@ def twenty_min_points_for_selection(fixture: FixtureRecord, result: ResultRecord
             return float(points if result.score.away > result.score.home else 0)
         return 0.0
     winner = fixture.home_team.name if result.score.home > result.score.away else fixture.away_team.name if result.score.away > result.score.home else ""
+    if not winner:
+        # 20min knockout points score ADVANCEMENT: a drawn match is decided by
+        # the shootout, whose winner the confirmed result carries in metadata.
+        # Treating draws as "no winner" silently dropped earned points
+        # (Morocco and Egypt shootout picks, 2026-07-14 audit).
+        winner = _shootout_winner(fixture, result) or ""
     return float(points if selection and selection == winner else 0)
+
+
+def _shootout_winner(fixture: FixtureRecord, result: ResultRecord) -> str | None:
+    metadata = result.metadata or {}
+    try:
+        home_pens = int(metadata["home_penalty_score"])
+        away_pens = int(metadata["away_penalty_score"])
+    except (KeyError, TypeError, ValueError):
+        home_pens = away_pens = None
+    if home_pens is not None and home_pens != away_pens:
+        return fixture.home_team.name if home_pens > away_pens else fixture.away_team.name
+    flag = str(metadata.get("winner") or "")
+    if flag == "HOME_TEAM":
+        return fixture.home_team.name
+    if flag == "AWAY_TEAM":
+        return fixture.away_team.name
+    return None
 
 
 def tip_from_row(row: dict[str, Any]) -> ScoreTip | None:

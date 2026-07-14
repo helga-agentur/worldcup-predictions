@@ -16,6 +16,8 @@ from worldcup_predictions.plugins.providers import (
 )
 from worldcup_predictions.evaluation.provider_knockout_audit import build_provider_knockout_audit_rows
 from worldcup_predictions.providers import ScoreMatrixOptimizer, srf_rules_for_fixture
+from worldcup_predictions.evaluation.provider_points import twenty_min_points_for_selection
+from worldcup_predictions.tournament import FixtureRecord, ResultRecord, TeamResolver
 
 
 class DummyContext:
@@ -154,6 +156,41 @@ class ProviderOptimizerTest(unittest.TestCase):
         self.assertEqual(optimized.selection, "Japan")
         self.assertAlmostEqual(optimized.expected_points, 20.8)
         self.assertEqual(optimized.metadata["correct_selection_points"], 40)
+
+    def test_twenty_min_scores_shootout_advancement_on_drawn_knockouts(self) -> None:
+        # 20min knockout points score advancement; a drawn match is decided by
+        # the shootout, whose winner the confirmed result carries in metadata.
+        # Live regression 2026-07-14: Morocco and Egypt shootout picks earned
+        # points on 20min but were tracked as 0.
+        resolver = TeamResolver.default()
+        fixture = FixtureRecord(
+            event_date="2026-06-30T01:00:00Z",
+            home_team=resolver.resolve("Netherlands"),
+            away_team=resolver.resolve("Morocco"),
+            stage="Round of 32",
+        )
+        result = ResultRecord(
+            event_date=fixture.event_date,
+            home_team=fixture.home_team,
+            away_team=fixture.away_team,
+            score=ScoreTip(1, 1),
+            metadata={"home_penalty_score": 2, "away_penalty_score": 3},
+        )
+
+        self.assertEqual(twenty_min_points_for_selection(fixture, result, "team", "Morocco"), 5.0)
+        self.assertEqual(twenty_min_points_for_selection(fixture, result, "team", "Netherlands"), 0.0)
+
+        # winner flag fallback, and no evidence stays conservative
+        result_flag = ResultRecord(
+            event_date=fixture.event_date, home_team=fixture.home_team, away_team=fixture.away_team,
+            score=ScoreTip(1, 1), metadata={"winner": "AWAY_TEAM"},
+        )
+        self.assertEqual(twenty_min_points_for_selection(fixture, result_flag, "team", "Morocco"), 5.0)
+        result_bare = ResultRecord(
+            event_date=fixture.event_date, home_team=fixture.home_team, away_team=fixture.away_team,
+            score=ScoreTip(1, 1),
+        )
+        self.assertEqual(twenty_min_points_for_selection(fixture, result_bare, "team", "Morocco"), 0.0)
 
     def test_provider_knockout_audit_compares_exact_score_and_advancement(self) -> None:
         prediction = build_prediction(
