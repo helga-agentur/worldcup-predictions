@@ -26,6 +26,27 @@ from worldcup_predictions.simulations.worldcup_2026 import (
 
 DEFAULT_TOP_SCORER_GOALS = (5, 6, 6, 7, 7, 8)
 STAGE_GROUP = "Group stage"
+
+
+def _real_round_of_32_pairs(fixtures) -> list[tuple[str, str]]:
+    """Actual round-of-32 pairings from the known fixture list.
+
+    Placeholder pairings (unresolved bracket slots) are excluded; the list is
+    empty in day-one mode, which leaves the heuristic third-place allocation
+    untouched.
+    """
+
+    pairs = []
+    for fixture in fixtures:
+        stage = str(getattr(fixture, "stage", "") or "")
+        if "32" not in stage:
+            continue
+        home = str(getattr(fixture, "home_team", "") or "")
+        away = str(getattr(fixture, "away_team", "") or "")
+        if not home or not away or home.startswith("Sieger") or away.startswith("Sieger"):
+            continue
+        pairs.append((home, away))
+    return pairs
 STAGE_ROUND_OF_32 = "Round of 32"
 STAGE_CHAMPION = "Champion"
 
@@ -90,6 +111,7 @@ class TournamentSimulator:
         self._matrix_source_counts: Counter[str] = Counter()
         self._market_adjustment_counts: Counter[str] = Counter()
         self._outright_adjusted_matrices: dict[tuple[str, str, str, str], tuple[list[ScoreMatrixEntry], str]] = {}
+        self._real_round_of_32_pairs = _real_round_of_32_pairs(inputs.fixtures)
 
     def run(self) -> SimulationSummary:
         rng = random.Random(self.seed)
@@ -351,7 +373,7 @@ class TournamentSimulator:
         rng: random.Random,
     ) -> str | None:
         previous_winners: dict[str, str] = {}
-        matches = round_of_32_matches(placements, third_rankings)
+        matches = round_of_32_matches(placements, third_rankings, self._real_round_of_32_pairs)
         for match in matches:
             winner = self._simulate_knockout_match(
                 match["match_id"],

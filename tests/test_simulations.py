@@ -40,7 +40,13 @@ from worldcup_predictions.plugins.providers.ch_srf import (
     evaluate_srf_bonus_questions,
 )
 from worldcup_predictions.simulations import DEFAULT_SIMULATION_ITERATIONS, SimulationInputs, TournamentSimulator, pair_key
-from worldcup_predictions.simulations.worldcup_2026 import NEXT_ROUNDS, ROUND_OF_32
+from worldcup_predictions.simulations.worldcup_2026 import (
+    NEXT_ROUNDS,
+    ROUND_OF_32,
+    assign_third_place_slots,
+    round_of_32_matches,
+    third_assignments_from_real_pairs,
+)
 from worldcup_predictions.storage import DuckDBStorage
 
 
@@ -826,6 +832,63 @@ class FakeDatasetStorage:
 
     def read_records(self, dataset: str, *, latest_only: bool = False) -> list[dict]:
         return list(self.rows_by_dataset.get(dataset, []))
+
+
+class ThirdPlacePinningTest(unittest.TestCase):
+    """The heuristic third-place allocation must yield to the real draw.
+
+    Live regression 2026-07-14: the heuristic assigned a different valid
+    allocation than FIFA's actual draw, so Switzerland's known 2:0 over
+    Algeria never attached and re-simulated in 40% of iterations, cascading
+    phantom eliminations to Argentina's and Spain's paths.
+    """
+
+    def _placements(self) -> dict[str, str]:
+        placements = {}
+        for group in "ABCDEFGHIJKL":
+            placements[f"1{group}"] = f"Winner {group}"
+            placements[f"2{group}"] = f"Second {group}"
+            placements[f"3{group}"] = f"Third {group}"
+        return placements
+
+    def _third_rankings(self) -> list[dict]:
+        return [{"group": group} for group in "ABCDEFGHIJKL"]
+
+    def test_real_pairs_pin_the_third_slot_groups(self) -> None:
+        placements = self._placements()
+        heuristic = assign_third_place_slots(self._third_rankings())
+        # M74 pairs 1E against a third from A/B/C/D/F: force reality to be
+        # a different valid choice than whatever the heuristic picked.
+        options = [g for g in "ABCDF" if g != heuristic.get("3A/B/C/D/F")]
+        real_group = options[0]
+        real_pairs = [("Winner E", f"Third {real_group}")]
+
+        pinned = third_assignments_from_real_pairs(placements, dict(heuristic), real_pairs)
+
+        self.assertEqual(pinned["3A/B/C/D/F"], real_group)
+
+    def test_invalid_or_unknown_real_pairs_change_nothing(self) -> None:
+        placements = self._placements()
+        heuristic = assign_third_place_slots(self._third_rankings())
+
+        # Group L is not an allowed candidate for the M74 slot.
+        pinned = third_assignments_from_real_pairs(placements, dict(heuristic), [("Winner E", "Third L")])
+        self.assertEqual(pinned, heuristic)
+
+        # No real pairs (day-one mode) is a strict no-op.
+        self.assertEqual(third_assignments_from_real_pairs(placements, dict(heuristic), []), heuristic)
+
+    def test_round_of_32_uses_pinned_pairing(self) -> None:
+        placements = self._placements()
+        heuristic = assign_third_place_slots(self._third_rankings())
+        options = [g for g in "ABCDF" if g != heuristic.get("3A/B/C/D/F")]
+        real_pairs = [("Winner E", f"Third {options[0]}")]
+
+        matches = round_of_32_matches(placements, self._third_rankings(), real_pairs)
+        m74 = next(m for m in matches if m["match_id"] == "M74")
+
+        self.assertEqual(m74["home"], "Winner E")
+        self.assertEqual(m74["away"], f"Third {options[0]}")
 
 
 if __name__ == "__main__":

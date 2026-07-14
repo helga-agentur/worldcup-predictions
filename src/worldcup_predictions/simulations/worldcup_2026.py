@@ -160,11 +160,58 @@ def assign_third_place_slots(third_rankings: list[dict[str, Any]]) -> dict[str, 
     }
 
 
+def third_assignments_from_real_pairs(
+    placements: dict[str, str],
+    third_assignments: dict[str, str | None],
+    real_pairs: list[tuple[str, str]],
+) -> dict[str, str | None]:
+    """Pin third-place slot assignments to the real round-of-32 draw.
+
+    The constrained heuristic in assign_third_place_slots picks one valid
+    allocation, but FIFA's actual draw may pick another. Once the real
+    round-of-32 pairings are known, each third slot's group is derived from
+    which third-placed team actually faced that slot's seeded opponent -
+    otherwise known results cannot attach and played matches re-simulate
+    (Switzerland's 2:0 over Algeria was re-sampled in 40% of iterations).
+    """
+
+    if not real_pairs:
+        return third_assignments
+    partner_by_team: dict[str, str] = {}
+    for home, away in real_pairs:
+        partner_by_team[home] = away
+        partner_by_team[away] = home
+    group_by_third_team = {
+        team: slot[1:]
+        for slot, team in placements.items()
+        if slot.startswith("3") and len(slot) == 2 and team
+    }
+    pinned = dict(third_assignments)
+    for _match_id, home_slot, away_slot in ROUND_OF_32:
+        third_slot, seeded_slot = None, None
+        if home_slot.startswith("3"):
+            third_slot, seeded_slot = home_slot, away_slot
+        elif away_slot.startswith("3"):
+            third_slot, seeded_slot = away_slot, home_slot
+        if third_slot is None:
+            continue
+        seeded_team = placements.get(seeded_slot)
+        if not seeded_team:
+            continue
+        opponent = partner_by_team.get(seeded_team)
+        group = group_by_third_team.get(opponent or "")
+        if group and group in slot_candidates(third_slot):
+            pinned[third_slot] = group
+    return pinned
+
+
 def round_of_32_matches(
     placements: dict[str, str],
     third_rankings: list[dict[str, Any]],
+    real_pairs: list[tuple[str, str]] | None = None,
 ) -> list[dict[str, str | None]]:
     third_assignments = assign_third_place_slots(third_rankings)
+    third_assignments = third_assignments_from_real_pairs(placements, third_assignments, real_pairs or [])
     return [
         {
             "match_id": match_id,
