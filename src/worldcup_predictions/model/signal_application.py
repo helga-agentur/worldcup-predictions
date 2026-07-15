@@ -252,7 +252,8 @@ def apply_hda_probabilities(score_matrix: list[ScoreMatrixEntry], signal: Signal
     except (KeyError, TypeError, ValueError):
         return score_matrix, None
     max_weight = _hda_max_weight(signal.name, policy)
-    weight = _clamp(signal_weight(signal), 0.0, max_weight)
+    multiplier = float(policy.signal_skill_multipliers.get(f"{signal.name}:{signal.source}", 1.0))
+    weight = _clamp(signal_weight(signal) * multiplier, 0.0, max_weight)
     if weight <= 0:
         return score_matrix, None
     return (
@@ -265,7 +266,9 @@ def apply_hda_probabilities(score_matrix: list[ScoreMatrixEntry], signal: Signal
         ),
         {
             "signal": signal.name,
+            "source": signal.source,
             "weight": weight,
+            "skill_multiplier": multiplier,
             "target_home": target_home,
             "target_draw": target_draw,
             "target_away": target_away,

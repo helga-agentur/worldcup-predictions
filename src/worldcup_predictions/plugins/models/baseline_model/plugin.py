@@ -7,6 +7,9 @@ from worldcup_predictions.core.datasets import HISTORICAL_RESULTS, MARKET_OUTRIG
 from worldcup_predictions.core.events import EventName, event_value
 from worldcup_predictions.core.metadata import PluginKind, PluginMetadata
 from worldcup_predictions.core.plugin import BasePlugin, PluginResult
+from worldcup_predictions.evaluation.signal_skill import signal_skill_multipliers
+from worldcup_predictions.model.contracts import ModelSignalPolicy
+from worldcup_predictions.model.signal_application import SignalApplierRegistry
 from worldcup_predictions.market_prior import adjust_prediction_for_outrights, team_strengths_from_outrights
 from worldcup_predictions.model import BaselineModel, HistoricalResult, load_historical_results
 from worldcup_predictions.tournament import TournamentState
@@ -60,7 +63,8 @@ class BaselineModelPlugin(BasePlugin):
         if not context.settings.get("ignore_tournament_results_for_model"):
             historical_results.extend(_historical_from_tournament_results(state))
         signals = _workflow_signals(context)
-        model = BaselineModel(historical_results)
+        policy = ModelSignalPolicy(signal_skill_multipliers=signal_skill_multipliers(context.storage, state))
+        model = BaselineModel(historical_results, signal_appliers=SignalApplierRegistry.default(policy))
         team_strengths = team_strengths_from_outrights(context.storage.read_records(MARKET_OUTRIGHTS, latest_only=True))
         predictions = [
             adjust_prediction_for_outrights(model.predict_fixture(fixture, signals=signals), team_strengths)

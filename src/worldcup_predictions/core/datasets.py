@@ -38,6 +38,7 @@ PREDICTION_LEDGER = "prediction_ledger"
 PUBLISHED_PREDICTION_LEDGER = "published_prediction_ledger"
 PUBLISHED_PREDICTION_SEED = "published_prediction_seed"
 MODEL_CALIBRATION = "model_calibration"
+SIGNAL_SKILL_CALIBRATION = "signal_skill_calibration"
 PREDICTION_AUDIT = "prediction_audit"
 PREDICTION_REPORTS = "prediction_reports"
 FOOTBALL_DATA_TEAMS = "football_data_teams"
@@ -121,6 +122,7 @@ DATASET_CONTRACTS: dict[str, DatasetContract] = {
     PUBLISHED_PREDICTION_LEDGER: DatasetContract(PUBLISHED_PREDICTION_LEDGER, "Website-facing prediction ledger with locked past predictions.", ("fixture_key", "status")),
     PUBLISHED_PREDICTION_SEED: DatasetContract(PUBLISHED_PREDICTION_SEED, "Archived pre-refactor published predictions used as a parity seed.", ("fixture_key", "srf_tip")),
     MODEL_CALIBRATION: DatasetContract(MODEL_CALIBRATION, "Model calibration/tuning run summaries.", ("calibration_id",)),
+    SIGNAL_SKILL_CALIBRATION: DatasetContract(SIGNAL_SKILL_CALIBRATION, "Outcome-scored skill and blend multiplier per H/D/A signal source.", ("signal", "source", "multiplier")),
     PREDICTION_AUDIT: DatasetContract(PREDICTION_AUDIT, "Audit rows for frozen pre-match prediction snapshots.", ("fixture_key", "snapshot_id")),
     PREDICTION_REPORTS: DatasetContract(PREDICTION_REPORTS, "Human-readable generated report manifests.", ("report_key", "path")),
     FOOTBALL_DATA_TEAMS: DatasetContract(FOOTBALL_DATA_TEAMS, "football-data.org team and squad metadata.", ("team",)),

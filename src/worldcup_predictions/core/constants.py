@@ -165,11 +165,11 @@ SIGNAL_WEIGHT_ML_HDA = 0.18
 SIGNAL_WEIGHT_LIVE_DRAW = 0.55
 SIGNAL_WEIGHT_LIVE_SCORE_TAIL = 0.45
 SIGNAL_WEIGHT_LIVE_FAVORITE = 0.35
-# Reduced 0.20 -> 0.05 on 2026-07-15: over ~100 scored matches the model
-# beats every SRF expert on both points (7.09 vs 5.63-6.00 per match) and
-# outcome direction (72% vs 60-63%), so a unanimous pundit consensus must
-# nudge (effective ~0.04), never dominate, the stronger model.
-SIGNAL_WEIGHT_SRF_EXPERT = 0.05
+# Base cap only: evaluation.signal_skill scales every H/D/A source by its
+# outcome-scored skill each run. With the experts' current 100-match record
+# (Brier edge -0.154 vs the published forecast) the learned multiplier puts
+# their effective weight near 0.05; it recovers automatically if they improve.
+SIGNAL_WEIGHT_SRF_EXPERT = 0.20
 SIGNAL_WEIGHT_WEATHER = 1.0
 SIGNAL_WEIGHT_AUTOMATIC_MATCH_NOTE = 0.25
 

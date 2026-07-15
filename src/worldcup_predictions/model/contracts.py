@@ -144,6 +144,9 @@ class ModelSignalPolicy:
     market_total_goals_max_weight: float = SIGNAL_WEIGHT_MARKET_TOTAL_GOALS
     market_goal_diff_max_weight: float = SIGNAL_WEIGHT_MARKET_GOAL_DIFF
     expert_hda_max_weight: float = SIGNAL_WEIGHT_EXPERT_HDA
+    # Outcome-scored blend multipliers per "signal_name:source", produced by
+    # evaluation.signal_skill; missing keys mean neutral 1.0.
+    signal_skill_multipliers: dict[str, float] = field(default_factory=dict)
     ml_hda_max_weight: float = SIGNAL_WEIGHT_ML_HDA
     live_draw_max_weight: float = SIGNAL_WEIGHT_LIVE_DRAW
     live_score_tail_max_weight: float = SIGNAL_WEIGHT_LIVE_SCORE_TAIL

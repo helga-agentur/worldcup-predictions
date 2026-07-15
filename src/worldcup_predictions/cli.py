@@ -42,6 +42,7 @@ from worldcup_predictions.evaluation.automation_hooks import (
 )
 from worldcup_predictions.evaluation.baseline_bundle import create_baseline_bundle
 from worldcup_predictions.evaluation.model_calibration import calibrate_baseline_model, write_model_calibration
+from worldcup_predictions.evaluation.signal_skill import write_signal_skill_rows
 from worldcup_predictions.evaluation.audit import build_prediction_audit_rows
 from worldcup_predictions.evaluation.diagnostics_completeness import write_diagnostics_completeness_audit
 from worldcup_predictions.evaluation.bonus_tracker import build_bonus_tracker_rows
@@ -252,6 +253,11 @@ def _run_scheduled_update(args: argparse.Namespace, project_root: Path, workflow
             source="scheduled_update:backtest",
             run_id=workflow.context.run_id,
         )
+        signal_skill_row_count = write_signal_skill_rows(
+            workflow.context.storage,
+            refreshed_state,
+            run_id=workflow.context.run_id,
+        )
         knockout_summary = knockout_backtest_summary(backtest_rows)
         knockout_audit_rows = write_provider_knockout_audit(
             workflow.context.storage,
@@ -369,6 +375,7 @@ def _run_scheduled_update(args: argparse.Namespace, project_root: Path, workflow
         "open_fixtures": open_count,
         "backtest_rows": backtest_count,
         "model_calibration_rows": model_calibration_count,
+        "signal_skill_rows": signal_skill_row_count,
         "audit_rows": audit_count,
         "postmatch_learning_rows": learning_count,
         "postmatch_review_rows": review_count,
