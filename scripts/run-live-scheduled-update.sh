@@ -35,6 +35,10 @@ log "pulling production image: $image"
 
 docker compose -f "$compose_file" pull "$service"
 
+# Every pull leaves the previous image behind; unpruned they filled 19GB
+# (41 images) by 2026-07-15. Keep only the last day's images.
+docker image prune -af --filter 'until=24h' >/dev/null 2>&1 || log "image prune failed (non-fatal)"
+
 image_identity="$(docker image inspect "$image" --format '{{.Id}} {{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' 2>/dev/null || true)"
 if [ -n "$image_identity" ]; then
   log "local image after pull: $image_identity"
