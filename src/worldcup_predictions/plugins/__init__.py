@@ -11,6 +11,7 @@ from worldcup_predictions.plugins.sources.enrichment.kaggle_source import Kaggle
 from worldcup_predictions.plugins.sources.enrichment.lineup_availability import LineupAvailabilityPlugin
 from worldcup_predictions.plugins.signals.live_calibration import LiveCalibrationPlugin
 from worldcup_predictions.plugins.sources.markets.market_odds import MarketOddsPlugin
+from worldcup_predictions.plugins.sources.markets.polymarket import PolymarketPlugin
 from worldcup_predictions.plugins.signals.market_trend import MarketTrendPlugin
 from worldcup_predictions.plugins.diagnostics.match_intel import MatchIntelPlugin
 from worldcup_predictions.plugins.signals.ml_outcome import MlOutcomePlugin
@@ -60,6 +61,7 @@ def builtin_plugins():
         WikipediaSquadsPlugin(),
         TransfermarktSourcePlugin(),
         MarketOddsPlugin(),
+        PolymarketPlugin(),
         MarketTrendPlugin(),
         PhaseContextPlugin(),
         WeatherPlugin(),

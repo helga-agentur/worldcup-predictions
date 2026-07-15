@@ -21,10 +21,24 @@ OUTRIGHT_MIN_EDGE = 0.01
 
 
 def team_strengths_from_outrights(rows: list[dict[str, Any]]) -> dict[str, float]:
-    """Return lookup strengths keyed by public team name and FIFA code."""
+    """Return lookup strengths keyed by public team name and FIFA code.
 
-    strengths: dict[str, float] = {}
+    When several outright sources exist (bookmaker odds, prediction markets),
+    the freshest observation per team wins - a quota-dead source's stale
+    prices must not mix into current strengths.
+    """
+
+    freshest: dict[str, dict[str, Any]] = {}
     for row in rows:
+        team_key = str(row.get("fifa_code") or row.get("team") or "")
+        if not team_key:
+            continue
+        observed = str(row.get("observed_at_utc") or "")
+        current = freshest.get(team_key)
+        if current is None or observed > str(current.get("observed_at_utc") or ""):
+            freshest[team_key] = row
+    strengths: dict[str, float] = {}
+    for row in freshest.values():
         probability = row.get("fair_probability") or row.get("avg_implied_probability")
         if probability in (None, ""):
             continue

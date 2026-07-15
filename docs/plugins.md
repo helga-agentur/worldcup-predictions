@@ -21,6 +21,7 @@ Generated from plugin metadata declared in the codebase.
 | `historical_results_source` | source | 135 | `feature_signals_requested` | `historical_results`, `shootouts` | - | no |
 | `result_monitoring` | output | 145 | `results_updated` | `result_update_audit` | - | no |
 | `market_odds` | source | 250 | `feature_signals_requested` | `market_odds`, `market_outrights` | `market_hda_probabilities`, `market_total_goals`, `market_goal_diff` | yes |
+| `polymarket` | source | 252 | `feature_signals_requested` | `market_outrights` | `market_hda_probabilities` | no |
 | `market_trend` | signal | 255 | `feature_signals_requested` | `market_trends` | `total_goals_factor` | no |
 | `phase_context` | signal | 258 | `feature_signals_requested` | `phase_context_signals` | `total_goals_factor`, `live_draw_adjustment`, `team_expected_goals_factor` | no |
 | `weather` | source | 260 | `feature_signals_requested` | `weather_observations` | `total_goals_factor` | no |
@@ -303,6 +304,21 @@ Fetch public Odds API markets and emit provider-neutral market signals.
   - `ODDS_API_KEY` (optional): The Odds API key for public market prices.
 - Quota: limited and ledger-required - Fetches are skipped while fresh enough or when quota floor is reached.
 - Confidence policy: Confidence rises with bookmaker count and is capped before blending into the score matrix.
+
+### `polymarket`
+
+Fetch Polymarket real-money match and outright prices as market probability signals.
+
+- Version: `0.1.0`
+- Kind: `source`
+- Priority: `252`
+- Events: `feature_signals_requested`
+- Reads: -
+- Writes: `market_outrights`
+- Signals: `market_hda_probabilities`
+- Locales: `en`, `de`
+- Quota: not limited and ledger-required - Keyless public Gamma API polled every scheduled run while fixtures are open.
+- Confidence policy: Signal confidence scales with traded volume; prices are normalized to a fair book.
 
 ### `market_trend`
 
