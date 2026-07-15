@@ -18,9 +18,9 @@ def twenty_min_points_for_fixture(fixture: Fixture) -> tuple[str, int]:
     stage = fixture_stage(fixture)
     if fixture.group is not None or stage_contains(stage, "group", "gruppe") or not stage:
         return "group_stage", 5
-    if stage_contains(stage, "round of 32", "runde der 32", "sechzehntel", "1/16", "last 32"):
+    if stage_contains(stage, "round of 32", "runde der 32", "sechzehntel", "1/16", "last 32", "last_32"):
         return "round_of_32", 5
-    if stage_contains(stage, "round of 16", "achtel", "1/8", "last 16"):
+    if stage_contains(stage, "round of 16", "achtel", "1/8", "last 16", "last_16"):
         return "round_of_16", 10
     if stage_contains(stage, "quarter", "viertel", "1/4"):
         return "quarter_final", 20
