@@ -1428,6 +1428,13 @@ def _result_winner_key(result: ResultRecord | None) -> str | None:
             return result.home_team.key
         if away_penalty > home_penalty:
             return result.away_team.key
+    # football_data/fixturedownload results carry a winner flag instead of
+    # penalty scores (same fallback as provider_points._shootout_winner).
+    flag = str(result.metadata.get("winner") or "")
+    if flag == "HOME_TEAM":
+        return result.home_team.key
+    if flag == "AWAY_TEAM":
+        return result.away_team.key
     return None
 
 
