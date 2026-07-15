@@ -613,6 +613,12 @@ class StorageTest(unittest.TestCase):
             rows = storage.read_source_ledger(run_id="run-a")
             self.assertEqual(rows[0]["status"], "rate_limited")
             self.assertIn("OUT_OF_USAGE_CREDITS", rows[0]["metadata"]["response_body"])
+            # Monthly credits cannot heal within the daily probe horizon:
+            # the whole scope goes quiet until the subscription cycle resets.
+            self.assertEqual(rows[0]["metadata"]["backoff_reason"], "monthly_quota_exhausted")
+            next_safe = dt.datetime.fromisoformat(str(rows[0]["next_safe_fetch_at"]).replace("Z", "+00:00"))
+            days_out = (next_safe - dt.datetime.now(dt.timezone.utc)).total_seconds() / 86400
+            self.assertGreater(days_out, 29.5)
             sibling = SourceRequest(
                 source="the_odds_api",
                 endpoint="/v4/sports/soccer/events",
@@ -622,6 +628,11 @@ class StorageTest(unittest.TestCase):
             decision = runtime.should_fetch(sibling)
             self.assertFalse(decision.should_fetch)
             self.assertEqual(decision.reason, "rate_limited_quota_scope_this_run")
+            # Later runs (fresh in-run state) must stay blocked by the ledger
+            # itself -- no daily probe for an exhausted monthly quota.
+            ledger_decision = storage.should_fetch(sibling)
+            self.assertFalse(ledger_decision.should_fetch)
+            self.assertEqual(ledger_decision.reason, "quota_scope_next_safe_fetch_at_not_reached")
 
     def test_client_error_codes_back_off_broken_request_keys(self) -> None:
         import urllib.error

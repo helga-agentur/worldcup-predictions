@@ -16,6 +16,7 @@ services:
       - "8000:8000"
     environment:
       PYTHONPATH: /app/src
+      ENVIRONMENT: ${ENVIRONMENT:-}
       ODDS_API_KEY: ${ODDS_API_KEY:-}
       FOOTBALL_DATA_API_KEY: ${FOOTBALL_DATA_API_KEY:-}
       KAGGLE_API_TOKEN: ${KAGGLE_API_TOKEN:-}

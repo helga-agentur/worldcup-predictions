@@ -5,6 +5,8 @@ from __future__ import annotations
 PROJECT_USER_AGENT = "worldcup-predictions/0.1"
 
 ENV_ODDS_API_KEY = "ODDS_API_KEY"
+ENV_ENVIRONMENT = "ENVIRONMENT"
+ENVIRONMENT_LIVE = "live"
 ENV_NEWS_API_KEY = "NEWS_API_KEY"
 ENV_FOOTBALL_DATA_API_KEY = "FOOTBALL_DATA_API_KEY"
 ENV_KAGGLE_API_TOKEN = "KAGGLE_API_TOKEN"
@@ -79,12 +81,23 @@ OPENFOOTBALL_WORLD_CUP_FILES = {
     "cup_finals.txt": "2026--usa/cup_finals.txt",
 }
 
+# Odds API credit budget: each call costs markets x regions credits, and the
+# free tier is 500 credits per month. h2h,totals,spreads over the eu region
+# alone (the deepest bookmaker pool) costs 3 credits per fetch; the dropped
+# us/uk regions tripled the bill for near-identical consensus. The
+# draw_no_bet/btts/team_totals extras cost 15 credits per event fetch for
+# marginal signal value and stay disabled while the budget is tight
+# (re-enable by restoring the market list).
 THE_ODDS_API_WORLD_CUP_SPORT = "soccer_fifa_world_cup"
 THE_ODDS_API_MARKETS = "h2h,totals,spreads"
-THE_ODDS_API_EVENT_MARKETS = "draw_no_bet,btts,team_totals,alternate_totals,alternate_spreads"
+THE_ODDS_API_EVENT_MARKETS = ""
 THE_ODDS_API_EVENT_MARKET_WINDOW_HOURS = 36
 THE_ODDS_API_EVENT_MARKET_FIXTURE_LIMIT = 6
-THE_ODDS_API_REGIONS = "eu,us,uk"
+THE_ODDS_API_REGIONS = "eu"
+# While an unplayed final exists but is not yet the next fixture, earlier
+# matches stop fetching once this many credits remain, so the final always
+# has budget for its own pre-match odds window.
+THE_ODDS_API_FINAL_RESERVE_CREDITS = 150
 
 KAGGLE_DATASET_SEARCHES = {
     "transfermarkt_football_market_value": "transfermarkt football market value",

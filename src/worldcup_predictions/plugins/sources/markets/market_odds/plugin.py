@@ -7,16 +7,17 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import os
 import urllib.error
-from dataclasses import dataclass
 from typing import Any, Iterable
 
 from worldcup_predictions.core.constants import (
     ENDPOINT_THE_ODDS_API_SPORTS,
     ENDPOINT_THE_ODDS_API_WORLD_CUP_EVENTS,
     ENDPOINT_THE_ODDS_API_WORLD_CUP_ODDS,
+    ENV_ENVIRONMENT,
     ENV_ODDS_API_KEY,
+    ENVIRONMENT_LIVE,
+    THE_ODDS_API_FINAL_RESERVE_CREDITS,
     SIGNAL_WEIGHT_MARKET_GOAL_DIFF,
     SIGNAL_WEIGHT_MARKET_HDA,
     SIGNAL_WEIGHT_MARKET_TOTAL_GOALS,
@@ -33,7 +34,6 @@ from worldcup_predictions.core.contracts import Diagnostic, Signal
 from worldcup_predictions.core.datasets import MARKET_ODDS as MARKET_ODDS_DATASET
 from worldcup_predictions.core.datasets import MARKET_OUTRIGHTS
 from worldcup_predictions.core.events import EventName, event_value
-from worldcup_predictions.core.http import HttpClient
 from worldcup_predictions.core.metadata import EnvVar, PluginKind, PluginMetadata, QuotaPolicy
 from worldcup_predictions.core.plugin import BasePlugin, PluginResult
 from worldcup_predictions.core.signals import MARKET_GOAL_DIFF, MARKET_HDA_PROBABILITIES, MARKET_TOTAL_GOALS
@@ -41,14 +41,6 @@ from worldcup_predictions.plugins.source_runtime import SourceRuntime
 from worldcup_predictions.storage.ledger import SourceRequest, normalize_datetime, parse_datetime, stable_hash, utc_now
 from worldcup_predictions.tournament import TeamResolver, TournamentState
 from worldcup_predictions.tournament.contracts import FixtureRecord, TeamRef
-
-
-@dataclass(frozen=True)
-class OddsApiResponse:
-    payload: list[dict[str, Any]]
-    quota_remaining: int | None
-    requests_used: int | None
-    message: str | None = None
 
 
 class MarketOddsPlugin(BasePlugin):
@@ -87,7 +79,7 @@ class MarketOddsPlugin(BasePlugin):
         fetch_result = self._maybe_fetch(runtime, state)
         diagnostics.extend(fetch_result.diagnostics)
         written += int(fetch_result.metadata.get("written_rows") or 0)
-        outright_result = self._maybe_fetch_outrights(runtime)
+        outright_result = self._maybe_fetch_outrights(runtime, state)
         diagnostics.extend(outright_result.diagnostics)
         outright_written += int(outright_result.metadata.get("written_rows") or 0)
 
@@ -105,6 +97,33 @@ class MarketOddsPlugin(BasePlugin):
             metadata={"signals": len(signals), "written_rows": written, "outright_rows": outright_written},
         )
 
+    def _live_api_key(self, runtime: SourceRuntime) -> tuple[str | None, Diagnostic | None]:
+        """API key when fetching is allowed: configured key + live environment.
+
+        Local and CI runs share the same monthly credit pool as the live
+        server, so only the live scheduler may spend it; everything else
+        reads the stored odds the live runs already synced.
+        """
+
+        api_key = runtime.env_value(ENV_ODDS_API_KEY)
+        if not api_key:
+            return None, runtime.diagnostic(
+                "info",
+                f"{ENV_ODDS_API_KEY} is not configured; using stored market odds only.",
+            )
+        environment = str(runtime.env_value(ENV_ENVIRONMENT) or "").strip().casefold()
+        if environment != ENVIRONMENT_LIVE:
+            return None, runtime.diagnostic(
+                "info",
+                f"Odds API fetches only run where {ENV_ENVIRONMENT}={ENVIRONMENT_LIVE}; "
+                "using stored market odds only.",
+            )
+        return api_key, None
+
+    def _quota_floor(self, runtime: SourceRuntime, open_fixtures: list[FixtureRecord]) -> int:
+        base_floor = int(runtime.context.config.source_defaults.odds_quota_remaining_floor)
+        return quota_floor_for_fixtures(open_fixtures, base_floor)
+
     def _maybe_fetch(self, runtime: SourceRuntime, state: TournamentState) -> PluginResult:
         open_fixtures = state.open_fixtures()
         if not open_fixtures:
@@ -113,16 +132,9 @@ class MarketOddsPlugin(BasePlugin):
                     runtime.diagnostic("info", "No open fixtures are available; market odds fetch was skipped.")
                 ]
             )
-        api_key = runtime.env_value(ENV_ODDS_API_KEY)
+        api_key, gate_diagnostic = self._live_api_key(runtime)
         if not api_key:
-            return runtime.result(
-                diagnostics=[
-                    runtime.diagnostic(
-                        level="info",
-                        message=f"{ENV_ODDS_API_KEY} is not configured; using stored market odds only.",
-                    )
-                ],
-            )
+            return runtime.result(diagnostics=[gate_diagnostic] if gate_diagnostic else [])
 
         request = SourceRequest(
             source=SOURCE_THE_ODDS_API,
@@ -134,9 +146,9 @@ class MarketOddsPlugin(BasePlugin):
                 "markets": THE_ODDS_API_MARKETS,
                 "odds_format": "decimal",
             },
-            quota_cost=1,
-            min_refresh_interval=dt.timedelta(minutes=30),
-            quota_remaining_floor=runtime.context.config.source_defaults.odds_quota_remaining_floor,
+            quota_cost=_credit_cost(THE_ODDS_API_MARKETS, THE_ODDS_API_REGIONS),
+            min_refresh_interval=main_odds_refresh_interval(open_fixtures),
+            quota_remaining_floor=self._quota_floor(runtime, open_fixtures),
             quota_scope=SOURCE_THE_ODDS_API,
             rate_limit_backoff=dt.timedelta(hours=6),
         )
@@ -203,7 +215,9 @@ class MarketOddsPlugin(BasePlugin):
         open_fixtures: list[FixtureRecord],
         odds_payload: list[dict[str, Any]],
     ) -> PluginResult:
-        api_key = runtime.env_value(ENV_ODDS_API_KEY)
+        if not THE_ODDS_API_EVENT_MARKETS:
+            return runtime.result(metadata={"rows": []})
+        api_key, _gate = self._live_api_key(runtime)
         if not api_key:
             return runtime.result(metadata={"rows": []})
         near_term_fixtures = _near_term_fixtures(open_fixtures)
@@ -242,9 +256,9 @@ class MarketOddsPlugin(BasePlugin):
                     "markets": THE_ODDS_API_EVENT_MARKETS,
                     "odds_format": "decimal",
                 },
-                quota_cost=len([market for market in THE_ODDS_API_EVENT_MARKETS.split(",") if market]),
+                quota_cost=_credit_cost(THE_ODDS_API_EVENT_MARKETS, THE_ODDS_API_REGIONS),
                 min_refresh_interval=dt.timedelta(minutes=30),
-                quota_remaining_floor=runtime.context.config.source_defaults.odds_quota_remaining_floor,
+                quota_remaining_floor=self._quota_floor(runtime, open_fixtures),
                 quota_scope=SOURCE_THE_ODDS_API,
                 rate_limit_backoff=dt.timedelta(hours=6),
             )
@@ -316,7 +330,7 @@ class MarketOddsPlugin(BasePlugin):
         return runtime.result(diagnostics=diagnostics, metadata={"rows": rows})
 
     def _maybe_fetch_events(self, runtime: SourceRuntime) -> PluginResult:
-        api_key = runtime.env_value(ENV_ODDS_API_KEY)
+        api_key, _gate = self._live_api_key(runtime)
         if not api_key:
             return runtime.result(metadata={"event_ids": {}})
         request = SourceRequest(
@@ -326,7 +340,7 @@ class MarketOddsPlugin(BasePlugin):
             params={"sport": THE_ODDS_API_WORLD_CUP_SPORT},
             quota_cost=1,
             min_refresh_interval=dt.timedelta(hours=6),
-            quota_remaining_floor=runtime.context.config.source_defaults.odds_quota_remaining_floor,
+            quota_remaining_floor=self._quota_floor(runtime, runtime.tournament_state().open_fixtures()),
             quota_scope=SOURCE_THE_ODDS_API,
             rate_limit_backoff=dt.timedelta(hours=6),
         )
@@ -348,10 +362,11 @@ class MarketOddsPlugin(BasePlugin):
         )
         return runtime.result(metadata={"event_ids": event_ids})
 
-    def _maybe_fetch_outrights(self, runtime: SourceRuntime) -> PluginResult:
-        api_key = runtime.env_value(ENV_ODDS_API_KEY)
+    def _maybe_fetch_outrights(self, runtime: SourceRuntime, state: TournamentState) -> PluginResult:
+        api_key, _gate = self._live_api_key(runtime)
         if not api_key:
             return runtime.result()
+        quota_floor = self._quota_floor(runtime, state.open_fixtures())
         sports_request = SourceRequest(
             source=SOURCE_THE_ODDS_API,
             endpoint=ENDPOINT_THE_ODDS_API_SPORTS,
@@ -359,7 +374,7 @@ class MarketOddsPlugin(BasePlugin):
             params={},
             quota_cost=1,
             min_refresh_interval=dt.timedelta(hours=12),
-            quota_remaining_floor=runtime.context.config.source_defaults.odds_quota_remaining_floor,
+            quota_remaining_floor=quota_floor,
             quota_scope=SOURCE_THE_ODDS_API,
             rate_limit_backoff=dt.timedelta(hours=6),
         )
@@ -396,9 +411,9 @@ class MarketOddsPlugin(BasePlugin):
                 endpoint=endpoint,
                 purpose="world_cup_outrights",
                 params={"sport": sport_key, "regions": THE_ODDS_API_REGIONS, "markets": "outrights"},
-                quota_cost=1,
+                quota_cost=_credit_cost("outrights", THE_ODDS_API_REGIONS),
                 min_refresh_interval=dt.timedelta(hours=6),
-                quota_remaining_floor=runtime.context.config.source_defaults.odds_quota_remaining_floor,
+                quota_remaining_floor=quota_floor,
                 quota_scope=SOURCE_THE_ODDS_API,
                 rate_limit_backoff=dt.timedelta(hours=6),
             )
@@ -431,30 +446,6 @@ class MarketOddsPlugin(BasePlugin):
             )
             written += count
         return runtime.result(diagnostics=diagnostics, metadata={"written_rows": written})
-
-
-def fetch_odds_api(*, http_client: HttpClient | None = None) -> OddsApiResponse:
-    api_key = os.environ.get(ENV_ODDS_API_KEY)
-    if not api_key:
-        raise OSError(f"{ENV_ODDS_API_KEY} is not configured.")
-    client = http_client or HttpClient()
-    payload, headers = client.get_json(
-        ENDPOINT_THE_ODDS_API_WORLD_CUP_ODDS,
-        {
-            "apiKey": api_key,
-            "regions": THE_ODDS_API_REGIONS,
-            "markets": THE_ODDS_API_MARKETS,
-            "oddsFormat": "decimal",
-            "dateFormat": "iso",
-        },
-    )
-    if not isinstance(payload, list):
-        raise json.JSONDecodeError("expected Odds API list response", json.dumps(payload), 0)
-    return OddsApiResponse(
-        payload=payload,
-        quota_remaining=_optional_int(headers.get("x-requests-remaining")),
-        requests_used=_optional_int(headers.get("x-requests-used")),
-    )
 
 
 def odds_api_rows(payload: Iterable[dict[str, Any]], fixtures: list[FixtureRecord]) -> list[dict[str, Any]]:
@@ -982,6 +973,61 @@ def _market_confidence(bookmaker_count: int) -> float:
     if bookmaker_count >= 2:
         return 0.72
     return 0.55
+
+
+def _credit_cost(markets: str, regions: str) -> int:
+    """Odds API pricing: one credit per market per region per call."""
+
+    market_count = len([market for market in str(markets or "").split(",") if market]) or 1
+    region_count = len([region for region in str(regions or "").split(",") if region]) or 1
+    return market_count * region_count
+
+
+def main_odds_refresh_interval(fixtures: list[FixtureRecord]) -> dt.timedelta:
+    """Kickoff-aware cadence: fetch often only when odds actually move.
+
+    Checkpoint-style spacing like the weather schedule: twice daily until a
+    day before the nearest kickoff, roughly 24/18/12/9/6/3h before it, and
+    hourly only inside the final three hours (team news lands ~1h before
+    kickoff). One fetch covers every upcoming match, so a defined final does
+    not add calls of its own while an earlier match is still ahead of it.
+    """
+
+    now = utc_now()
+    upcoming = [
+        kickoff
+        for kickoff in (parse_datetime(fixture.event_date) for fixture in fixtures)
+        if kickoff is not None and kickoff > now
+    ]
+    if not upcoming:
+        return dt.timedelta(hours=12)
+    hours_to_kickoff = (min(upcoming) - now).total_seconds() / 3600.0
+    if hours_to_kickoff <= 3:
+        return dt.timedelta(hours=1)
+    if hours_to_kickoff <= 12:
+        return dt.timedelta(hours=3)
+    if hours_to_kickoff <= 24:
+        return dt.timedelta(hours=6)
+    return dt.timedelta(hours=12)
+
+
+def quota_floor_for_fixtures(fixtures: list[FixtureRecord], base_floor: int) -> int:
+    """Reserve credits for the final while earlier fixtures are still open."""
+
+    finals = [fixture for fixture in fixtures if _is_final_stage(fixture.stage)]
+    if not finals:
+        return base_floor
+    dated = [fixture for fixture in fixtures if fixture.event_date]
+    if dated and min(dated, key=lambda fixture: fixture.event_date) in finals:
+        return base_floor
+    return max(base_floor, THE_ODDS_API_FINAL_RESERVE_CREDITS)
+
+
+def _is_final_stage(stage: str | None) -> bool:
+    normalized = str(stage or "").casefold()
+    if "final" not in normalized:
+        return False
+    return not any(token in normalized for token in ("semi", "third", "bronze", "quarter", "1/2", "1/4"))
 
 
 def _near_term_fixtures(fixtures: list[FixtureRecord]) -> list[FixtureRecord]:

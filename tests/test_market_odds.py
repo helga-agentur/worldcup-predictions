@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import datetime as dt
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 try:
     import duckdb  # noqa: F401
@@ -17,7 +19,15 @@ from worldcup_predictions.core.plugin import PluginManager
 from worldcup_predictions.core.workflow import PredictionWorkflow
 from worldcup_predictions.model import BaselineModel
 from worldcup_predictions.plugins.sources.markets.market_odds import MarketOddsPlugin
-from worldcup_predictions.plugins.sources.markets.market_odds.plugin import MARKET_ODDS_DATASET, market_signals_from_rows, odds_api_rows
+from worldcup_predictions.plugins.sources.markets.market_odds.plugin import (
+    MARKET_ODDS_DATASET,
+    _credit_cost,
+    main_odds_refresh_interval,
+    market_signals_from_rows,
+    odds_api_rows,
+    quota_floor_for_fixtures,
+)
+from worldcup_predictions.plugins.source_runtime import SourceRuntime
 from worldcup_predictions.storage import DuckDBStorage
 from worldcup_predictions.tournament import FixtureRecord, TeamResolver
 from worldcup_predictions.tournament.repository import write_fixtures
@@ -182,6 +192,89 @@ class MarketOddsStorageTest(unittest.TestCase):
             self.assertEqual(len(results), 1)
             self.assertEqual(len(results[0].signals), 3)
             self.assertTrue(any("ODDS_API_KEY" in diagnostic.message for diagnostic in results[0].diagnostics))
+
+
+class OddsApiCreditBudgetTest(unittest.TestCase):
+    """The 500-credit month only gets spent by the live server, at a
+    kickoff-aware cadence, with a reserve kept for the final."""
+
+    def _fixture_in(self, hours: float, stage: str = "Final") -> FixtureRecord:
+        resolver = TeamResolver.default()
+        kickoff = dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=hours)
+        return FixtureRecord(
+            event_date=kickoff.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            home_team=resolver.resolve("Brazil"),
+            away_team=resolver.resolve("Japan"),
+            stage=stage,
+        )
+
+    def test_environment_gate_blocks_non_live_fetches_but_keeps_stored_signals(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            storage = DuckDBStorage.at_data_root(root / "data")
+            match = fixture()
+            write_fixtures(storage, [match], source="test")
+            storage.write_records(MARKET_ODDS_DATASET, odds_api_rows(odds_payload(), [match]), source="test")
+            workflow = PredictionWorkflow.from_project_root(root, PluginManager([MarketOddsPlugin()]))
+
+            with patch.dict(os.environ, {"ODDS_API_KEY": "configured-key"}, clear=False):
+                os.environ.pop("ENVIRONMENT", None)
+                results = workflow.manager.emit(EventName.FEATURE_SIGNALS_REQUESTED, workflow.context, {})
+
+            self.assertEqual(len(results[0].signals), 3, "stored odds keep feeding signals")
+            self.assertTrue(
+                any("ENVIRONMENT=live" in diagnostic.message for diagnostic in results[0].diagnostics),
+                "the gate must say why no fetch happened",
+            )
+            self.assertEqual(
+                len(workflow.context.storage.read_source_ledger(run_id=workflow.context.run_id)),
+                0,
+                "no fetch attempt may reach the ledger from a non-live environment",
+            )
+
+    def test_live_environment_unlocks_the_key(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workflow = PredictionWorkflow.from_project_root(Path(tmp), PluginManager([MarketOddsPlugin()]))
+            plugin = MarketOddsPlugin()
+            runtime = SourceRuntime(plugin, EventName.FEATURE_SIGNALS_REQUESTED, workflow.context)
+
+            with patch.dict(os.environ, {"ODDS_API_KEY": "configured-key", "ENVIRONMENT": "live"}, clear=False):
+                api_key, diagnostic = plugin._live_api_key(runtime)
+
+            self.assertEqual(api_key, "configured-key")
+            self.assertIsNone(diagnostic)
+
+    def test_refresh_interval_scales_with_time_to_kickoff(self) -> None:
+        self.assertEqual(main_odds_refresh_interval([self._fixture_in(2)]), dt.timedelta(hours=1))
+        self.assertEqual(main_odds_refresh_interval([self._fixture_in(10)]), dt.timedelta(hours=3))
+        self.assertEqual(main_odds_refresh_interval([self._fixture_in(20)]), dt.timedelta(hours=6))
+        self.assertEqual(main_odds_refresh_interval([self._fixture_in(100)]), dt.timedelta(hours=12))
+        self.assertEqual(main_odds_refresh_interval([]), dt.timedelta(hours=12))
+        # The nearest kickoff drives the cadence when several fixtures are
+        # open: a defined final far out does not slow the imminent match, and
+        # an imminent match does not add extra calls for the final (one fetch
+        # returns every upcoming event).
+        self.assertEqual(
+            main_odds_refresh_interval([self._fixture_in(100), self._fixture_in(2)]),
+            dt.timedelta(hours=1),
+        )
+
+    def test_quota_floor_reserves_credits_for_the_final(self) -> None:
+        bronze = self._fixture_in(24, stage="Bronze final")
+        final = self._fixture_in(48, stage="Final")
+        semi = self._fixture_in(6, stage="Semi-final")
+
+        self.assertEqual(quota_floor_for_fixtures([semi, bronze, final], 2), 150)
+        self.assertEqual(quota_floor_for_fixtures([bronze, final], 2), 150)
+        self.assertEqual(quota_floor_for_fixtures([final], 2), 2, "the final spends down to the base floor")
+        self.assertEqual(quota_floor_for_fixtures([bronze], 2), 2, "no final left means nothing to reserve")
+        self.assertEqual(quota_floor_for_fixtures([], 2), 2)
+
+    def test_credit_cost_is_markets_times_regions(self) -> None:
+        self.assertEqual(_credit_cost("h2h,totals,spreads", "eu"), 3)
+        self.assertEqual(_credit_cost("h2h,totals,spreads", "eu,us,uk"), 9)
+        self.assertEqual(_credit_cost("outrights", "eu"), 1)
+        self.assertEqual(_credit_cost("", "eu"), 1)
 
 
 if __name__ == "__main__":

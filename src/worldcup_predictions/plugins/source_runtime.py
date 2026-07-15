@@ -35,6 +35,10 @@ FAILURE_BACKOFF_LADDER = (
     dt.timedelta(hours=24),
 )
 DAILY_PROBE_BACKOFF = dt.timedelta(hours=24)
+# A monthly usage quota cannot heal within the daily probe horizon: once a
+# provider says the month's credits are gone, every request is a wasted call
+# until the subscription cycle resets, so the whole quota scope goes quiet.
+MONTHLY_QUOTA_BACKOFF = dt.timedelta(days=30)
 PERMANENT_CLIENT_ERROR_CODES = frozenset({400, 404})
 _RATE_LIMITED_SOURCES_STATE_KEY = "_source_runtime_rate_limited_sources"
 _RATE_LIMITED_QUOTA_SCOPES_STATE_KEY = "_source_runtime_rate_limited_quota_scopes"
@@ -252,7 +256,7 @@ class SourceRuntime:
         status = _error_status(error, metadata_dict)
         consecutive_failures = self._consecutive_failures(request) + 1
         next_safe_fetch_at, backoff_reason = _error_next_safe_fetch_at(
-            error, status, consecutive_failures
+            error, status, consecutive_failures, metadata_dict
         )
         code = _optional_int(getattr(error, "code", None))
         if status == "rate_limited":
@@ -411,12 +415,30 @@ def _retry_after_next_safe_fetch_at(error: Exception | str) -> str | None:
     return normalize_datetime(utc_now() + dt.timedelta(seconds=max(0, retry_after)))
 
 
+def _monthly_quota_exhausted(error: Exception | str, metadata: Mapping[str, Any] | None) -> bool:
+    """True when a provider reports its monthly usage credits are spent."""
+
+    text = " ".join(
+        str(part or "")
+        for part in (error, (metadata or {}).get("response_body"), (metadata or {}).get("error_code"))
+    ).casefold()
+    return "out_of_usage_credits" in text or "usage credits" in text
+
+
 def _error_next_safe_fetch_at(
-    error: Exception | str, status: str, consecutive_failures: int
+    error: Exception | str,
+    status: str,
+    consecutive_failures: int,
+    metadata: Mapping[str, Any] | None = None,
 ) -> tuple[str, str]:
     """Escalating backoff for failed request keys, with a daily probe cap."""
 
     if status == "rate_limited":
+        if _monthly_quota_exhausted(error, metadata):
+            return (
+                normalize_datetime(utc_now() + MONTHLY_QUOTA_BACKOFF),
+                "monthly_quota_exhausted",
+            )
         header_based = _retry_after_next_safe_fetch_at(error)
         if header_based:
             return header_based, "retry_after_header"

@@ -205,6 +205,7 @@ sudo chmod 0640 /etc/worldcup-predictions/env
 Supported production variables:
 
 ```bash
+ENVIRONMENT=live
 ODDS_API_KEY=
 FOOTBALL_DATA_API_KEY=
 KAGGLE_API_TOKEN=

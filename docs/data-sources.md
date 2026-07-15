@@ -237,6 +237,7 @@ Production does not read `/opt/worldcup-predictions/.env`. Live secrets belong i
 
 Supported variables:
 
+- `ENVIRONMENT` (`live` on the production host; quota-billed sources such as The Odds API only fetch when this is `live`, so local and CI runs cannot spend the shared monthly credits)
 - `ODDS_API_KEY`
 - `FOOTBALL_DATA_API_KEY`
 - `KAGGLE_API_TOKEN`
