@@ -157,7 +157,7 @@ SIGNAL_LIVE_FAVORITE_OUTCOME_FACTOR_MAX = 1.08
 # Market is the strongest public predictor; weighted high but below a full overwrite so
 # the model's score shape and other signals still contribute. Validated forward on the
 # live tournament (no historical odds exist to backtest these).
-SIGNAL_WEIGHT_MARKET_HDA = 1.00
+SIGNAL_WEIGHT_MARKET_HDA = 0.95
 SIGNAL_WEIGHT_MARKET_TOTAL_GOALS = 0.65
 SIGNAL_WEIGHT_MARKET_GOAL_DIFF = 0.55
 SIGNAL_WEIGHT_EXPERT_HDA = 0.20
