@@ -267,6 +267,7 @@ class TournamentSimulator:
         for team in qualified:
             team_stage[team] = STAGE_ROUND_OF_32
 
+        knockout_start = len(fixture_results)
         champion = self._simulate_knockout(
             placements,
             third_rankings,
@@ -274,6 +275,13 @@ class TournamentSimulator:
             team_goals,
             fixture_results,
             rng,
+        )
+        # Knockout scores are regular-time samples, so a 0-0 that goes to
+        # extra time counts toward the nil-nil tally like any group 0-0.
+        nil_nil_count += sum(
+            1
+            for result in fixture_results[knockout_start:]
+            if result.score.home == 0 and result.score.away == 0
         )
 
         top_scorer_goals = rng.choice(self.inputs.top_scorer_goals_prior)
@@ -387,9 +395,13 @@ class TournamentSimulator:
             if winner:
                 previous_winners[str(match["match_id"])] = winner
 
+        semifinal_sides: dict[str, tuple[str | None, str | None]] = {}
         for round_template in NEXT_ROUNDS:
             current_winners: dict[str, str] = {}
             for match in next_round_matches(previous_winners, round_template):
+                match_id = str(match["match_id"])
+                if match_id in ("M101", "M102"):
+                    semifinal_sides[match_id] = (match["home"], match["away"])
                 winner = self._simulate_knockout_match(
                     match["match_id"],
                     match["home"],
@@ -400,8 +412,17 @@ class TournamentSimulator:
                     rng,
                 )
                 if winner:
-                    current_winners[str(match["match_id"])] = winner
+                    current_winners[match_id] = winner
             previous_winners.update(current_winners)
+
+        self._simulate_third_place(
+            semifinal_sides,
+            previous_winners,
+            team_stage,
+            team_goals,
+            fixture_results,
+            rng,
+        )
 
         champion = previous_winners.get("M104")
         if champion:
@@ -413,6 +434,43 @@ class TournamentSimulator:
             return fallback
         return None
 
+    def _simulate_third_place(
+        self,
+        semifinal_sides: dict[str, tuple[str | None, str | None]],
+        previous_winners: dict[str, str],
+        team_stage: dict[str, str],
+        team_goals: dict[str, int],
+        fixture_results: list[SimulationResult],
+        rng: random.Random,
+    ) -> None:
+        """Play the bronze final between the semifinal losers.
+
+        The winner keeps its "Semi-final" stage: team_stage tracks the
+        furthest advancement round, and the bronze final advances nobody.
+        """
+
+        losers: list[str | None] = []
+        for match_id in ("M101", "M102"):
+            home, away = semifinal_sides.get(match_id, (None, None))
+            winner = previous_winners.get(match_id)
+            if winner == home:
+                losers.append(away)
+            elif winner == away:
+                losers.append(home)
+            else:
+                losers.append(None)
+        if losers[0] and losers[1]:
+            self._simulate_knockout_match(
+                "M103",
+                losers[0],
+                losers[1],
+                team_stage,
+                team_goals,
+                fixture_results,
+                rng,
+                advance_winner=False,
+            )
+
     def _simulate_knockout_match(
         self,
         match_id: str | None,
@@ -422,12 +480,13 @@ class TournamentSimulator:
         team_goals: dict[str, int],
         fixture_results: list[SimulationResult],
         rng: random.Random,
+        advance_winner: bool = True,
     ) -> str | None:
         match_id = str(match_id)
         stage = ROUND_NAMES.get(match_id, "Knockout stage")
         if not home or not away:
             winner = home or away
-            if winner:
+            if winner and advance_winner:
                 team_stage[winner] = self._next_stage(stage)
             return winner
         score, source, matrix_source = self._score_for_fixture(match_id, home, away, rng)
@@ -438,7 +497,8 @@ class TournamentSimulator:
             winner = self._winner_from_score(home, away, score, allow_draw=False, rng=rng)
         team_stage.setdefault(home, STAGE_GROUP)
         team_stage.setdefault(away, STAGE_GROUP)
-        team_stage[winner] = self._next_stage(stage)
+        if advance_winner:
+            team_stage[winner] = self._next_stage(stage)
         team_goals[home] += score.home
         team_goals[away] += score.away
         fixture_results.append(
@@ -636,11 +696,15 @@ class TournamentSimulator:
         home_rating = self.inputs.team_ratings.get(home)
         away_rating = self.inputs.team_ratings.get(away)
         if home_rating is not None and away_rating is not None:
-            return 1.0 / (1.0 + 10 ** (-(home_rating - away_rating) / PENALTY_ELO_SCALE))
-        home_strength = self.inputs.team_strengths.get(home, 1.0)
-        away_strength = self.inputs.team_strengths.get(away, 1.0)
-        total = home_strength + away_strength
-        return home_strength / total if total > 0 else 0.5
+            share = 1.0 / (1.0 + 10 ** (-(home_rating - away_rating) / PENALTY_ELO_SCALE))
+        else:
+            home_strength = self.inputs.team_strengths.get(home, 1.0)
+            away_strength = self.inputs.team_strengths.get(away, 1.0)
+            total = home_strength + away_strength
+            share = home_strength / total if total > 0 else 0.5
+        # Shootouts are close to coin flips; bound the edge like the model's
+        # _extra_time_penalty_home_share does.
+        return min(0.65, max(0.35, share))
 
     def _next_stage(self, stage: str) -> str:
         if stage == "Final":

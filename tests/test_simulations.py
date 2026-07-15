@@ -3,8 +3,10 @@ from __future__ import annotations
 import datetime as dt
 import itertools
 import math
+import random
 import tempfile
 import unittest
+from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -337,6 +339,67 @@ class KnockoutShootoutResolutionTest(unittest.TestCase):
         answers = {row["answer"] for row in summary.distributions["team_stage"]["South Africa"]}
         self.assertIn("Round of 32", answers)
         self.assertGreater(len(answers), 1)
+
+    def test_penalty_win_probability_is_bounded_like_the_model(self) -> None:
+        inputs = SimulationInputs(fixtures=[], team_ratings={"Goliath": 2400.0, "David": 1200.0})
+        simulator = TournamentSimulator(inputs, iterations=1, seed=1)
+
+        self.assertEqual(simulator._penalty_home_probability("Goliath", "David"), 0.65)
+        self.assertEqual(simulator._penalty_home_probability("David", "Goliath"), 0.35)
+
+
+class ThirdPlaceMatchTest(unittest.TestCase):
+    """The bronze final is played between the semifinal losers."""
+
+    def test_third_place_match_uses_semifinal_losers_without_advancing_them(self) -> None:
+        inputs = SimulationInputs(
+            fixtures=[],
+            known_results={pair_key("Brazil", "Japan"): ScoreTip(2, 1)},
+        )
+        simulator = TournamentSimulator(inputs, iterations=1, seed=7)
+        team_stage = {
+            "Brazil": "Semi-final",
+            "Japan": "Semi-final",
+            "France": "Final",
+            "Spain": "Final",
+        }
+        team_goals: dict[str, int] = defaultdict(int)
+        results: list = []
+
+        simulator._simulate_third_place(
+            {"M101": ("France", "Brazil"), "M102": ("Japan", "Spain")},
+            {"M101": "France", "M102": "Spain", "M104": "Spain"},
+            team_stage,
+            team_goals,
+            results,
+            random.Random(7),
+        )
+
+        [result] = results
+        self.assertEqual(result.match_id, "M103")
+        self.assertEqual(result.stage, "Third-place match")
+        self.assertEqual((result.home_team, result.away_team), ("Brazil", "Japan"))
+        self.assertEqual((result.score.home, result.score.away), (2, 1))
+        self.assertEqual(result.winner, "Brazil")
+        self.assertEqual(team_stage["Brazil"], "Semi-final", "bronze winner keeps its semifinal stage")
+        self.assertEqual(team_stage["Japan"], "Semi-final")
+        self.assertEqual(team_goals["Brazil"], 2)
+        self.assertEqual(team_goals["Japan"], 1)
+
+    def test_missing_semifinal_loser_skips_the_bronze_final(self) -> None:
+        simulator = TournamentSimulator(SimulationInputs(fixtures=[]), iterations=1, seed=7)
+        results: list = []
+
+        simulator._simulate_third_place(
+            {"M101": ("France", None)},
+            {"M101": "France", "M102": "Spain"},
+            {},
+            defaultdict(int),
+            results,
+            random.Random(7),
+        )
+
+        self.assertEqual(results, [])
 
 
 class SimulationInputWiringTest(unittest.TestCase):

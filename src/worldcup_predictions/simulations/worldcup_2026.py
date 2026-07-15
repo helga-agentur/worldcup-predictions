@@ -78,6 +78,7 @@ ROUND_NAMES: dict[str, str] = {
     "M100": "Quarter-final",
     "M101": "Semi-final",
     "M102": "Semi-final",
+    "M103": "Third-place match",
     "M104": "Final",
 }
 

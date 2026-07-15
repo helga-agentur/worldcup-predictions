@@ -78,18 +78,28 @@ class PenaltyShootoutTest(unittest.TestCase):
         return TournamentSimulator(SimulationInputs(fixtures=[], **inputs_kwargs))
 
     def test_elo_logistic_used_when_ratings_present(self) -> None:
-        sim = self._simulator(team_ratings={"A": 1600.0, "B": 1400.0})
+        sim = self._simulator(team_ratings={"A": 1500.0, "B": 1400.0})
         prob = sim._penalty_home_probability("A", "B")
-        # 200-point gap under a 500 scale: 1/(1+10^(-0.4)) ~= 0.715.
-        self.assertAlmostEqual(prob, 1.0 / (1.0 + 10 ** (-0.4)), places=6)
+        # 100-point gap under a 500 scale: 1/(1+10^(-0.2)) ~= 0.613.
+        self.assertAlmostEqual(prob, 1.0 / (1.0 + 10 ** (-0.2)), places=6)
+
+    def test_large_rating_gaps_are_clamped_to_the_model_bounds(self) -> None:
+        sim = self._simulator(team_ratings={"A": 1600.0, "B": 1400.0})
+        # 200-point gap yields ~0.715 raw, bounded at 0.65 like the model's
+        # _extra_time_penalty_home_share: shootouts stay near coin flips.
+        self.assertAlmostEqual(sim._penalty_home_probability("A", "B"), 0.65, places=6)
+        self.assertAlmostEqual(sim._penalty_home_probability("B", "A"), 0.35, places=6)
 
     def test_equal_ratings_are_even(self) -> None:
         sim = self._simulator(team_ratings={"A": 1500.0, "B": 1500.0})
         self.assertAlmostEqual(sim._penalty_home_probability("A", "B"), 0.5, places=6)
 
     def test_falls_back_to_strengths_without_ratings(self) -> None:
-        sim = self._simulator(team_strengths={"A": 3.0, "B": 1.0})
-        self.assertAlmostEqual(sim._penalty_home_probability("A", "B"), 0.75, places=6)
+        sim = self._simulator(team_strengths={"A": 1.2, "B": 1.0})
+        self.assertAlmostEqual(sim._penalty_home_probability("A", "B"), 1.2 / 2.2, places=6)
+        # Lopsided strengths hit the same clamp as lopsided ratings.
+        lopsided = self._simulator(team_strengths={"A": 3.0, "B": 1.0})
+        self.assertAlmostEqual(lopsided._penalty_home_probability("A", "B"), 0.65, places=6)
 
     def test_defaults_to_even_without_any_signal(self) -> None:
         sim = self._simulator()
